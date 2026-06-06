@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -52,11 +53,6 @@ export function LoginForm() {
     }
   }
 
-  function handleForgotPassword() {
-    // A4 — recuperação de senha em PRD futura
-    toast("Em breve");
-  }
-
   return (
     <Form {...form}>
       <form
@@ -102,16 +98,13 @@ export function LoginForm() {
               />
               <FormMessage />
               <div className="flex justify-end">
-                {/* A4 — recuperação de senha em PRD futura (placeholder ativo). */}
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  onClick={handleForgotPassword}
-                  className="h-auto px-0 text-sm"
+                {/* Recuperação de senha (PRD-01.1) — rota dedicada. */}
+                <Link
+                  href="/esqueci-senha"
+                  className="text-sm font-medium text-primary hover:underline"
                 >
                   Esqueci minha senha
-                </Button>
+                </Link>
               </div>
             </FormItem>
           )}

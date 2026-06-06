@@ -132,17 +132,14 @@ describe("LoginForm", () => {
     expect(screen.queryByRole("link", { name: "Cadastre-se" })).toBeNull();
   });
 
-  it("'Esqueci minha senha' está ativo e dispara o toast 'Em breve' (A4)", () => {
+  it("'Esqueci minha senha' é um link para /esqueci-senha (PRD-01.1)", () => {
     render(<LoginForm />);
 
-    const forgot = screen.getByRole("button", {
+    const forgot = screen.getByRole("link", {
       name: "Esqueci minha senha",
     });
-    // Placeholder ativo: sem aria-disabled (contradição resolvida).
-    expect(forgot.getAttribute("aria-disabled")).toBeNull();
-
-    fireEvent.click(forgot);
-    expect(toastMock).toHaveBeenCalledTimes(1);
-    expect(toastMock).toHaveBeenCalledWith("Em breve");
+    expect(forgot.getAttribute("href")).toBe("/esqueci-senha");
+    // Não é mais um placeholder com toast.
+    expect(toastMock).not.toHaveBeenCalled();
   });
 });
