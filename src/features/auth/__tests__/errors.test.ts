@@ -55,6 +55,29 @@ describe("mapAuthError › códigos mapeados", () => {
   });
 });
 
+describe("mapAuthError › códigos de action-code (recuperação de senha)", () => {
+  it("invalid-action-code retorna mensagem específica de link inválido", () => {
+    const message = mapAuthError("auth/invalid-action-code");
+    expect(message).not.toBe(FALLBACK_MESSAGE);
+    expect(message).not.toBe(CREDENTIAL_MESSAGE);
+    expect(message.toLowerCase()).toContain("link");
+  });
+
+  it("expired-action-code retorna mensagem específica de link expirado", () => {
+    const message = mapAuthError("auth/expired-action-code");
+    expect(message).not.toBe(FALLBACK_MESSAGE);
+    expect(message).not.toBe(CREDENTIAL_MESSAGE);
+    expect(message.toLowerCase()).toContain("expir");
+  });
+
+  it("user-disabled retorna mensagem específica de conta desativada", () => {
+    const message = mapAuthError("auth/user-disabled");
+    expect(message).not.toBe(FALLBACK_MESSAGE);
+    expect(message).not.toBe(CREDENTIAL_MESSAGE);
+    expect(message.length).toBeGreaterThan(0);
+  });
+});
+
 describe("mapAuthError › fallback", () => {
   it("código desconhecido cai no fallback genérico", () => {
     expect(mapAuthError("auth/some-unknown-code")).toBe(FALLBACK_MESSAGE);

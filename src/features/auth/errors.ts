@@ -39,6 +39,14 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   // Falha de rede.
   "auth/network-request-failed":
     "Falha de conexão. Verifique sua internet e tente novamente.",
+  // Recuperação de senha — link de ação (oobCode) inválido ou já usado.
+  "auth/invalid-action-code":
+    "O link de redefinição é inválido. Solicite um novo.",
+  // Recuperação de senha — link de ação expirado.
+  "auth/expired-action-code":
+    "O link de redefinição expirou. Solicite um novo.",
+  // Conta desativada (ex.: usuário bloqueado tentando redefinir senha).
+  "auth/user-disabled": "Esta conta está desativada. Contate o administrador.",
 };
 
 /**
