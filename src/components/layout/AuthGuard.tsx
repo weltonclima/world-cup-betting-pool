@@ -33,7 +33,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     if (loading) return;
 
     if (!firebaseUser) {
-      router.push("/pending");
+      router.push("/login");
       return;
     }
 
