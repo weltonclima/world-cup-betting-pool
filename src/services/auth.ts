@@ -1,8 +1,11 @@
 import {
+  confirmPasswordReset,
   createUserWithEmailAndPassword,
   deleteUser,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  verifyPasswordResetCode,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 
@@ -88,4 +91,43 @@ export async function signUp({
 /** Encerra a sessão atual no Firebase Auth. */
 export async function signOut(): Promise<void> {
   await firebaseSignOut(firebaseAuth);
+}
+
+/**
+ * Envia o e-mail de redefinição de senha (PRD-01.1, perna 1).
+ *
+ * Anti-enumeração (R3): se o e-mail não existir, o Firebase rejeita com
+ * `auth/user-not-found`. Para NÃO revelar a existência (ou não) de uma conta,
+ * esse caso é tratado como sucesso silencioso — a UI exibe a mesma tela de
+ * confirmação independentemente. Qualquer outro erro (rate limit, rede etc.)
+ * propaga cru para a UI traduzir via `mapAuthError`.
+ */
+export async function sendPasswordReset(email: string): Promise<void> {
+  try {
+    await sendPasswordResetEmail(firebaseAuth, email);
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "auth/user-not-found") return;
+    throw error;
+  }
+}
+
+/**
+ * Valida o `oobCode` do link de redefinição (PRD-01.1, perna 2) e resolve o
+ * e-mail associado ao código. Erros (`auth/invalid-action-code`,
+ * `auth/expired-action-code`…) propagam para a UI tratar o estado inválido.
+ */
+export async function verifyResetCode(oobCode: string): Promise<string> {
+  return verifyPasswordResetCode(firebaseAuth, oobCode);
+}
+
+/**
+ * Conclui a redefinição de senha (PRD-01.1, perna 2) com o `oobCode` e a nova
+ * senha. Propaga os erros do Firebase (código inválido/expirado, senha fraca).
+ */
+export async function confirmReset(
+  oobCode: string,
+  newPassword: string,
+): Promise<void> {
+  await confirmPasswordReset(firebaseAuth, oobCode, newPassword);
 }

@@ -1,14 +1,25 @@
 import type { User as FirebaseUser, UserCredential } from "firebase/auth";
 import {
+  confirmPasswordReset,
   createUserWithEmailAndPassword,
   deleteUser,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  verifyPasswordResetCode,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { signIn, signOut, signUp, type SignUpInput } from "@/services/auth";
+import {
+  confirmReset,
+  sendPasswordReset,
+  signIn,
+  signOut,
+  signUp,
+  verifyResetCode,
+  type SignUpInput,
+} from "@/services/auth";
 
 // --- Mocks de Firebase (sem rede/emulador), espelhando AuthProvider.test.tsx ---
 vi.mock("firebase/auth", () => ({
@@ -16,6 +27,9 @@ vi.mock("firebase/auth", () => ({
   createUserWithEmailAndPassword: vi.fn(),
   deleteUser: vi.fn(),
   signOut: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+  verifyPasswordResetCode: vi.fn(),
+  confirmPasswordReset: vi.fn(),
 }));
 
 vi.mock("firebase/firestore", () => ({
@@ -34,6 +48,9 @@ const deleteUserMock = vi.mocked(deleteUser);
 const signOutMock = vi.mocked(firebaseSignOut);
 const docMock = vi.mocked(doc);
 const setDocMock = vi.mocked(setDoc);
+const sendResetMock = vi.mocked(sendPasswordResetEmail);
+const verifyCodeMock = vi.mocked(verifyPasswordResetCode);
+const confirmResetMock = vi.mocked(confirmPasswordReset);
 
 // Usuário fake do Firebase Auth.
 const fakeUser = { uid: "uid-123" } as FirebaseUser;
@@ -53,6 +70,9 @@ beforeEach(() => {
   signOutMock.mockReset();
   docMock.mockReset();
   setDocMock.mockReset();
+  sendResetMock.mockReset();
+  verifyCodeMock.mockReset();
+  confirmResetMock.mockReset();
   docMock.mockReturnValue({} as ReturnType<typeof doc>);
 });
 
@@ -176,5 +196,81 @@ describe("signOut", () => {
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
     expect(signOutMock).toHaveBeenCalledWith({ __tag: "auth" });
+  });
+});
+
+describe("sendPasswordReset", () => {
+  it("chama sendPasswordResetEmail com o auth e o e-mail", async () => {
+    sendResetMock.mockResolvedValue(undefined);
+
+    await sendPasswordReset("fulano@example.com");
+
+    expect(sendResetMock).toHaveBeenCalledTimes(1);
+    expect(sendResetMock).toHaveBeenCalledWith(
+      { __tag: "auth" },
+      "fulano@example.com",
+    );
+  });
+
+  it("resolve silenciosamente quando o e-mail não existe (anti-enumeração R3)", async () => {
+    const error = Object.assign(new Error("not found"), {
+      code: "auth/user-not-found",
+    });
+    sendResetMock.mockRejectedValue(error);
+
+    await expect(sendPasswordReset("naoexiste@example.com")).resolves.toBeUndefined();
+  });
+
+  it("propaga outros erros do Firebase", async () => {
+    const error = Object.assign(new Error("rate limit"), {
+      code: "auth/too-many-requests",
+    });
+    sendResetMock.mockRejectedValue(error);
+
+    await expect(sendPasswordReset("a@b.com")).rejects.toBe(error);
+  });
+});
+
+describe("verifyResetCode", () => {
+  it("chama verifyPasswordResetCode e resolve o e-mail retornado", async () => {
+    verifyCodeMock.mockResolvedValue("fulano@example.com");
+
+    const email = await verifyResetCode("oob-code-123");
+
+    expect(verifyCodeMock).toHaveBeenCalledWith({ __tag: "auth" }, "oob-code-123");
+    expect(email).toBe("fulano@example.com");
+  });
+
+  it("propaga erro de código expirado", async () => {
+    const error = Object.assign(new Error("expired"), {
+      code: "auth/expired-action-code",
+    });
+    verifyCodeMock.mockRejectedValue(error);
+
+    await expect(verifyResetCode("velho")).rejects.toBe(error);
+  });
+});
+
+describe("confirmReset", () => {
+  it("chama confirmPasswordReset com oobCode e nova senha", async () => {
+    confirmResetMock.mockResolvedValue(undefined);
+
+    await confirmReset("oob-code-123", "novaSenha1");
+
+    expect(confirmResetMock).toHaveBeenCalledTimes(1);
+    expect(confirmResetMock).toHaveBeenCalledWith(
+      { __tag: "auth" },
+      "oob-code-123",
+      "novaSenha1",
+    );
+  });
+
+  it("propaga erro de código inválido", async () => {
+    const error = Object.assign(new Error("invalid"), {
+      code: "auth/invalid-action-code",
+    });
+    confirmResetMock.mockRejectedValue(error);
+
+    await expect(confirmReset("ruim", "novaSenha1")).rejects.toBe(error);
   });
 });
