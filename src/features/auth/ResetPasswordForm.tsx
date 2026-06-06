@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/form";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { PasswordChecklist } from "@/features/auth/PasswordChecklist";
+import { ResetVerifying } from "@/features/auth/ResetVerifying";
 import { cn } from "@/lib/utils";
 import {
   resetPasswordSchema,
@@ -101,18 +102,7 @@ export function ResetPasswordForm() {
   }
 
   if (state === "verificando") {
-    return (
-      <div className="flex flex-col items-center gap-4 py-10">
-        <LoaderCircle
-          size={32}
-          aria-hidden="true"
-          className="animate-spin text-primary motion-reduce:animate-none"
-        />
-        <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-          Validando o link de redefinição…
-        </p>
-      </div>
-    );
+    return <ResetVerifying />;
   }
 
   if (state === "invalido") {

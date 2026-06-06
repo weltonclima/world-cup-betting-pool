@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import { LoaderCircle } from "lucide-react";
 
 import { AuthLogo } from "@/components/auth/AuthLogo";
 import { ResetPasswordForm } from "@/features/auth/ResetPasswordForm";
+import { ResetVerifying } from "@/features/auth/ResetVerifying";
 
 /**
  * Página "Redefinir senha" (PRD-01.1, TASK-04).
@@ -27,27 +27,11 @@ export default function RedefinirSenhaPage() {
 
       <section className="auth-card flex-1 rounded-t-3xl bg-card px-6 pb-10 pt-8 shadow-lg">
         <div className="mx-auto w-full max-w-sm">
-          <Suspense fallback={<ResetPasswordFallback />}>
+          <Suspense fallback={<ResetVerifying />}>
             <ResetPasswordForm />
           </Suspense>
         </div>
       </section>
-    </div>
-  );
-}
-
-/** Fallback do Suspense — espelha o estado "verificando" do formulário. */
-function ResetPasswordFallback() {
-  return (
-    <div className="flex flex-col items-center gap-4 py-10">
-      <LoaderCircle
-        size={32}
-        aria-hidden="true"
-        className="animate-spin text-primary motion-reduce:animate-none"
-      />
-      <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-        Validando o link de redefinição…
-      </p>
     </div>
   );
 }
