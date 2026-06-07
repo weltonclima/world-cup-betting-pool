@@ -10,8 +10,8 @@ import {
   isPredictionLocked,
   predictionDocId,
 } from "@/features/predictions/lib";
-import { fetchAllMatches } from "../_lib/apiFootballData";
-import { apiFootballErrorResponse } from "../_lib/apiFootballError";
+import { fetchAllMatches } from "@/server/copaData";
+import { copaDataErrorResponse } from "../_lib/copaDataError";
 
 // Node runtime: firebase-admin + cookies() de next/headers exigem Node.
 export const runtime = "nodejs";
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     matches = await fetchAllMatches();
   } catch (err) {
-    return apiFootballErrorResponse(err);
+    return copaDataErrorResponse(err);
   }
 
   const match = matches.find((m) => m.id === matchId);

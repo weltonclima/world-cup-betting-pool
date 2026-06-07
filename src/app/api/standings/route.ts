@@ -1,8 +1,8 @@
 /**
- * GET /api/standings (TASK-04, A1) — grupos derivados das seleções.
+ * GET /api/standings — grupos derivados das seleções.
  *
- * A API-Football não tem (nesta camada) um endpoint dedicado de standings; o
- * agrupamento por grupo é DERIVADO do campo `groupId` de cada seleção (A1).
+ * O agrupamento por grupo é DERIVADO do campo `groupId` de cada seleção.
+ * groupId vem de match.group do openfootball ("Group A" → "A").
  *
  * Resposta (StandingsResponse):
  *   {
@@ -10,16 +10,15 @@
  *     ungrouped: TeamWithId[]                                   // seleções sem grupo
  *   }
  *
- * Cache (A5): `REVALIDATE.grupos` (24h) — composição dos grupos é estática.
+ * Cache: 24h — composição dos grupos é estática.
  */
 
 import { NextResponse } from "next/server";
 
-import { apiFootballErrorResponse } from "../_lib/apiFootballError";
-import { fetchAllTeams, type TeamWithId } from "../_lib/apiFootballData";
+import { copaDataErrorResponse } from "../_lib/copaDataError";
+import { fetchAllTeams, type TeamWithId } from "@/server/copaData";
 
-// Literal estático obrigatório pelo Next.js (MemberExpression não é suportado).
-// Valor: REVALIDATE.grupos = 86400s (24h).
+// Literal estático obrigatório pelo Next.js.
 export const revalidate = 86400;
 
 interface GroupStanding {
@@ -64,6 +63,6 @@ export async function GET(): Promise<NextResponse> {
     const body: StandingsResponse = { groups, ungrouped };
     return NextResponse.json(body);
   } catch (err) {
-    return apiFootballErrorResponse(err);
+    return copaDataErrorResponse(err);
   }
 }

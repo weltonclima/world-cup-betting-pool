@@ -1,28 +1,23 @@
 /**
- * GET /api/matches (TASK-04) — todas as partidas da Copa, mapeadas e validadas.
+ * GET /api/matches — todas as partidas da Copa, mapeadas e validadas.
  *
- * Proxy + cache + validação da API-Football. Resposta: `MatchWithId[]` com
- * `id = String(fixture.id)` (matches não são persistidos no Firestore).
- *
- * Cache (A5): base `REVALIDATE.jogoAoVivo` (60s) — endpoint único; granularidade
- * fina por status fica no client (React Query staleTime, TASK-06). Ver spec §5.
+ * Proxy + cache. Resposta: `MatchWithId[]` com id estável (slug para grupos,
+ * m{num} para mata-mata). Dados via openfootball/worldcup.json (D-OF1).
  */
 
 import { NextResponse } from "next/server";
 
-import { apiFootballErrorResponse } from "../_lib/apiFootballError";
-import { fetchAllMatches } from "../_lib/apiFootballData";
+import { copaDataErrorResponse } from "../_lib/copaDataError";
+import { fetchAllMatches } from "@/server/copaData";
 
-// Cache de segmento (A5): teto fresco único; client segmenta por tier.
-// Literal estático obrigatório pelo Next.js (MemberExpression não é suportado).
-// Valor: REVALIDATE.jogoAoVivo = 60s (1min).
-export const revalidate = 60;
+// Cache de segmento: 1h — dados mudam quando score.ft é populado.
+export const revalidate = 3600;
 
 export async function GET(): Promise<NextResponse> {
   try {
     const matches = await fetchAllMatches();
     return NextResponse.json(matches);
   } catch (err) {
-    return apiFootballErrorResponse(err);
+    return copaDataErrorResponse(err);
   }
 }

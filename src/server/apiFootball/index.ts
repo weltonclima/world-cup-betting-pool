@@ -1,6 +1,11 @@
 /**
  * Barrel (entrada pública) da camada de integração API-Football.
  *
+ * @deprecated Módulo aposentado — substituído por `@/server/copaData` (TASK-17).
+ * Os imports de produção (Route Handlers) foram migrados para `@/server/copaData`.
+ * Este módulo é mantido como referência histórica e para testes isolados.
+ * Não remover sem verificar que nenhum código de produção importa daqui.
+ *
  * `import "server-only"` garante que qualquer tentativa de importar esta API
  * a partir de um Client Component falhe no build (o marker lança fora do
  * bundle de servidor). Route Handlers e código server devem consumir a API
