@@ -93,3 +93,7 @@ export type {
   Finalists,
   ScoresByMatchId,
 } from "./FinalSummary";
+
+// Casca do wizard + Completar Copa (TASK-16).
+export { PredictionsWizard } from "./PredictionsWizard";
+export type { PredictionsWizardProps } from "./PredictionsWizard";

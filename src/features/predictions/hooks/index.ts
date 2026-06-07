@@ -10,3 +10,6 @@ export { usePredictionDraft } from "./usePredictionDraft";
 export type { PredictionDraftAPI } from "./usePredictionDraft";
 export { useGroupPredictions } from "./useGroupPredictions";
 export type { GroupPredictionItem, GroupPredictionsData } from "./useGroupPredictions";
+// TASK-16
+export { usePredictionsWizard } from "./usePredictionsWizard";
+export type { PredictionsWizardState } from "./usePredictionsWizard";

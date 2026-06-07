@@ -83,13 +83,17 @@ export default function PredictionsHubPage() {
   const isComplete = progress.global.total > 0 && progress.global.filled === progress.global.total;
 
   // CTA: destino do "Completar Copa" → primeira fase não-concluída e não-bloqueada.
-  // Fallback para a Fase de Grupos (sempre desbloqueada).
+  // Fallback para a Fase de Grupos (sempre desbloqueada). Ativa o modo guiado do
+  // wizard (TASK-16) via `?wizard=1` — salvo se o destino é o Resumo Final (copa
+  // completa), onde o fluxo guiado não precisa iniciar.
   const completeHref = useMemo(() => {
+    if (isComplete) return "/predictions/resumo";
     const next = phases.find(
       (p) => p.status === "andamento" || p.status === "nao-iniciado",
     );
-    return next?.href ?? "/predictions/grupos";
-  }, [phases]);
+    const target = next?.href ?? "/predictions/grupos";
+    return `${target}?wizard=1`;
+  }, [phases, isComplete]);
 
   const refetch = () => {
     void matchesQuery.refetch();
