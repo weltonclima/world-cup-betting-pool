@@ -33,8 +33,8 @@ describe("shared › enums", () => {
     expect(userStatusSchema.safeParse("deleted").success).toBe(false);
   });
 
-  it("stageSchema aceita as 5 fases e rejeita fora do enum", () => {
-    for (const s of ["grupos", "oitavas", "quartas", "semifinal", "final"]) {
+  it("stageSchema aceita as 6 fases e rejeita fora do enum", () => {
+    for (const s of ["grupos", "oitavas", "quartas", "semifinal", "terceiro", "final"]) {
       expect(stageSchema.safeParse(s).success).toBe(true);
     }
     expect(stageSchema.safeParse("terceiro_lugar").success).toBe(false);
@@ -103,7 +103,7 @@ describe("shared › inferência de tipos", () => {
       "pending" | "approved" | "blocked"
     >();
     expectTypeOf<Stage>().toEqualTypeOf<
-      "grupos" | "oitavas" | "quartas" | "semifinal" | "final"
+      "grupos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final"
     >();
     expectTypeOf<RankingScope>().toEqualTypeOf<
       "geral" | "grupos" | "oitavas" | "quartas" | "semifinal" | "final"
