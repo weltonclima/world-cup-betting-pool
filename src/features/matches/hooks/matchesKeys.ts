@@ -21,4 +21,5 @@ export const matchesKeys = {
   details: () => [...matchesKeys.all(), "detail"] as const,
   detail: (id: string) => [...matchesKeys.details(), id] as const,
   teams: () => [...matchesKeys.all(), "teams"] as const,
+  predictions: (uid: string) => [...matchesKeys.all(), "predictions", uid] as const,
 } as const;
