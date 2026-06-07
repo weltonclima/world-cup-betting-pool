@@ -92,6 +92,9 @@ describe("shared › primitivos", () => {
 
   it("isoDateTime valida data ISO 8601", () => {
     expect(isoDateTime.safeParse("2026-06-05T12:00:00Z").success).toBe(true);
+    // Offset numérico aceito (formato da API-Football: fixture.date com "+00:00").
+    expect(isoDateTime.safeParse("2026-06-05T12:00:00+00:00").success).toBe(true);
+    expect(isoDateTime.safeParse("2026-06-11T15:00:00-03:00").success).toBe(true);
     expect(isoDateTime.safeParse("não-é-data").success).toBe(false);
   });
 });

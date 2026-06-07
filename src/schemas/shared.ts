@@ -38,4 +38,7 @@ export const matchStatusSchema = z.enum([
 export const nonEmptyString = z.string().min(1);
 export const scoreSchema = z.int().min(0); // placar inteiro ≥ 0
 export const percentageSchema = z.number().min(0).max(100); // aproveitamento 0–100
-export const isoDateTime = z.iso.datetime(); // data/hora em ISO 8601
+// Aceita tanto sufixo 'Z' quanto offset numérico (ex.: "+00:00", "-03:00").
+// A API-Football retorna fixture.date com offset ("...+00:00"); sem offset:true o
+// parse falharia e os Route Handlers de partidas quebrariam com dado real (TASK-04).
+export const isoDateTime = z.iso.datetime({ offset: true }); // data/hora em ISO 8601
