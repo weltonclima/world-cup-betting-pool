@@ -12,6 +12,7 @@ export const stageSchema = z.enum([
   "oitavas",
   "quartas",
   "semifinal",
+  "terceiro", // disputa do 3º lugar (API: "3rd Place Final")
   "final",
 ]);
 
