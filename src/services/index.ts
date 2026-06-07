@@ -8,3 +8,5 @@ export {
   confirmReset,
   type SignUpInput,
 } from "./auth";
+
+export { listUsersByStatus, updateUserStatus } from "./users";
