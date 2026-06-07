@@ -2,22 +2,33 @@
 
 /**
  * Página de Palpite em Massa do Grupo (/predictions/grupos/[groupId]) —
- * TASK-09 (PRD03-03).
+ * TASK-09 (PRD03-03) + Classificação Prevista TASK-10 (PRD03-04).
  *
  * Preenche os 6 jogos do grupo numa tela: data-fetching via useGroupPredictions,
  * auto-save em rascunho local (usePredictionDraft) a cada alteração (sem travar
  * a digitação) e persistência server em lote (useUpsertPredictionsBatch) ao
  * "Salvar Grupo". Feedback agregado via Sonner. Jogos encerrados entram travados.
  *
+ * Após "Salvar Grupo" (com sucesso) ou via toggle, exibe a seção Classificação
+ * Prevista (TASK-10) calculada client-side de computeGroupStandings — VISUAL,
+ * não pontuada (A2). Mantém o fluxo numa única rota para o wizard (TASK-16).
+ *
  * Container com tema `.palpites-theme` (shell verde — MASTER §2.4-palpites).
- * O componente apresentacional GroupQuickFill cuida do render; esta página
- * orquestra hooks, draft e toast.
  */
 
-import { use, useCallback } from "react";
+import { use, useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { ListOrdered } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useGroupMatches, useTeams } from "@/features/matches/hooks";
+import {
+  buildTeamMap,
+  resolveTeam,
+} from "@/features/matches/lib/matchesHelpers";
 import {
   useGroupPredictions,
   usePredictionDraft,
@@ -25,8 +36,11 @@ import {
 } from "@/features/predictions/hooks";
 import {
   GroupQuickFill,
+  PredictedStandings,
   buildSaveFeedback,
 } from "@/features/predictions/components";
+import { computeGroupStandings } from "@/features/predictions/lib";
+import type { Prediction } from "@/types";
 import type { UpsertPredictionInput } from "@/services/predictions";
 
 interface GroupFillPageProps {
@@ -42,6 +56,7 @@ const TOAST_BY_TONE = {
 
 export default function GroupFillPage({ params }: GroupFillPageProps) {
   const { groupId } = use(params);
+  const router = useRouter();
 
   const { firebaseUser } = useAuth();
   const uid = firebaseUser?.uid ?? null;
@@ -49,6 +64,13 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
   const group = useGroupPredictions(groupId);
   const draft = usePredictionDraft(uid ?? "");
   const batch = useUpsertPredictionsBatch(uid ?? "");
+
+  // Fontes brutas para a classificação prevista (TASK-10): matches do grupo +
+  // mapa de times. As predictions são montadas dos currentScores dos items.
+  const groupMatchesQuery = useGroupMatches(groupId);
+  const teamsQuery = useTeams();
+
+  const [showStandings, setShowStandings] = useState(false);
 
   // uid ausente é tratado como loading (consistente com Hub/grid).
   const isLoading = uid === null || group.isLoading;
@@ -68,7 +90,8 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
 
   /**
    * Salvar Grupo (R5/R6): monta o payload com itens não bloqueados e com par
-   * completo; dispara o batch; toast agregado conforme o resultado.
+   * completo; dispara o batch; toast agregado conforme o resultado. Em sucesso
+   * com saved>0, revela a Classificação Prevista (TASK-10).
    */
   const handleSave = useCallback(() => {
     const payload: UpsertPredictionInput[] = group.items
@@ -94,6 +117,7 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
       onSuccess: (result) => {
         const feedback = buildSaveFeedback(result);
         TOAST_BY_TONE[feedback.tone](feedback.message);
+        if (result.saved.length > 0) setShowStandings(true);
       },
       onError: (error) => {
         toast.error(error.message);
@@ -101,8 +125,45 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
     });
   }, [group.items, batch]);
 
+  // Classificação prevista (TASK-10): derivada client-side dos currentScores.
+  const teamMap = useMemo(
+    () => buildTeamMap(teamsQuery.data ?? []),
+    [teamsQuery.data],
+  );
+
+  const predictionsFromDraft = useMemo<Prediction[]>(
+    () =>
+      group.items
+        .filter((item) => item.currentScores !== undefined)
+        .map((item) => ({
+          uid: uid ?? "",
+          matchId: item.matchId,
+          homeScore: item.currentScores!.homeScore,
+          awayScore: item.currentScores!.awayScore,
+        })),
+    [group.items, uid],
+  );
+
+  const standings = useMemo(
+    () =>
+      computeGroupStandings(
+        groupMatchesQuery.data ?? [],
+        predictionsFromDraft,
+      ),
+    [groupMatchesQuery.data, predictionsFromDraft],
+  );
+
+  const resolveTeamName = useCallback(
+    (teamId: string) => resolveTeam(teamId, teamMap),
+    [teamMap],
+  );
+
+  const isPartial = group.filledCount < group.totalCount;
+  const canShowStandings =
+    !isLoading && !group.isError && standings.length > 0;
+
   return (
-    <div className="palpites-theme mx-auto flex max-w-2xl flex-col pb-20 md:pb-4">
+    <div className="palpites-theme mx-auto flex max-w-2xl flex-col gap-6 pb-20 md:pb-4">
       <GroupQuickFill
         groupId={groupId}
         items={group.items}
@@ -113,6 +174,31 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
         onScoreChange={handleScoreChange}
         onSave={handleSave}
       />
+
+      {canShowStandings && !showStandings ? (
+        <button
+          type="button"
+          onClick={() => setShowStandings(true)}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "lg" }),
+            "min-h-[44px] w-full md:w-auto md:self-start",
+          )}
+        >
+          <ListOrdered size={20} aria-hidden="true" />
+          Ver classificação prevista
+        </button>
+      ) : null}
+
+      {canShowStandings && showStandings ? (
+        <PredictedStandings
+          groupId={groupId}
+          standings={standings}
+          resolveTeamName={resolveTeamName}
+          isPartial={isPartial}
+          onConfirm={() => router.push("/predictions/grupos")}
+          onEdit={() => setShowStandings(false)}
+        />
+      ) : null}
     </div>
   );
 }

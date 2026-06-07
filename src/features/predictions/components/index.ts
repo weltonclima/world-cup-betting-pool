@@ -42,3 +42,10 @@ export type {
   SaveFeedback,
   SaveFeedbackTone,
 } from "./GroupQuickFill";
+
+// Tela Classificação Prevista (TASK-10).
+export { PredictedStandings, deriveQualification } from "./PredictedStandings";
+export type {
+  PredictedStandingsProps,
+  Qualification,
+} from "./PredictedStandings";
