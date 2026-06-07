@@ -32,3 +32,13 @@ export type {
   GroupSelectionGridProps,
   GroupSummary,
 } from "./GroupSelectionGrid";
+
+// Tela Palpite em Massa do Grupo (TASK-09).
+export { GroupMatchRow } from "./GroupMatchRow";
+export type { GroupMatchRowProps } from "./GroupMatchRow";
+export { GroupQuickFill, buildSaveFeedback } from "./GroupQuickFill";
+export type {
+  GroupQuickFillProps,
+  SaveFeedback,
+  SaveFeedbackTone,
+} from "./GroupQuickFill";
