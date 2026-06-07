@@ -138,7 +138,7 @@ describe("usePredictions — troca de uid", () => {
 
     const { result, rerender } = renderHook(
       ({ uid }: { uid: string | null }) => usePredictions(uid),
-      { wrapper, initialProps: { uid: null } },
+      { wrapper, initialProps: { uid: null as string | null } },
     );
 
     // Inicialmente desabilitado
