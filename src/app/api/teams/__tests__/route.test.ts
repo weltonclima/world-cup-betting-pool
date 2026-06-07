@@ -1,57 +1,75 @@
 /**
- * Testes do Route Handler GET /api/teams (TASK-04).
- * Sucesso (TeamWithId[]) e erro de auth (502).
+ * Testes do Route Handler GET /api/teams.
+ * Sucesso (TeamWithId[]) e erro de fetch (502).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MOCK_TEAMS } from "@/server/apiFootball/mock";
-import { ApiFootballAuthError } from "@/server/apiFootball/client";
+import {
+  CopaDataFetchError,
+} from "@/server/copaData/client";
 
-const { getClientMock, getTeamsMock } = vi.hoisted(() => ({
-  getClientMock: vi.fn(),
-  getTeamsMock: vi.fn(),
+const { fetchAllTeamsMock } = vi.hoisted(() => ({
+  fetchAllTeamsMock: vi.fn(),
 }));
 
-vi.mock("@/server/apiFootball", async () => {
-  const client = await vi.importActual<typeof import("@/server/apiFootball/client")>(
-    "@/server/apiFootball/client",
+vi.mock("@/server/copaData", async () => {
+  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
+    "@/server/copaData/client",
   );
   return {
-    getApiFootballClient: getClientMock,
-    COPA_2026_CONFIG: { leagueId: 1, season: 2026 },
-    ApiFootballQuotaError: client.ApiFootballQuotaError,
-    ApiFootballAuthError: client.ApiFootballAuthError,
-    ApiFootballTimeoutError: client.ApiFootballTimeoutError,
+    fetchAllMatches: vi.fn(),
+    fetchAllTeams: fetchAllTeamsMock,
+    CopaDataTimeoutError: client.CopaDataTimeoutError,
+    CopaDataFetchError: client.CopaDataFetchError,
+    CopaDataParseError: client.CopaDataParseError,
   };
 });
 
+vi.mock("server-only", () => ({}));
+
 import { GET } from "@/app/api/teams/route";
+
+const MOCK_TEAMS = [
+  {
+    id: "MEX",
+    code: "MEX",
+    name: "México",
+    flagUrl: "https://flagcdn.com/h40/mx.png",
+    groupId: "A",
+  },
+  {
+    id: "RSA",
+    code: "RSA",
+    name: "África do Sul",
+    flagUrl: "https://flagcdn.com/h40/za.png",
+    groupId: "A",
+  },
+];
 
 describe("GET /api/teams", () => {
   beforeEach(() => {
-    getClientMock.mockReturnValue({ getTeamsByTournament: getTeamsMock });
-    getTeamsMock.mockReset();
+    fetchAllTeamsMock.mockReset();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("responde 200 com array de TeamWithId (id = String(team.id))", async () => {
-    getTeamsMock.mockResolvedValue(MOCK_TEAMS);
+  it("responde 200 com array de TeamWithId", async () => {
+    fetchAllTeamsMock.mockResolvedValue(MOCK_TEAMS);
 
     const response = await GET();
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as Array<{ id: string; code: string }>;
     expect(body).toHaveLength(MOCK_TEAMS.length);
-    expect(body[0]?.id).toBe(String(MOCK_TEAMS[0]?.team.id));
-    expect(body[0]?.code).toBe(MOCK_TEAMS[0]?.team.code);
+    expect(body[0]?.id).toBe("MEX");
+    expect(body[0]?.code).toBe("MEX");
   });
 
-  it("responde 502 em ApiFootballAuthError", async () => {
-    getTeamsMock.mockRejectedValue(new ApiFootballAuthError());
+  it("responde 502 em CopaDataFetchError", async () => {
+    fetchAllTeamsMock.mockRejectedValue(new CopaDataFetchError(404));
 
     const response = await GET();
     expect(response.status).toBe(502);

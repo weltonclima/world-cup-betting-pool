@@ -1,34 +1,48 @@
 /**
- * Testes do Route Handler GET /api/matches/[id] (TASK-04).
- * Sucesso (id existente), 404 (id inexistente) e erro de quota.
+ * Testes do Route Handler GET /api/matches/[id].
+ * Sucesso (id existente), 404 (id inexistente) e erro de timeout.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MOCK_TEAMS } from "@/server/apiFootball/mock";
-import { ApiFootballQuotaError } from "@/server/apiFootball/client";
-import { VALID_FIXTURES } from "../../../_lib/__tests__/validFixtures";
+import {
+  CopaDataTimeoutError,
+} from "@/server/copaData/client";
 
-const { getClientMock, getFixturesMock, getTeamsMock } = vi.hoisted(() => ({
-  getClientMock: vi.fn(),
-  getFixturesMock: vi.fn(),
-  getTeamsMock: vi.fn(),
+const { fetchAllMatchesMock } = vi.hoisted(() => ({
+  fetchAllMatchesMock: vi.fn(),
 }));
 
-vi.mock("@/server/apiFootball", async () => {
-  const client = await vi.importActual<typeof import("@/server/apiFootball/client")>(
-    "@/server/apiFootball/client",
+vi.mock("@/server/copaData", async () => {
+  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
+    "@/server/copaData/client",
   );
   return {
-    getApiFootballClient: getClientMock,
-    COPA_2026_CONFIG: { leagueId: 1, season: 2026 },
-    ApiFootballQuotaError: client.ApiFootballQuotaError,
-    ApiFootballAuthError: client.ApiFootballAuthError,
-    ApiFootballTimeoutError: client.ApiFootballTimeoutError,
+    fetchAllMatches: fetchAllMatchesMock,
+    fetchAllTeams: vi.fn(),
+    CopaDataTimeoutError: client.CopaDataTimeoutError,
+    CopaDataFetchError: client.CopaDataFetchError,
+    CopaDataParseError: client.CopaDataParseError,
   };
 });
 
+vi.mock("server-only", () => ({}));
+
 import { GET } from "@/app/api/matches/[id]/route";
+
+const MOCK_MATCH = {
+  id: "2026-06-11-mexico-south-africa",
+  homeTeamId: "MEX",
+  awayTeamId: "RSA",
+  kickoffAt: "2026-06-11T13:00:00-06:00",
+  stage: "grupos" as const,
+  round: 1,
+  groupId: "A",
+  venue: { name: "Mexico City", city: "Mexico City" },
+  status: "scheduled" as const,
+  homeScore: null,
+  awayScore: null,
+};
 
 function ctx(id: string): { params: Promise<{ id: string }> } {
   return { params: Promise.resolve({ id }) };
@@ -36,12 +50,7 @@ function ctx(id: string): { params: Promise<{ id: string }> } {
 
 describe("GET /api/matches/[id]", () => {
   beforeEach(() => {
-    getClientMock.mockReturnValue({
-      getFixtures: getFixturesMock,
-      getTeamsByTournament: getTeamsMock,
-    });
-    getFixturesMock.mockReset();
-    getTeamsMock.mockReset();
+    fetchAllMatchesMock.mockReset();
   });
 
   afterEach(() => {
@@ -49,28 +58,26 @@ describe("GET /api/matches/[id]", () => {
   });
 
   it("responde 200 com a partida quando o id existe", async () => {
-    getTeamsMock.mockResolvedValue(MOCK_TEAMS);
-    getFixturesMock.mockResolvedValue(VALID_FIXTURES);
+    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
 
-    const response = await GET(new Request("http://localhost"), ctx("1001"));
+    const response = await GET(new Request("http://localhost"), ctx(MOCK_MATCH.id));
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as { id: string };
-    expect(body.id).toBe("1001");
+    expect(body.id).toBe(MOCK_MATCH.id);
   });
 
   it("responde 404 quando o id não existe", async () => {
-    getTeamsMock.mockResolvedValue(MOCK_TEAMS);
-    getFixturesMock.mockResolvedValue(VALID_FIXTURES);
+    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
 
-    const response = await GET(new Request("http://localhost"), ctx("999999"));
+    const response = await GET(new Request("http://localhost"), ctx("m999"));
     expect(response.status).toBe(404);
   });
 
-  it("responde 503 em ApiFootballQuotaError", async () => {
-    getTeamsMock.mockRejectedValue(new ApiFootballQuotaError());
+  it("responde 504 em CopaDataTimeoutError", async () => {
+    fetchAllMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
 
-    const response = await GET(new Request("http://localhost"), ctx("1001"));
-    expect(response.status).toBe(503);
+    const response = await GET(new Request("http://localhost"), ctx(MOCK_MATCH.id));
+    expect(response.status).toBe(504);
   });
 });

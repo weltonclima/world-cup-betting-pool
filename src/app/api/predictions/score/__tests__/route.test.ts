@@ -7,7 +7,7 @@
  * Mocks:
  * - `@/server/firebaseAdmin`        → getAdminAuth (verifySessionCookie) + getAdminFirestore
  * - `next/headers`                  → cookies (httpOnly session cookie)
- * - `../../../_lib/apiFootballData` → fetchAllMatches
+ * - `@/server/copaData` → fetchAllMatches
  * - `@/features/predictions/lib`    → scorePrediction (spy — usa implementação real para casos de binário)
  * - `server-only`                   → {} (sem erro fora do contexto Next.js)
  *
@@ -24,7 +24,7 @@
  * 10.  partida finished sem palpites → zero writes, scoredMatches=1, updatedPredictions=0
  * 11.  idempotência — rodar duas vezes produz os mesmos valores gravados
  * 12.  sumário correto: { scoredMatches, updatedPredictions }
- * 13.  503 — fetchAllMatches lança ApiFootballQuotaError
+ * 13.  502 — fetchAllMatches lança CopaDataFetchError
  * 14.  set() chamado com { merge: true } e apenas { status, points }
  */
 
@@ -60,10 +60,21 @@ vi.mock("next/headers", () => ({
   cookies: cookiesMock,
 }));
 
-// Mock: fetchAllMatches (caminho relativo ao arquivo de rota score/route.ts)
-vi.mock("../../../_lib/apiFootballData", () => ({
-  fetchAllMatches: fetchAllMatchesMock,
-}));
+// Mock: fetchAllMatches (copaData barrel — importado pelo route handler).
+// Reaproveita as classes reais de erro para que instanceof funcione corretamente
+// no copaDataErrorResponse.
+vi.mock("@/server/copaData", async () => {
+  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
+    "@/server/copaData/client",
+  );
+  return {
+    fetchAllMatches: fetchAllMatchesMock,
+    fetchAllTeams: vi.fn(),
+    CopaDataTimeoutError: client.CopaDataTimeoutError,
+    CopaDataFetchError: client.CopaDataFetchError,
+    CopaDataParseError: client.CopaDataParseError,
+  };
+});
 
 // Mock: scorePrediction (barrel — nunca path direto)
 // Usamos importActual para preservar predictionDocId e outros exports reais.
@@ -88,7 +99,7 @@ import { POST } from "@/app/api/predictions/score/route";
 // ---------------------------------------------------------------------------
 // Import de erros reais para instanceof funcionar corretamente no handler.
 // ---------------------------------------------------------------------------
-import { ApiFootballQuotaError } from "@/server/apiFootball/client";
+import { CopaDataFetchError } from "@/server/copaData/client";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 // ---------------------------------------------------------------------------
@@ -176,6 +187,7 @@ function makeQuerySnapshot(docs: ReturnType<typeof makeDocSnapshot>[]) {
 function makeFirestoreMock({
   matchPredictionsMap = {} as Record<string, Record<string, unknown>[]>,
   userDocData = { role: "admin" } as Record<string, unknown> | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   docSetMock = vi.fn().mockResolvedValue(undefined),
 }: {
   matchPredictionsMap?: Record<string, Record<string, unknown>[]>;
@@ -191,6 +203,7 @@ function makeFirestoreMock({
       : { exists: true, data: () => userDocData },
   );
   const userDocMock = vi.fn().mockReturnValue({ get: getMock });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const userCollectionMock = vi.fn().mockReturnValue({ doc: userDocMock });
 
   // Mock para query predictions where matchId ==
@@ -205,6 +218,7 @@ function makeFirestoreMock({
     };
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const predictionsCollectionMock = vi.fn().mockReturnValue({ where: whereMock });
 
   getFirestoreMock.mockReturnValue({
@@ -684,16 +698,16 @@ describe("POST /api/predictions/score", () => {
   // 10. Erros de upstream — fetchAllMatches lança
   // -------------------------------------------------------------------------
 
-  describe("erros de integração com API-Football", () => {
-    it("retorna 503 quando fetchAllMatches lança ApiFootballQuotaError", async () => {
-      fetchAllMatchesMock.mockRejectedValue(new ApiFootballQuotaError());
+  describe("erros de integração com copaData", () => {
+    it("retorna 502 quando fetchAllMatches lança CopaDataFetchError", async () => {
+      fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
 
       getFirestoreMock.mockReturnValue({
         collection: vi.fn().mockReturnValue({}),
       });
 
       const response = await POST(postRequestWithSecret(MOCK_SCORE_SECRET));
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(502);
     });
   });
 });
