@@ -253,14 +253,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  // ─── 10. Commit do batch ─────────────────────────────────────────────────
-  try {
-    await batch.commit();
-  } catch {
-    return NextResponse.json(
-      { error: "Erro ao salvar o lote de palpites." },
-      { status: 500 },
-    );
+  // ─── 10. Commit do batch (só se houver itens a gravar — evita round-trip à toa
+  //         quando todos os itens foram rejeitados; review WARNING-01 TASK-04) ──
+  if (saved.length > 0) {
+    try {
+      await batch.commit();
+    } catch {
+      return NextResponse.json(
+        { error: "Erro ao salvar o lote de palpites." },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ saved, rejected }, { status: 200 });
