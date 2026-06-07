@@ -1,16 +1,21 @@
 /**
  * Constantes de rótulo e cor para badges da feature Jogos (TASK-01).
  * Fonte única — sem strings de cor ou rótulo hardcodadas em outros arquivos.
+ *
+ * WARNING-1 fix (TASK-03): GAME_STATUS_LABEL é agora derivado de deriveGameStatusLabel,
+ * eliminando a duplicação silenciosa de mapa MatchStatus→rótulo.
+ * matchesHelpers.ts usa apenas `import type` de matchLabels — sem ciclo de runtime.
  */
 
-import type { GameStatusLabel, MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
+import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
+import { deriveGameStatusLabel } from "@/features/matches/lib/matchesHelpers";
 import type { MatchStatus } from "@/types";
 
 /** Rótulo em pt-BR para o status de palpite do usuário. */
 export const PREDICTION_STATUS_LABEL: Record<MatchPredictionStatus, string> = {
-  enviado: "Enviado",
-  pendente: "Pendente",
-  bloqueado: "Bloqueado",
+  enviado: "Palpite Enviado",
+  pendente: "Palpite Pendente",
+  bloqueado: "Palpite Bloqueado",
 };
 
 /**
@@ -23,14 +28,22 @@ export const PREDICTION_STATUS_COLOR: Record<MatchPredictionStatus, string> = {
   bloqueado: "bg-gray-500/20 text-gray-600",
 };
 
-/** Rótulo em pt-BR para o status do jogo. */
-export const GAME_STATUS_LABEL: Record<MatchStatus, GameStatusLabel> = {
-  scheduled: "Agendado",
-  live: "Ao Vivo",
-  finished: "Encerrado",
-  postponed: "Adiado",
-  canceled: "Cancelado",
-};
+// Todos os valores válidos de MatchStatus (espelha matchStatusSchema do shared.ts).
+const MATCH_STATUS_VALUES = [
+  "scheduled",
+  "live",
+  "finished",
+  "postponed",
+  "canceled",
+] as const satisfies readonly MatchStatus[];
+
+/**
+ * Rótulo em pt-BR para o status do jogo.
+ * Derivado de `deriveGameStatusLabel` — fonte única de verdade (WARNING-1 fix).
+ */
+export const GAME_STATUS_LABEL: Record<MatchStatus, string> = Object.fromEntries(
+  MATCH_STATUS_VALUES.map((s) => [s, deriveGameStatusLabel(s)]),
+) as Record<MatchStatus, string>;
 
 /**
  * Classes Tailwind para badge de status do jogo.
