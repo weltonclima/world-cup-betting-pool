@@ -14,6 +14,9 @@ vi.mock("@/features/admin/hooks/useUsers", () => ({
   useUsersByStatus: useUsersByStatusMock,
 }));
 
+// UserStatusList→UserActions→useUpdateUserStatus→@/firebase (valida env) — mockar.
+vi.mock("@/firebase", () => ({ firestore: {}, firebaseAuth: {} }));
+
 afterEach(() => {
   vi.clearAllMocks();
 });

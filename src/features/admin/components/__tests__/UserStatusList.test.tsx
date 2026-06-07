@@ -13,6 +13,14 @@ vi.mock("@/features/admin/hooks/useUsers", () => ({
   useUsersByStatus: useUsersByStatusMock,
 }));
 
+// Stub de UserActions: evita puxar useUpdateUserStatus/QueryClient neste teste
+// de estados. Marca presença das ações por usuário.
+vi.mock("@/features/admin/components/UserActions", () => ({
+  UserActions: ({ status }: { status: string }) => (
+    <button>acao-{status}</button>
+  ),
+}));
+
 function fakeUser(uid: string): User {
   return {
     uid,
@@ -64,7 +72,7 @@ describe("UserStatusList", () => {
     expect(screen.getByText("Nenhum usuário bloqueado.")).toBeTruthy();
   });
 
-  it("T11: data com itens → lista, sem ações (read-only)", () => {
+  it("T11: data com itens → lista com ações injetadas por usuário", () => {
     useUsersByStatusMock.mockReturnValue({
       isPending: false,
       isError: false,
@@ -73,6 +81,9 @@ describe("UserStatusList", () => {
 
     render(<UserStatusList status="approved" />);
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
-    expect(screen.queryByRole("button")).toBeNull();
+    // Cada item recebe UserActions (stub) com o status da tab.
+    expect(screen.getAllByRole("button", { name: "acao-approved" })).toHaveLength(
+      2,
+    );
   });
 });
