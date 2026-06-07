@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { fetchGoogleCerts } from "@/server/auth/googleCerts";
+import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 import { verifySession } from "@/server/auth/verifySession";
 
 /**
@@ -22,12 +23,12 @@ import { verifySession } from "@/server/auth/verifySession";
  * `role` pode estar até ~1h defasado (claim no cookie é congelado na emissão);
  * por isso a autorização sensível NÃO depende só dele.
  *
- * Nome do cookie alinhado a `SESSION_COOKIE_NAME` em
- * `src/app/api/auth/session/route.ts` (`__session` é o único cookie repassado
- * pelo CDN do Firebase App Hosting ao backend).
+ * Nome do cookie vem de `@/server/auth/sessionCookie` (`SESSION_COOKIE_NAME`),
+ * fonte única compartilhada com o Route Handler `route.ts`. Esse módulo não tem
+ * dependências de runtime Node, então é seguro importá-lo aqui no edge sem puxar
+ * `firebase-admin`. (`__session` é o único cookie repassado pelo CDN do Firebase
+ * App Hosting ao backend.)
  */
-
-const SESSION_COOKIE_NAME = "__session";
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;

@@ -10,6 +10,7 @@ import {
   type ServiceAccount,
 } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
+import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { z } from "zod";
 
 /**
@@ -94,4 +95,9 @@ export function getAdminApp(): App {
 /** `Auth` do Admin SDK (verifyIdToken / createSessionCookie / verifySessionCookie). */
 export function getAdminAuth(): Auth {
   return getAuth(getAdminApp());
+}
+
+/** `Firestore` do Admin SDK (acesso server-side ao banco). */
+export function getAdminFirestore(): Firestore {
+  return getFirestore(getAdminApp());
 }

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { getAdminAuth } from "@/server/firebaseAdmin";
+import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 /**
  * Route Handler de sessão (TASK-09) — troca o ID token do client por um session
@@ -20,10 +21,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Nome do cookie de sessão. `__session` é o ÚNICO cookie repassado pelo CDN do
- * Firebase Hosting / App Hosting ao backend — por isso o nome é fixo.
+ * Nome do cookie de sessão. Reexportado a partir do módulo compartilhado
+ * `@/server/auth/sessionCookie` (fonte única, sem dependências de runtime),
+ * para manter a superfície pública deste Route Handler e alinhar com o
+ * `middleware.ts` (edge) — evitando o literal duplicado.
  */
-export const SESSION_COOKIE_NAME = "__session";
+export { SESSION_COOKIE_NAME };
 
 /** Validade do session cookie: 5 dias (em ms para o Admin SDK, em s para o cookie). */
 const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000;
