@@ -38,7 +38,9 @@ export function HomeHeader({ name, uid }: HomeHeaderProps) {
         {/* Avatar + texto */}
         <div className="flex items-center gap-3 min-w-0">
           <Avatar className="size-12 shrink-0">
+            {/* aria-hidden: o nome completo já é lido na saudação ao lado (evita leitura redundante das iniciais). */}
             <AvatarFallback
+              aria-hidden="true"
               className={cn("text-sm font-semibold", avatarColorClass)}
             >
               {initials}
@@ -65,7 +67,6 @@ export function HomeHeader({ name, uid }: HomeHeaderProps) {
             "flex items-center justify-center size-11 rounded-full",
             "text-muted-foreground",
             "disabled:opacity-50 disabled:cursor-not-allowed",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           )}
         >
           <Bell size={20} aria-hidden="true" />
