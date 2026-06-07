@@ -145,11 +145,12 @@ export function computeIsCorrect(
   prediction: Prediction | null | undefined,
 ): boolean {
   if (!prediction) return false;
-  // match.homeScore e match.awayScore são non-null em jogos finished (refinement do schema).
-  // Cast seguro: chamado apenas com jogos finished.
+  // Guarda de segurança: placar nulo não deveria ocorrer em jogos finished
+  // (o refinement do schema garante non-null), mas protege contra dados inconsistentes.
+  if (match.homeScore === null || match.awayScore === null) return false;
   return (
-    prediction.homeScore === (match.homeScore as number) &&
-    prediction.awayScore === (match.awayScore as number)
+    prediction.homeScore === match.homeScore &&
+    prediction.awayScore === match.awayScore
   );
 }
 

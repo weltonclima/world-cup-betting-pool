@@ -13,7 +13,7 @@ import { homeKeys } from "./homeKeys";
  */
 export function useGeneralRanking(): UseQueryResult<Ranking | null> {
   return useQuery({
-    queryKey: homeKeys.generalRanking,
+    queryKey: homeKeys.generalRanking(),
     queryFn: getGeneralRanking,
   });
 }

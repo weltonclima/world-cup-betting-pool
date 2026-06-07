@@ -15,7 +15,7 @@ import { homeKeys } from "./homeKeys";
  */
 export function useTeams(): UseQueryResult<TeamWithId[]> {
   return useQuery({
-    queryKey: homeKeys.teams,
+    queryKey: homeKeys.teams(),
     queryFn: listAllTeams,
   });
 }

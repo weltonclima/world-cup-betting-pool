@@ -13,7 +13,7 @@ import { homeKeys } from "./homeKeys";
  */
 export function useSystemSettings(): UseQueryResult<SystemSettings | null> {
   return useQuery({
-    queryKey: homeKeys.systemSettings,
+    queryKey: homeKeys.systemSettings(),
     queryFn: getSystemSettings,
   });
 }

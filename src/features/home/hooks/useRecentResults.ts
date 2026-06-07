@@ -14,7 +14,7 @@ import { homeKeys } from "./homeKeys";
  */
 export function useRecentResults(): UseQueryResult<MatchWithId[]> {
   return useQuery({
-    queryKey: homeKeys.recentResults,
+    queryKey: homeKeys.recentResults(),
     queryFn: getRecentFinishedMatches,
   });
 }
