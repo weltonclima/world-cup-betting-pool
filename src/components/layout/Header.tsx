@@ -1,7 +1,18 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { ShieldCheck } from "lucide-react";
+
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+
 /** Barra de topo fixa com identidade da aplicação. */
 export function Header() {
+  const { role } = useAuth();
+  const pathname = usePathname();
+  const isAdminRoute = pathname.startsWith("/admin");
+
   return (
     <header
       role="banner"
@@ -14,8 +25,22 @@ export function Header() {
           Bolão dos Parças
         </span>
 
-        {/* Slot reservado para avatar/menu do usuário — preenchido no PRD-01 */}
-        <div aria-label="Ações do usuário" />
+        {/* Ações do usuário — entrada admin role-gated (PRD-01.2, A3 camada 1) */}
+        <div aria-label="Ações do usuário" className="flex items-center gap-1">
+          {role === "admin" ? (
+            <Button
+              variant="ghost"
+              aria-label="Painel admin"
+              aria-current={isAdminRoute ? "page" : undefined}
+              className="size-11"
+              render={
+                <Link href="/admin">
+                  <ShieldCheck size={20} aria-hidden="true" />
+                </Link>
+              }
+            />
+          ) : null}
+        </div>
       </div>
     </header>
   );
