@@ -1,3 +1,5 @@
-// Barrel da feature matches. Reexporta os hooks de dados de partidas/seleções
-// (integracao-api-football, TASK-06); UI será preenchida em PRDs futuros (Jogos).
-export { matchesKeys, useMatches, useMatch, useTeams } from "./hooks";
+// Barrel da feature matches (Jogos, PRD-03).
+// Hooks de dados (baixo nível + compositores) e componentes de UI.
+export * from "./hooks";
+export * from "./components";
+export * from "./lib";
