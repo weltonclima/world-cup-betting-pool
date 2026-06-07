@@ -31,9 +31,9 @@ import { useTeams } from "./useTeams";
 export type {
   CurrentStageSummary,
   HomeDashboardData,
+  HomePredictionStatus,
   NextMatchSummary,
   PerformanceSummary,
-  PredictionStatus,
   RankingSummary,
   RecentResult,
   ResolvedTeam,

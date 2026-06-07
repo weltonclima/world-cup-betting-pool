@@ -134,6 +134,26 @@ describe("predictions › predictionSchema (doc Firestore)", () => {
     ).toBe(true);
   });
 
+  // ---- combos semanticamente inconsistentes: validação cruzada é responsabilidade do Route Handler (TASK-04) ----
+
+  it("aceita {status:'correct', points:0} — o schema não valida a coerência status/points (TASK-04)", () => {
+    // O schema trata status e points como campos independentes e opcionais.
+    // A regra "correct implica points:1" é uma invariante de negócio que deve ser
+    // aplicada pelo Route Handler ao gravar o doc, não pelo schema de leitura.
+    expect(
+      predictionSchema.safeParse({ ...valid, status: "correct", points: 0 })
+        .success,
+    ).toBe(true);
+  });
+
+  it("aceita {status:'wrong', points:1} — o schema não valida a coerência status/points (TASK-04)", () => {
+    // Idem: "wrong implica points:0" é regra do Route Handler, não do schema.
+    expect(
+      predictionSchema.safeParse({ ...valid, status: "wrong", points: 1 })
+        .success,
+    ).toBe(true);
+  });
+
   it("rejeita campo extra mesmo com status/points presentes (.strict)", () => {
     expect(
       predictionSchema.safeParse({
@@ -176,7 +196,7 @@ describe("predictions › predictionInputSchema (body do cliente)", () => {
     ).toBe(true);
   });
 
-  it("rejeita uid no body (campo proibido — uid vem da sessão)", () => {
+  it("remove uid do body (stripped, não rejeitado — uid vem da sessão)", () => {
     // predictionInputSchema não inclui uid; se passado, não deve ser incluído no output
     // (sem .strict() a validação passa, mas uid é stripped — garantir que uid NÃO está no schema)
     const result = predictionInputSchema.safeParse({
@@ -190,7 +210,7 @@ describe("predictions › predictionInputSchema (body do cliente)", () => {
     }
   });
 
-  it("rejeita status no body (campo proibido — gravado pelo servidor)", () => {
+  it("remove status do body (stripped, não rejeitado — gravado pelo servidor)", () => {
     const result = predictionInputSchema.safeParse({
       ...validInput,
       status: "pending",
@@ -201,7 +221,7 @@ describe("predictions › predictionInputSchema (body do cliente)", () => {
     }
   });
 
-  it("rejeita points no body (campo proibido — gravado pelo servidor)", () => {
+  it("remove points do body (stripped, não rejeitado — gravado pelo servidor)", () => {
     const result = predictionInputSchema.safeParse({
       ...validInput,
       points: 1,

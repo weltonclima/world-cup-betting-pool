@@ -15,8 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
+  HomePredictionStatus,
   NextMatchSummary,
-  PredictionStatus,
   ResolvedTeam,
 } from "@/features/home/lib/homeDashboardHelpers";
 
@@ -41,8 +41,8 @@ export interface NextMatchCardProps {
 // Mapeamentos de status do palpite → badge e texto do CTA
 // ---------------------------------------------------------------------------
 
-/** Mapeamento de PredictionStatus → texto do CTA. */
-const CTA_LABEL: Record<PredictionStatus, string> = {
+/** Mapeamento de HomePredictionStatus → texto do CTA. */
+const CTA_LABEL: Record<HomePredictionStatus, string> = {
   pendente: "Enviar Palpite",
   enviado: "Editar Palpite",
   bloqueado: "Ver Jogo",
@@ -53,7 +53,7 @@ const CTA_LABEL: Record<PredictionStatus, string> = {
 // ---------------------------------------------------------------------------
 
 /** Badge de status do palpite do usuário para o próximo jogo (§3.4.1). */
-function PredictionStatusBadge({ status }: { status: PredictionStatus }) {
+function PredictionStatusBadge({ status }: { status: HomePredictionStatus }) {
   if (status === "bloqueado") {
     return <Badge variant="destructive">Encerrado</Badge>;
   }
