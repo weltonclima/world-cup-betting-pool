@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /** Barra de topo fixa com identidade da aplicação. */
 export function Header() {
@@ -28,17 +29,17 @@ export function Header() {
         {/* Ações do usuário — entrada admin role-gated (PRD-01.2, A3 camada 1) */}
         <div aria-label="Ações do usuário" className="flex items-center gap-1">
           {role === "admin" ? (
-            <Button
-              variant="ghost"
+            // Navegação → link real (role="link"). Estilizado como botão ghost
+            // via buttonVariants; não usa o primitive Button (que imporia
+            // semântica de botão a um elemento de navegação).
+            <Link
+              href="/admin"
               aria-label="Painel admin"
               aria-current={isAdminRoute ? "page" : undefined}
-              className="size-11"
-              render={
-                <Link href="/admin">
-                  <ShieldCheck size={20} aria-hidden="true" />
-                </Link>
-              }
-            />
+              className={cn(buttonVariants({ variant: "ghost" }), "size-11")}
+            >
+              <ShieldCheck size={20} aria-hidden="true" />
+            </Link>
           ) : null}
         </div>
       </div>
