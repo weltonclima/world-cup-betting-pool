@@ -54,17 +54,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---- predictions: leitura ampla (approved), escrita só do dono ----
+    // ---- predictions: leitura ampla (approved); escrita APENAS via Admin SDK ----
     // D7: approved lê todos os palpites (rankings/comparações sociais).
-    // Escrita restrita ao dono; no update exige ownership no estado atual
-    // E no novo (resource.data.uid + request.resource.data.uid) para
-    // impedir "roubar" um palpite reescrevendo o uid.
+    // MOTIVO DO BLOQUEIO DE WRITE CLIENT:
+    //   Partidas não estão no Firestore (servidas via Route Handlers — PRD-07 v2.0).
+    //   As Rules não conseguem ler `kickoffAt` para verificar o bloqueio temporal.
+    //   Toda escrita passa pelo Route Handler /api/predictions (Admin SDK),
+    //   que bypassa as Rules por design e aplica o lock server-side de forma
+    //   autoritativa. Write client-direto é negado a todos (incluindo admin).
     match /predictions/{predictionId} {
-      allow read:   if isApproved();
-      allow create: if isApproved() && isOwner(request.resource.data.uid);
-      allow update: if isApproved() && isOwner(resource.data.uid)
-                                    && isOwner(request.resource.data.uid);
-      allow delete: if (isApproved() && isOwner(resource.data.uid)) || isAdmin();
+      allow read:  if isApproved();
+      allow write: if false; // write exclusivo do Admin SDK via Route Handler
     }
 
     // ---- bonus_predictions: mesma política de predictions ----

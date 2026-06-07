@@ -207,14 +207,31 @@ describe("Firestore Security Rules — auto-cadastro (signup)", () => {
 });
 
 describe("Firestore Security Rules — predictions (ownership)", () => {
-  it("C11: cria o próprio palpite", async () => {
-    await assertSucceeds(
+  it("C11: write client-direto em predictions é negado (write só via Admin SDK)", async () => {
+    // TASK-05: matches fora do Firestore → lock não verificável em rule →
+    // write exclusivo do Route Handler /api/predictions (Admin SDK).
+    await assertFails(
       approvedDb().doc("predictions/p1").set({
         uid: "approvedUser",
         matchId: "m1",
         homeScore: 2,
         awayScore: 1,
       }),
+    );
+  });
+
+  it("C11b: update client-direto em predictions é negado (mesmo dono)", async () => {
+    // Semeia um doc via Admin SDK (como faria o Route Handler).
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("predictions/p_own").set({
+        uid: "approvedUser",
+        matchId: "m1",
+        homeScore: 1,
+        awayScore: 0,
+      });
+    });
+    await assertFails(
+      approvedDb().doc("predictions/p_own").update({ homeScore: 2 }),
     );
   });
 
@@ -329,9 +346,21 @@ describe("Firestore Security Rules — delete de predictions (B1: isApproved obr
     await assertFails(approvedDb().doc("predictions/p_outro").delete());
   });
 
-  it("C21+: approved consegue deletar o próprio palpite (caminho feliz)", async () => {
-    // Confirma que a correção B1 não bloqueou o caso legítimo.
-    await assertSucceeds(approvedDb().doc("predictions/p_approved_own").delete());
+  it("C21+: delete client-direto em predictions é negado (write só via Admin SDK)", async () => {
+    // TASK-05: write bloqueado a todos os clientes, incluindo delete.
+    await assertFails(approvedDb().doc("predictions/p_approved_own").delete());
+  });
+
+  it("C26: admin client-direto não consegue criar palpite em predictions", async () => {
+    // Admin SDK bypassa Rules; o cliente autenticado como admin não.
+    await assertFails(
+      adminDb().doc("predictions/p_admin").set({
+        uid: "adminUser",
+        matchId: "m1",
+        homeScore: 0,
+        awayScore: 0,
+      }),
+    );
   });
 });
 
