@@ -34,6 +34,13 @@ export const matchStatusSchema = z.enum([
   "canceled",
 ]);
 
+export const predictionStatusSchema = z.enum([
+  "pending",   // palpite registrado, partida não finalizada
+  "correct",   // placar exato acertado (gravado pelo servidor)
+  "wrong",     // placar errado (gravado pelo servidor)
+  "locked",    // partida iniciada antes da finalização (não pontuada ainda)
+]);
+
 // Primitivos compartilhados.
 export const nonEmptyString = z.string().min(1);
 export const scoreSchema = z.int().min(0); // placar inteiro ≥ 0

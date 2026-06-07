@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import type {
   matchStatusSchema,
+  predictionStatusSchema,
   rankingScopeSchema,
   roleSchema,
   stageSchema,
@@ -14,3 +15,4 @@ export type UserStatus = z.infer<typeof userStatusSchema>;
 export type Stage = z.infer<typeof stageSchema>;
 export type RankingScope = z.infer<typeof rankingScopeSchema>;
 export type MatchStatus = z.infer<typeof matchStatusSchema>;
+export type PredictionStatus = z.infer<typeof predictionStatusSchema>;
