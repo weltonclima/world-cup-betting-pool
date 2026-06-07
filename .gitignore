@@ -1,0 +1,21 @@
+/node_modules
+/.next/
+/out/
+/build
+.env*
+!.env.local.example
+!.env.production.example
+*.log
+.DS_Store
+/coverage
+next-env.d.ts
+*.tsbuildinfo
+
+# Firebase
+/.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*-debug.log
+/emulator-data/
+serviceAccountKey.json

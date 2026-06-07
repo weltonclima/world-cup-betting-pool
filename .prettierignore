@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+build
+coverage
+*.lock
+
+# Pastas de tooling/documentação fora do escopo de formatação do código-fonte
+.claude
+ai
+docs

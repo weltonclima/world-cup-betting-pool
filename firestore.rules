@@ -1,0 +1,96 @@
+rules_version = '2';
+
+// Bolão dos Parças — Security Rules (TASK-08).
+// Controle de acesso por dois eixos: status (pending|approved|blocked) e
+// role (user|admin). As rules são a última linha de defesa: o frontend
+// nunca é confiável. Modelo: só autenticado + approved enxerga as áreas
+// internas; cada um escreve apenas os próprios palpites; só admin muda
+// role/status de terceiros e administra dados do torneio; o auto-cadastro
+// nasce sempre pending/user e não pode se auto-promover.
+// Deny-by-default: qualquer path não casado é negado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers (status/role via get() do doc do requisitante) ----
+    // Curto-circuito em isSignedIn() garante que o get() nunca roda para
+    // usuário não autenticado (request.auth.uid nulo invalidaria o path).
+    function isSignedIn() { return request.auth != null; }
+
+    function getUserData() {
+      // Lê o doc do PRÓPRIO requisitante (users/{request.auth.uid}).
+      // Se o doc ainda não existir (signup em andamento), isAdmin()/
+      // isApproved() resultam false — comportamento seguro (nega).
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin()    { return isSignedIn() && getUserData().role == "admin"; }
+    function isApproved() { return isSignedIn() && getUserData().status == "approved"; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    // ---- users: perfil/role/status ----
+    // Leitura só do dono ou admin: o perfil tem e-mail/role/status e não
+    // pode vazar para todos. Apelido de terceiros vem desnormalizado de
+    // rankings/statistics, não desta coleção.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Auto-cadastro força status="pending" + role="user" (impossível
+      // nascer admin/approved). Admin cria livre (via Admin SDK/console).
+      allow create: if isAdmin() || (
+        isOwner(uid) &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.role == "user"
+      );
+
+      // Dono atualiza o próprio doc SEM mudar role/status; só admin muda
+      // role/status (aprovar/bloquear/promover).
+      allow update: if isAdmin() || (
+        isOwner(uid) &&
+        resource.data.keys().hasAll(["role", "status"]) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.status == resource.data.status
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ---- predictions: leitura ampla (approved), escrita só do dono ----
+    // D7: approved lê todos os palpites (rankings/comparações sociais).
+    // Escrita restrita ao dono; no update exige ownership no estado atual
+    // E no novo (resource.data.uid + request.resource.data.uid) para
+    // impedir "roubar" um palpite reescrevendo o uid.
+    match /predictions/{predictionId} {
+      allow read:   if isApproved();
+      allow create: if isApproved() && isOwner(request.resource.data.uid);
+      allow update: if isApproved() && isOwner(resource.data.uid)
+                                    && isOwner(request.resource.data.uid);
+      allow delete: if (isApproved() && isOwner(resource.data.uid)) || isAdmin();
+    }
+
+    // ---- bonus_predictions: mesma política de predictions ----
+    match /bonus_predictions/{bonusId} {
+      allow read:   if isApproved();
+      allow create: if isApproved() && isOwner(request.resource.data.uid);
+      allow update: if isApproved() && isOwner(resource.data.uid)
+                                    && isOwner(request.resource.data.uid);
+      allow delete: if (isApproved() && isOwner(resource.data.uid)) || isAdmin();
+    }
+
+    // ---- Coleções do torneio: approved lê, admin escreve ----
+    // As Cloud Functions populam estas coleções via Admin SDK, que bypassa
+    // as Security Rules por design (TASK-09). isAdmin() cobre escrita manual
+    // via cliente admin. statistics/rankings são derivados (só Functions).
+    match /teams/{teamId}        { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /groups/{groupId}      { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /matches/{matchId}     { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /rankings/{scope}      { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /statistics/{uid}      { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /system_settings/{id}  { allow read: if isApproved(); allow write: if isAdmin(); }
+
+    // ---- Deny-by-default: qualquer outro path ----
+    // Redundante (não casar já nega), mantido como afirmação explícita.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
