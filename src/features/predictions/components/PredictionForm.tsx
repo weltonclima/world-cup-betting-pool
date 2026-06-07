@@ -24,16 +24,13 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { AlertCircle, ArrowLeft, Calendar, MapPin } from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Form, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatchDetail } from "@/features/matches/hooks/useMatchDetail";
 import type { MatchDetailItem } from "@/features/matches/hooks/useMatchDetail";
-import type { ResolvedTeam } from "@/features/matches/lib/matchesHelpers";
 import { isPredictionLocked } from "@/features/predictions/lib";
 import { usePredictions, useUpsertPrediction } from "@/features/predictions/hooks";
 import {
@@ -41,6 +38,7 @@ import {
   type PredictionFormValues,
 } from "@/schemas/predictions";
 
+import { MatchHeader } from "./_MatchHeader";
 import { PredictionLockedState } from "./PredictionLockedState";
 import { PredictionSuccess } from "./PredictionSuccess";
 import { ScoreInput } from "./ScoreInput";
@@ -51,96 +49,6 @@ import { ScoreInput } from "./ScoreInput";
 
 export interface PredictionFormProps {
   matchId: string;
-}
-
-// ---------------------------------------------------------------------------
-// Subcomponente: TeamFlag
-// ---------------------------------------------------------------------------
-
-function TeamFlag({ team }: { team: ResolvedTeam }) {
-  if (team.flagUrl) {
-    return (
-      <img
-        src={team.flagUrl}
-        alt={team.name}
-        width={64}
-        height={44}
-        loading="lazy"
-        decoding="async"
-        className="w-16 h-11 rounded object-contain"
-      />
-    );
-  }
-
-  const initials = team.name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
-
-  return (
-    <span
-      aria-label={team.name}
-      className="w-16 h-11 flex items-center justify-center rounded bg-muted text-sm font-bold text-muted-foreground"
-    >
-      {initials}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Subcomponente: MatchHeader
-// ---------------------------------------------------------------------------
-
-function MatchHeader({ match }: { match: MatchDetailItem }) {
-  const kickoffDate = new Date(match.kickoffAt);
-  const dateStr = format(kickoffDate, "dd/MM/yyyy", { locale: ptBR });
-  const timeStr = format(kickoffDate, "HH:mm");
-
-  return (
-    <div className="rounded-xl border border-border bg-card shadow-sm p-4 flex flex-col gap-3">
-      {/* Times */}
-      <div className="flex items-center justify-around gap-4">
-        {/* Mandante */}
-        <div className="flex flex-col items-center gap-2 flex-1">
-          <TeamFlag team={match.homeTeam} />
-          <span className="text-sm font-medium text-foreground text-center">
-            {match.homeTeam.name}
-          </span>
-        </div>
-
-        <span
-          className="text-xl font-bold text-muted-foreground"
-          aria-label="versus"
-        >
-          ×
-        </span>
-
-        {/* Visitante */}
-        <div className="flex flex-col items-center gap-2 flex-1">
-          <TeamFlag team={match.awayTeam} />
-          <span className="text-sm font-medium text-foreground text-center">
-            {match.awayTeam.name}
-          </span>
-        </div>
-      </div>
-
-      {/* Detalhes */}
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Calendar size={12} aria-hidden="true" />
-          {dateStr} - {timeStr}
-        </span>
-        {match.venue && (
-          <span className="flex items-center gap-1">
-            <MapPin size={12} aria-hidden="true" />
-            {match.venue.name}, {match.venue.city}
-          </span>
-        )}
-      </div>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -357,12 +265,14 @@ export function PredictionForm({ matchId }: PredictionFormProps) {
               name="homeScore"
               render={({ field }) => (
                 <FormItem className="flex flex-col items-center gap-0 space-y-0">
-                  <ScoreInput
-                    label="Gols Mandante"
-                    value={field.value}
-                    onChange={field.onChange}
-                    disabled={mutation.isPending}
-                  />
+                  <FormControl>
+                    <ScoreInput
+                      label="Gols Mandante"
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={mutation.isPending}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -382,12 +292,14 @@ export function PredictionForm({ matchId }: PredictionFormProps) {
               name="awayScore"
               render={({ field }) => (
                 <FormItem className="flex flex-col items-center gap-0 space-y-0">
-                  <ScoreInput
-                    label="Gols Visitante"
-                    value={field.value}
-                    onChange={field.onChange}
-                    disabled={mutation.isPending}
-                  />
+                  <FormControl>
+                    <ScoreInput
+                      label="Gols Visitante"
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={mutation.isPending}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

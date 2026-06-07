@@ -13,6 +13,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { UseQueryResult, UseMutationResult } from "@tanstack/react-query";
 
 // ── Mocks declarados ANTES dos imports de módulo (hoisting) ─────────────────
 
@@ -59,6 +60,7 @@ import { useMatchDetail } from "@/features/matches/hooks/useMatchDetail";
 import type { MatchDetailData } from "@/features/matches/hooks/useMatchDetail";
 import type { MatchListItem } from "@/features/matches/hooks/useMatchesList";
 import { usePredictions, useUpsertPrediction } from "@/features/predictions/hooks";
+import type { UpsertPredictionInput } from "@/services/predictions";
 import { isPredictionLocked } from "@/features/predictions/lib";
 import type { Prediction } from "@/types";
 
@@ -110,37 +112,65 @@ function makeMatchDetailData(overrides: Partial<MatchDetailData> = {}): MatchDet
   };
 }
 
-function makeMutationResult(overrides: Record<string, unknown> = {}) {
+function makeMutationResult(
+  overrides: Partial<UseMutationResult<void, Error, UpsertPredictionInput>> = {},
+): UseMutationResult<void, Error, UpsertPredictionInput> {
   return {
     mutate: vi.fn(),
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,
     isError: false,
     isSuccess: false,
+    isIdle: true,
     error: null,
+    data: undefined,
+    variables: undefined,
+    context: undefined,
+    failureCount: 0,
+    failureReason: null,
+    isPaused: false,
+    status: "idle",
+    submittedAt: 0,
     reset: vi.fn(),
     ...overrides,
-  };
+  } as UseMutationResult<void, Error, UpsertPredictionInput>;
 }
 
-function makePredictionsQuery(data: Prediction[] | undefined = []) {
+function makePredictionsQuery(
+  data: Prediction[] | undefined = [],
+): UseQueryResult<Prediction[]> {
   return {
     data,
     isLoading: false,
     isError: false,
     isFetching: false,
+    isSuccess: true,
+    isPending: false,
+    isLoadingError: false,
+    isRefetchError: false,
+    isPlaceholderData: false,
+    isStale: false,
+    isRefetching: false,
+    isPaused: false,
+    dataUpdatedAt: 0,
+    errorUpdatedAt: 0,
+    errorUpdateCount: 0,
+    error: null,
+    failureCount: 0,
+    failureReason: null,
+    fetchStatus: "idle",
+    status: "success",
     refetch: vi.fn(),
-  };
+    promise: Promise.resolve(data),
+  } as unknown as UseQueryResult<Prediction[]>;
 }
 
 // ── Setup padrão para PredictionForm ────────────────────────────────────────
 
 function setupDefaultMocks() {
   mockedUseMatchDetail.mockReturnValue(makeMatchDetailData({ match: matchFixture }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mockedUsePredictions.mockReturnValue(makePredictionsQuery([]) as any);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mockedUseUpsertPrediction.mockReturnValue(makeMutationResult() as any);
+  mockedUsePredictions.mockReturnValue(makePredictionsQuery([]));
+  mockedUseUpsertPrediction.mockReturnValue(makeMutationResult());
   mockedIsPredictionLocked.mockReturnValue(false);
 }
 
@@ -372,8 +402,7 @@ describe("PredictionForm — modo CREATE (sem palpite existente)", () => {
 
 describe("PredictionForm — modo EDIT (palpite existente)", () => {
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockedUsePredictions.mockReturnValue(makePredictionsQuery([predictionFixture]) as any);
+    mockedUsePredictions.mockReturnValue(makePredictionsQuery([predictionFixture]));
   });
 
   it("T31: exibe título 'Editar Palpite'", () => {
@@ -428,8 +457,7 @@ describe("PredictionForm — quando isPredictionLocked=true", () => {
   });
 
   it("T37: com prediction existente — mostra placar no estado bloqueado", () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockedUsePredictions.mockReturnValue(makePredictionsQuery([predictionFixture]) as any);
+    mockedUsePredictions.mockReturnValue(makePredictionsQuery([predictionFixture]));
     render(<PredictionForm matchId="match-001" />);
     expect(screen.getByText("Palpite bloqueado")).toBeTruthy();
   });
@@ -443,8 +471,7 @@ describe("PredictionForm — submit", () => {
   it("T38: submit chama mutation.mutateAsync com {matchId, homeScore, awayScore} corretos", async () => {
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
     mockedUseUpsertPrediction.mockReturnValue(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeMutationResult({ mutateAsync }) as any,
+      makeMutationResult({ mutateAsync }),
     );
 
     render(<PredictionForm matchId="match-001" />);
@@ -469,8 +496,7 @@ describe("PredictionForm — submit", () => {
   it("T39: onSuccess → renderiza PredictionSuccess com 'Palpite registrado!'", async () => {
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
     mockedUseUpsertPrediction.mockReturnValue(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeMutationResult({ mutateAsync }) as any,
+      makeMutationResult({ mutateAsync }),
     );
 
     render(<PredictionForm matchId="match-001" />);
@@ -486,8 +512,7 @@ describe("PredictionForm — submit", () => {
   it("T40: onSuccess → exibe 'Seu palpite foi salvo com sucesso.'", async () => {
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
     mockedUseUpsertPrediction.mockReturnValue(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      makeMutationResult({ mutateAsync }) as any,
+      makeMutationResult({ mutateAsync }),
     );
 
     render(<PredictionForm matchId="match-001" />);
