@@ -30,8 +30,8 @@ export interface ResolvedTeam {
   flagUrl: string | undefined; // undefined se não constar no doc (campo opcional no schema)
 }
 
-/** Status do palpite do usuário para o próximo jogo (A6). */
-export type PredictionStatus = "enviado" | "pendente" | "bloqueado";
+/** Status do palpite do usuário para o próximo jogo (A6). UI da Home feature. */
+export type HomePredictionStatus = "enviado" | "pendente" | "bloqueado";
 
 /** Próximo jogo com dados resolvidos. */
 export interface NextMatchSummary {
@@ -39,7 +39,7 @@ export interface NextMatchSummary {
   kickoffAt: string;           // ISO 8601
   homeTeam: ResolvedTeam;
   awayTeam: ResolvedTeam;
-  predictionStatus: PredictionStatus;
+  predictionStatus: HomePredictionStatus;
   /** Palpite do usuário, se enviado. */
   userPrediction: { homeScore: number; awayScore: number } | null;
 }
@@ -170,7 +170,7 @@ export function derivePredictionStatus(
   matchId: string,
   predictions: Prediction[],
   predictionsLocked: boolean,
-): PredictionStatus {
+): HomePredictionStatus {
   if (predictionsLocked) return "bloqueado";
   const hasPrediction = predictions.some((p) => p.matchId === matchId);
   return hasPrediction ? "enviado" : "pendente";

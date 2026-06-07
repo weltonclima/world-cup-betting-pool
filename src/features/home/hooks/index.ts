@@ -10,6 +10,7 @@ export { useSystemSettings } from "./useSystemSettings";
 export { useHomeDashboard } from "./useHomeDashboard";
 export type {
   HomeDashboardData,
+  HomePredictionStatus,
   NextMatchSummary,
   RecentResult,
   RankingSummary,
@@ -17,5 +18,4 @@ export type {
   PerformanceSummary,
   CurrentStageSummary,
   SystemNotice,
-  PredictionStatus,
 } from "./useHomeDashboard";
