@@ -76,3 +76,11 @@ export { BracketMatchup } from "./BracketMatchup";
 export type { BracketMatchupProps } from "./BracketMatchup";
 export { Bracket } from "./Bracket";
 export type { BracketProps, BracketScores } from "./Bracket";
+
+// Telas das fases eliminatórias (TASK-14).
+export { KnockoutPhaseScreen } from "./KnockoutPhaseScreen";
+export type {
+  KnockoutPhaseScreenProps,
+  KnockoutSection,
+  PhaseNavLink,
+} from "./KnockoutPhaseScreen";
