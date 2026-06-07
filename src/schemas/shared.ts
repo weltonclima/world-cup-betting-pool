@@ -9,14 +9,17 @@ export const userStatusSchema = z.enum(["pending", "approved", "blocked"]);
 
 export const stageSchema = z.enum([
   "grupos",
+  "dezesseis-avos", // 16 avos de final — formato Copa 2026 (48 seleções); API-Football: "Round of 32"
   "oitavas",
   "quartas",
   "semifinal",
-  "terceiro", // disputa do 3º lugar (API: "3rd Place Final")
+  "terceiro",       // disputa do 3º lugar (API: "3rd Place Final")
   "final",
 ]);
 
-// Escopo de ranking: "geral" + as 5 fases de ranking (exclui "terceiro", que não tem ranking próprio).
+// Escopo de ranking: "geral" + as 5 fases de ranking.
+// Exclui "terceiro" (disputa do 3º lugar, jogo único sem ranking próprio)
+// e "dezesseis-avos" (Copa 2026 — sem ranking de fase previsto no PRD).
 export const rankingScopeSchema = z.enum([
   "geral",
   "grupos",

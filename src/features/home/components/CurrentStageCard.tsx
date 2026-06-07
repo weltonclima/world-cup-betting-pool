@@ -21,6 +21,7 @@ import type { Stage } from "@/types";
  */
 const STAGE_LABEL: Record<Stage, string> = {
   grupos: "Fase de Grupos",
+  "dezesseis-avos": "Dezesseis Avos de Final",
   oitavas: "Oitavas de Final",
   quartas: "Quartas de Final",
   semifinal: "Semifinal",
