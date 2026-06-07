@@ -1,14 +1,14 @@
+import { MatchList } from "@/features/matches/components/MatchList";
+
 /**
- * Placeholder da página de jogos.
- * Conteúdo real será implementado em PRDs futuros.
+ * Página `/matches` — Lista de Jogos da Copa 2026 (TASK-04).
+ *
+ * Server Component intencional: sem diretiva "use client".
+ * AuthGuard + AppShell já aplicados pelo layout pai `src/app/(app)/layout.tsx`.
+ * Toda a lógica de estado (loading/error/filtros/busca) está em <MatchList>.
+ *
+ * Padrão espelhado de `src/app/(app)/home/page.tsx`.
  */
 export default function MatchesPage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-foreground">Jogos</h1>
-      <p className="text-sm text-muted-foreground">
-        Lista de jogos em construção — conteúdo será adicionado nos próximos PRDs.
-      </p>
-    </div>
-  );
+  return <MatchList />;
 }
