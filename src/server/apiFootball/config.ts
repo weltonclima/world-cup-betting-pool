@@ -18,7 +18,7 @@ export const COPA_2026_CONFIG = {
   // this season, try from 2022 to 2024"). Usamos 2022 (Copa do Catar — 64 jogos
   // reais, plano free) até haver acesso/upgrade para 2026.
   // TODO: voltar para 2026 quando o plano liberar a temporada da próxima Copa.
-  season: 2022,
+  season: 2026,
 } as const;
 
 /**
