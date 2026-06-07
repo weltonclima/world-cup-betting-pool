@@ -209,6 +209,21 @@
     --input: oklch(0.922 0 0);
 }
 
+/*
+ * Área de Palpites em Massa — shell verde dos wireframes (PRD03-01..16).
+ * Escopo local aplicado no container raiz da rota /predictions; remapeia apenas
+ * primary/ring/sidebar-primary para o verde da identidade. Reusa o verde já
+ * validado de `.auth-theme` (mesma decisão de contraste WCAG AA: branco sobre
+ * verde ~0.46 e verde sobre branco ambos ≥ AA). Documentado em MASTER.md
+ * (§2.4-palpites) e na decisão de tela TASK-06 (§6).
+ */
+.palpites-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

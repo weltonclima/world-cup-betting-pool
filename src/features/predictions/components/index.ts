@@ -17,3 +17,11 @@ export { PhaseCard } from "./PhaseCard";
 export type { PhaseCardProps, FillStatus, PhaseStatus } from "./PhaseCard";
 export { GroupCard } from "./GroupCard";
 export type { GroupCardProps } from "./GroupCard";
+
+// Tela Hub de Palpites (TASK-07).
+export { PredictionsHub, buildHubPhases } from "./PredictionsHub";
+export type {
+  PredictionsHubProps,
+  PhaseHubItem,
+  HubPhaseInput,
+} from "./PredictionsHub";

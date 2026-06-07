@@ -98,6 +98,21 @@ A tela de **Login** usa layout de **duas zonas** (ref. `docs/prd-01/login.png`),
 
 **Logo:** Login usa `public/logo-login.png` (troféu **verde**, ref. `login.png`). A tela **Pending** NÃO usa essas classes (mantém tema claro). **Cadastro** será ajustado em iteração futura (decisão adiada).
 
+### 2.4-palpites Tema da área de Palpites em Massa (`.palpites-theme`)
+
+A jornada de palpites em massa (PRD03-01..16, feature `palpites-massa`) usa **shell + CTA + barra + realce de seleção em verde**, conforme os wireframes. Isso é uma **decisão de tema** (remapear `--primary`/`--ring`), não semântica de acerto/erro — por isso **não** reusa `--color-win/loss/draw` (que continuam reservados para semântica esportiva: ✓ de grupo concluído usa `text-win`).
+
+Implementado como **classe de escopo `.palpites-theme`** em `globals.css` (à la `.auth-theme`), aplicada no container raiz da rota `/predictions` (TASK-07). Reusa o **mesmo verde validado AA** de `.auth-theme` (troféu da identidade).
+
+| Classe | Token | Valor oklch | Uso |
+|---|---|---|---|
+| `.palpites-theme` | `--primary` | `0.46 0.16 150` | CTA, barra de progresso, realce |
+| `.palpites-theme` | `--primary-foreground` | `0.985 0 0` | Texto branco sobre primary |
+| `.palpites-theme` | `--ring` | `0.46 0.16 150` | Focus ring verde |
+| `.palpites-theme` | `--sidebar-primary` | `0.46 0.16 150` | Item ativo da nav no escopo |
+
+**Decisão de contraste (WCAG AA):** `--primary` verde médio-escuro (`~0.46`) com foreground branco → CTA (branco sobre verde) e elementos `text-primary` (verde sobre branco/card claro) ambos ≥ AA. Mesma escolha de `.auth-theme`. Cards internos permanecem em superfície clara neutra; só o shell/CTA/barra/realce ficam verdes. As primitivas (`ProgressBar`, `PhaseCard`, `GroupCard`, `CompactScoreInput`) são neutras-por-token e herdam o verde **dentro** do escopo.
+
 ### 2.4 Extensões semânticas para esportes (a adicionar em globals.css quando necessário)
 
 Estes tokens **não existem ainda** — devem ser adicionados em `globals.css` quando PRDs de features precisarem:
