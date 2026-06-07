@@ -10,3 +10,4 @@ export {
   type UpdateUserStatusVars,
 } from "./hooks/useUpdateUserStatus";
 export { usersKeys } from "./hooks/usersKeys";
+export { UsersPanel } from "./components/UsersPanel";
