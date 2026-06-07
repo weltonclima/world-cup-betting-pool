@@ -366,6 +366,7 @@ export function advanceBracket(
     if (winner === undefined) continue; // sem palpite
 
     const matchNum = extractMatchNum(matchup.matchId);
+    if (Number.isNaN(matchNum)) continue; // skip malformed matchId (e.g. "group-1")
 
     if (winner.winnerId !== null) {
       result.set(`W${matchNum}`, winner.winnerId);

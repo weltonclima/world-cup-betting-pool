@@ -92,6 +92,7 @@ const QF_MATCHES: MatchWithId[] = [
 
 const SF_MATCHES: MatchWithId[] = [
   makeKnockoutMatch(101, "W97", "W98", "semifinal"),
+  makeKnockoutMatch(102, "W98", "W99", "semifinal"),
 ];
 
 const THIRD_MATCH: MatchWithId[] = [
@@ -155,7 +156,7 @@ describe("buildBracketFromFixtures", () => {
     expect(result["dezesseis-avos"]).toHaveLength(4);
     expect(result["oitavas"]).toHaveLength(2);
     expect(result["quartas"]).toHaveLength(1);
-    expect(result["semifinal"]).toHaveLength(1);
+    expect(result["semifinal"]).toHaveLength(2);
     expect(result["terceiro"]).toHaveLength(1);
     expect(result["final"]).toHaveLength(1);
   });
@@ -410,6 +411,24 @@ describe("advanceBracket", () => {
     const r1 = advanceBracket(round, winners);
     const r2 = advanceBracket(round, winners);
     expect([...r1.entries()]).toEqual([...r2.entries()]);
+  });
+
+  it("matchId malformado (ex: 'group-1') → não insere WNaN/LNaN no Map", () => {
+    const malformedRound: BracketMatchup[] = [
+      {
+        matchId: "group-1",
+        stage: "dezesseis-avos",
+        home: { teamId: "BRA", origin: "resolved", meta: {} },
+        away: { teamId: "ARG", origin: "resolved", meta: {} },
+      },
+    ];
+    const winners = new Map<string, RoundWinner>([
+      ["group-1", { matchId: "group-1", winnerId: "BRA", loserId: "ARG" }],
+    ]);
+    const result = advanceBracket(malformedRound, winners);
+    expect(result.has("WNaN")).toBe(false);
+    expect(result.has("LNaN")).toBe(false);
+    expect(result.size).toBe(0);
   });
 
   it("jogo m103 (terceiro) com L101/L102 → resolve perdedores de semifinal", () => {
