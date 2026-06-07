@@ -229,6 +229,22 @@ export const fixtureDataInvalida: FixtureResponse = {
   league: { round: "Group Stage - 1" },
 };
 
+/** 16 avos de final (Round of 32 — Copa 2026, formato 48 seleções) */
+export const fixtureDezesseisAvos: FixtureResponse = {
+  fixture: {
+    id: 2001,
+    date: "2026-06-29T21:00:00.000Z",
+    status: { short: "NS" },
+    venue: { id: 100, name: "MetLife Stadium", city: "East Rutherford" },
+  },
+  teams: {
+    home: { id: 6, name: "Brasil" },
+    away: { id: 9, name: "Espanha" },
+  },
+  goals: { home: null, away: null },
+  league: { round: "Round of 32" },
+};
+
 /** Partida com time ausente no teamIdMap (deve lançar erro) */
 export const fixtureTimeAusente: FixtureResponse = {
   fixture: {

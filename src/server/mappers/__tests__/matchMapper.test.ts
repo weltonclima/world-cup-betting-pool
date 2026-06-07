@@ -28,6 +28,7 @@ import {
   fixtureOffsetUtc,
   fixtureOffsetBrasilia,
   fixtureDataInvalida,
+  fixtureDezesseisAvos,
 } from "./fixtures/apiFixtureFixtures";
 
 describe("mapApiFixtureToFirestore", () => {
@@ -80,6 +81,13 @@ describe("mapApiFixtureToFirestore", () => {
   it("M9: round Final mapeia para stage final", () => {
     const r = mapApiFixtureToFirestore(fixtureFinal, TEST_TEAM_ID_MAP);
     expect(r.stage).toBe("final");
+  });
+
+  it("M-NOVO: round 'Round of 32' mapeia para stage dezesseis-avos", () => {
+    const r = mapApiFixtureToFirestore(fixtureDezesseisAvos, TEST_TEAM_ID_MAP);
+    expect(r.stage).toBe("dezesseis-avos");
+    expect(r.round).toBeNull(); // fase única, sem número de rodada
+    expect(r.groupId).toBeNull(); // não é fase de grupos
   });
 
   it("M10: round desconhecido lança erro informativo", () => {
@@ -212,6 +220,9 @@ describe("normalizeKickoffAt", () => {
 describe("mapRoundToStage", () => {
   it("converte Group Stage para grupos", () => {
     expect(mapRoundToStage("Group Stage - 1")).toBe("grupos");
+  });
+  it("mapRoundToStage: 'Round of 32' → dezesseis-avos", () => {
+    expect(mapRoundToStage("Round of 32")).toBe("dezesseis-avos");
   });
   it("converte Round of 16 para oitavas", () => {
     expect(mapRoundToStage("Round of 16")).toBe("oitavas");

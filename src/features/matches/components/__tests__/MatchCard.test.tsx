@@ -286,6 +286,31 @@ describe("MatchCard — fallback de bandeira", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Testes: rótulo de fase dezesseis-avos (TASK-01)
+// ---------------------------------------------------------------------------
+
+describe("MatchCard — rótulo dezesseis-avos (TASK-01)", () => {
+  it("T18: exibe 'Dezesseis Avos de Final' para stage dezesseis-avos", () => {
+    const dezesseisMatch: MatchWithId = {
+      ...baseMatch,
+      stage: "dezesseis-avos",
+      round: null,
+      groupId: null,
+    };
+    render(
+      <MatchCard
+        match={dezesseisMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="pendente"
+        detailHref="/matches/match-001"
+      />,
+    );
+    expect(screen.getByText(/Dezesseis Avos de Final/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Testes: venue e estádio
 // ---------------------------------------------------------------------------
 

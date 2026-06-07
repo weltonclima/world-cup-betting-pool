@@ -158,6 +158,18 @@ describe("MatchDetail — estado sucesso", () => {
     expect(screen.getByText("Fase de Grupos · Grupo C")).toBeTruthy();
   });
 
+  it("T10b: exibe 'Dezesseis Avos de Final' para stage dezesseis-avos (TASK-01)", () => {
+    const dezesseisMatch: MatchListItem = {
+      ...matchFixture,
+      stage: "dezesseis-avos",
+      round: null,
+      groupId: null,
+    };
+    mockedUseMatchDetail.mockReturnValue(makeData({ match: dezesseisMatch }));
+    render(<MatchDetail id="match-001" />);
+    expect(screen.getByText("Dezesseis Avos de Final")).toBeTruthy();
+  });
+
   it("T11: renderiza headings de seção", () => {
     mockedUseMatchDetail.mockReturnValue(makeData({ match: matchFixture }));
     render(<MatchDetail id="match-001" />);

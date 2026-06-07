@@ -15,6 +15,7 @@ import type { CurrentStageSummary } from "@/features/home/lib/homeDashboardHelpe
 /** Mapa de stage → label pt-BR esperado (espelho do STAGE_LABEL no componente). */
 const EXPECTED_LABELS: Record<string, string> = {
   grupos: "Fase de Grupos",
+  "dezesseis-avos": "Dezesseis Avos de Final",
   oitavas: "Oitavas de Final",
   quartas: "Quartas de Final",
   semifinal: "Semifinal",

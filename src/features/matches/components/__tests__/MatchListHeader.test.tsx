@@ -103,6 +103,18 @@ describe("MatchListHeader — chips de fase (Stage)", () => {
     expect(screen.getByRole("button", { name: "Fase de Grupos" })).toBeTruthy();
   });
 
+  it("T11b: exibe chip '16 Avos' entre Fase de Grupos e Oitavas (TASK-01)", () => {
+    render(<MatchListHeader {...defaultProps} />);
+    expect(screen.getByRole("button", { name: "16 Avos" })).toBeTruthy();
+  });
+
+  it("T11c: clicar em '16 Avos' chama onStageChange com 'dezesseis-avos' (TASK-01)", () => {
+    const onStageChange = vi.fn();
+    render(<MatchListHeader {...defaultProps} onStageChange={onStageChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "16 Avos" }));
+    expect(onStageChange).toHaveBeenCalledWith("dezesseis-avos");
+  });
+
   it("T12: chama onStageChange com 'grupos' ao clicar no chip Fase de Grupos", () => {
     const onStageChange = vi.fn();
     render(<MatchListHeader {...defaultProps} onStageChange={onStageChange} />);
