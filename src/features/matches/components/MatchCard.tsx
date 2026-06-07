@@ -85,16 +85,13 @@ function TeamFlag({ team }: { team: ResolvedTeam }) {
 // Subcomponente: TeamColumn (bandeira + nome)
 // ---------------------------------------------------------------------------
 
-function TeamColumn({ team, align }: { team: ResolvedTeam; align: "left" | "right" }) {
+function TeamColumn({ team }: { team: ResolvedTeam; align?: "left" | "right" }) {
   return (
-    <div
-      className={cn(
-        "flex flex-col items-center gap-1",
-        align === "left" ? "items-start sm:items-center" : "items-end sm:items-center",
-      )}
-    >
+    // flex-1 min-w-0: as duas colunas de time dividem a largura e PODEM encolher
+    // (sem min-w-0 o flex item não encolhe abaixo do conteúdo → estoura no mobile).
+    <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
       <TeamFlag team={team} />
-      <span className="text-xs font-medium text-foreground text-center max-w-[80px] md:max-w-[120px] truncate">
+      <span className="w-full truncate text-center text-xs font-medium text-foreground">
         {team.name}
       </span>
     </div>
@@ -149,7 +146,9 @@ function CenterColumn({ match }: { match: MatchWithId }) {
     match.awayScore !== null;
 
   return (
-    <div className="flex flex-col items-center gap-0.5 flex-1 px-2">
+    // Largura fixa (shrink-0): o centro não cresce nem força overflow; o estádio
+    // quebra linha (break-words) em vez de empurrar a largura do card.
+    <div className="flex w-24 shrink-0 flex-col items-center gap-0.5 px-1">
       {isFinished ? (
         // Variante encerrado: exibe placar em destaque
         <div className="flex items-center gap-2">
@@ -165,7 +164,7 @@ function CenterColumn({ match }: { match: MatchWithId }) {
       <span className="text-xs text-muted-foreground">{dateStr}</span>
 
       {match.venue && (
-        <span className="text-xs text-muted-foreground text-center">
+        <span className="text-center text-[10px] leading-tight text-muted-foreground break-words">
           {match.venue.name} · {match.venue.city}
         </span>
       )}
@@ -277,10 +276,10 @@ export function MatchCard({
         <GroupLabel match={match} />
 
         {/* Bloco central: times + horário/placar */}
-        <div className="flex items-center justify-between gap-2 py-2">
-          <TeamColumn team={homeTeam} align="left" />
+        <div className="flex items-start justify-between gap-2 py-2">
+          <TeamColumn team={homeTeam} />
           <CenterColumn match={match} />
-          <TeamColumn team={awayTeam} align="right" />
+          <TeamColumn team={awayTeam} />
         </div>
 
         {/* Rodapé: badge de status + seção extra para encerrado */}

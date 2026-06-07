@@ -37,9 +37,9 @@ export function AppShell({ children }: AppShellProps) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 px-4 py-4 pb-20 md:pb-4"
+          className="min-w-0 flex-1 px-4 py-4 pb-20 md:pb-4"
         >
-          <div className="max-w-4xl mx-auto">
+          <div className="mx-auto min-w-0 max-w-4xl">
             {children}
           </div>
         </main>

@@ -12,10 +12,13 @@
  * Copa do Mundo 2026: leagueId provavelmente = 1, season = 2026 (CONFIRMAR)
  */
 export const COPA_2026_CONFIG = {
-  // TODO: confirmar quando disponível na API-Football
+  // World Cup = league 1 na API-Football (confirmado via /leagues?search=world cup).
   leagueId: 1,
-  // TODO: confirmar quando disponível na API-Football
-  season: 2026,
+  // ⚠️ season 2026 é BLOQUEADA no plano free ("Free plans do not have access to
+  // this season, try from 2022 to 2024"). Usamos 2022 (Copa do Catar — 64 jogos
+  // reais, plano free) até haver acesso/upgrade para 2026.
+  // TODO: voltar para 2026 quando o plano liberar a temporada da próxima Copa.
+  season: 2022,
 } as const;
 
 /**
