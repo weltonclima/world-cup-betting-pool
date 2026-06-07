@@ -89,30 +89,52 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // ─── 4. Loop de pontuação ─────────────────────────────────────────────────
+  // ─── 4. Pontuação paralela ────────────────────────────────────────────────
   const db = getAdminFirestore(); // singleton — retorna mesma instância
-  let scoredMatches = 0;
-  let updatedPredictions = 0;
 
-  for (const match of finishedMatches) {
+  /**
+   * Processa uma única partida finished:
+   * - Busca todos os palpites (matchId ==)
+   * - Parseia, pontua e grava em paralelo
+   * - Retorna o número de palpites escritos com sucesso
+   */
+  async function processMatch(
+    match: (typeof finishedMatches)[number],
+  ): Promise<number> {
     const snapshot = await db
       .collection("predictions")
       .where("matchId", "==", match.id)
       .get();
 
-    for (const docSnap of snapshot.docs) {
+    const writes = snapshot.docs.map(async (docSnap): Promise<number> => {
       const parsed = predictionSchema.safeParse(docSnap.data());
-      if (!parsed.success) continue; // skip docs malformados (tolerância a falhas individuais)
+      if (!parsed.success) {
+        // #1 Observabilidade: doc malformado rastreável em produção
+        console.warn(
+          "[score] doc malformado ignorado:",
+          docSnap.ref.path,
+          parsed.error.issues,
+        );
+        return 0;
+      }
 
       const { status, points } = scorePrediction(parsed.data, match);
 
       // Idempotente: set merge sempre grava os mesmos valores derivados de função pura
       await docSnap.ref.set({ status, points }, { merge: true });
-      updatedPredictions++;
-    }
+      return 1;
+    });
 
-    scoredMatches++;
+    // Paraleliza todos os set() da partida
+    const results = await Promise.all(writes);
+    return results.reduce((sum, n) => sum + n, 0);
   }
+
+  // Paraleliza o processamento de todas as partidas finished (#2 timeout risk)
+  const perMatchCounts = await Promise.all(finishedMatches.map(processMatch));
+
+  const scoredMatches = finishedMatches.length;
+  const updatedPredictions = perMatchCounts.reduce((sum, n) => sum + n, 0);
 
   return NextResponse.json({ scoredMatches, updatedPredictions }, { status: 200 });
 }
