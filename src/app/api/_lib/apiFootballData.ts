@@ -7,18 +7,17 @@
  * da API (matches idem: id = `String(fixture.id)`).
  */
 
-import type { z } from "zod";
-
-import { matchSchema, teamSchema } from "@/schemas";
 import { getApiFootballClient, COPA_2026_CONFIG } from "@/server/apiFootball";
 import type { TeamResponse } from "@/server/apiFootball";
 import { mapApiFixtureToFirestore } from "@/server/mappers/matchMapper";
-import { mapApiTeamToFirestore } from "@/server/mappers/teamMapper";
+import {
+  mapApiTeamToFirestore,
+  type MappedTeam,
+} from "@/server/mappers/teamMapper";
 import type { MatchWithId } from "@/types/matches";
 
-type Team = z.infer<typeof teamSchema>;
 /** Seleção com o id do doc (= String(team.id) da API) injetado. */
-export type TeamWithId = Team & { id: string };
+export type TeamWithId = MappedTeam & { id: string };
 
 /** Constrói os mapas API id → doc id e API id → grupo a partir da resposta de teams. */
 function buildTeamMaps(teamsRaw: TeamResponse[]): {
@@ -49,11 +48,10 @@ export async function fetchAllMatches(): Promise<MatchWithId[]> {
   const { teamIdMap, teamGroupMap } = buildTeamMaps(teamsRaw);
 
   return fixturesRaw.map((raw) => {
-    // mapApiFixtureToFirestore já valida com matchSchema (.parse) internamente.
+    // mapApiFixtureToFirestore já valida com matchSchema (.parse) internamente;
+    // não re-parsear aqui (seria validação duplicada). Só injeta o id.
     const match = mapApiFixtureToFirestore(raw, teamIdMap, teamGroupMap);
-    // Revalida explicitamente o shape de saída (contrato do front).
-    const parsed = matchSchema.parse(match);
-    return { id: String(raw.fixture.id), ...parsed };
+    return { id: String(raw.fixture.id), ...match };
   });
 }
 
@@ -65,8 +63,9 @@ export async function fetchAllTeams(): Promise<TeamWithId[]> {
   const teamsRaw = await client.getTeamsByTournament(leagueId, season);
 
   return teamsRaw.map((raw) => {
+    // mapApiTeamToFirestore já valida com teamSchema (.parse) internamente;
+    // não re-parsear aqui (seria validação duplicada). Só injeta o id.
     const team = mapApiTeamToFirestore(raw);
-    const parsed = teamSchema.parse(team);
-    return { id: String(raw.team.id), ...parsed };
+    return { id: String(raw.team.id), ...team };
   });
 }

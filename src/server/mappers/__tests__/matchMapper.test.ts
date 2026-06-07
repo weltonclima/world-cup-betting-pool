@@ -8,6 +8,7 @@ import {
   mapApiFixtureToFirestore,
   mapRoundToStage,
   mapApiStatusToMatchStatus,
+  normalizeKickoffAt,
 } from "../matchMapper";
 import { matchSchema } from "@/schemas";
 import {
@@ -24,6 +25,9 @@ import {
   fixtureSemVenue,
   fixtureRoundDesconhecido,
   fixtureTimeAusente,
+  fixtureOffsetUtc,
+  fixtureOffsetBrasilia,
+  fixtureDataInvalida,
 } from "./fixtures/apiFixtureFixtures";
 
 describe("mapApiFixtureToFirestore", () => {
@@ -155,6 +159,53 @@ describe("mapApiFixtureToFirestore", () => {
       TEST_TEAM_GROUP_MAP,
     );
     expect(matchSchema.safeParse(r).success).toBe(true);
+  });
+
+  it("M21: kickoffAt com offset +00:00 é normalizado para sufixo Z", () => {
+    const r = mapApiFixtureToFirestore(fixtureOffsetUtc, TEST_TEAM_ID_MAP);
+    expect(r.kickoffAt).toBe("2026-06-11T15:00:00.000Z");
+    expect(r.kickoffAt.endsWith("Z")).toBe(true);
+  });
+
+  it("M22: kickoffAt com offset -03:00 é convertido para o instante em Z", () => {
+    const r = mapApiFixtureToFirestore(fixtureOffsetBrasilia, TEST_TEAM_ID_MAP);
+    // 12:00-03:00 == 15:00Z
+    expect(r.kickoffAt).toBe("2026-06-11T15:00:00.000Z");
+  });
+
+  it("M23: offsets +00:00 e -03:00 do mesmo instante produzem o mesmo kickoffAt", () => {
+    const utc = mapApiFixtureToFirestore(fixtureOffsetUtc, TEST_TEAM_ID_MAP);
+    const brt = mapApiFixtureToFirestore(fixtureOffsetBrasilia, TEST_TEAM_ID_MAP);
+    expect(utc.kickoffAt).toBe(brt.kickoffAt);
+  });
+
+  it("M24: data inválida lança erro claro", () => {
+    expect(() =>
+      mapApiFixtureToFirestore(fixtureDataInvalida, TEST_TEAM_ID_MAP),
+    ).toThrow(/data de partida inválida/i);
+  });
+});
+
+describe("normalizeKickoffAt", () => {
+  it("preserva instante já em Z", () => {
+    expect(normalizeKickoffAt("2026-06-11T15:00:00.000Z")).toBe(
+      "2026-06-11T15:00:00.000Z",
+    );
+  });
+  it("normaliza offset +00:00 para Z", () => {
+    expect(normalizeKickoffAt("2026-06-11T15:00:00+00:00")).toBe(
+      "2026-06-11T15:00:00.000Z",
+    );
+  });
+  it("converte offset -03:00 para o instante UTC", () => {
+    expect(normalizeKickoffAt("2026-06-11T12:00:00-03:00")).toBe(
+      "2026-06-11T15:00:00.000Z",
+    );
+  });
+  it("lança erro para data inválida", () => {
+    expect(() => normalizeKickoffAt("não-é-data")).toThrow(
+      /data de partida inválida/i,
+    );
   });
 });
 

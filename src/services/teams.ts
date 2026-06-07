@@ -3,6 +3,8 @@ import { z } from "zod";
 import { teamSchema } from "@/schemas";
 import type { TeamWithId } from "@/types";
 
+import { API_BASE, buildHttpError, parseWithId } from "./_apiClient";
+
 /**
  * Camada de serviço de seleções (integracao-api-football, TASK-05).
  *
@@ -18,54 +20,16 @@ import type { TeamWithId } from "@/types";
  * Assinatura mantida (`listAllTeams`) para não quebrar `useTeams`.
  */
 
-/** Base relativa — funciona no client (browser resolve contra a origem atual). */
-const API_BASE = "/api";
-
 /**
- * Schema do `id` que a rede embute em cada seleção (= `String(team.id)`).
- *
- * `teamSchema` é `.strict()` (não conhece `id`), então validamos `id` separado e o
- * restante com o `teamSchema` intacto — ver `parseTeamWithId`. (Consistente com a
- * abordagem de matches, que evita interseção por causa do refine.)
- */
-const idSchema = z.object({ id: z.string().min(1) });
-
-/**
- * Valida uma seleção vinda da rede: separa `id` (validado por `idSchema`) do
- * restante (validado por `teamSchema`, `.strict()`, sem `id`).
+ * Valida uma seleção vinda da rede: separa `id` do restante (validado por
+ * `teamSchema`, `.strict()`, sem `id`). Usa o helper compartilhado `parseWithId`
+ * (consistente com matches; evita interseção por causa do refine) — ver
+ * `_apiClient.ts`.
  *
  * @throws ZodError se `id` ou o restante violarem o contrato.
  */
 function parseTeamWithId(input: unknown): TeamWithId {
-  const { id } = idSchema.parse(input);
-  const { id: _omit, ...rest } = input as Record<string, unknown>;
-  void _omit;
-  return { id, ...teamSchema.parse(rest) };
-}
-
-/**
- * Lê o corpo `{ error }` (se houver) e monta uma mensagem útil para o `Error`.
- */
-async function buildHttpError(
-  res: Response,
-  fallback: string,
-): Promise<Error> {
-  let detail = "";
-  try {
-    const body: unknown = await res.json();
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-    ) {
-      detail = (body as { error: string }).error;
-    }
-  } catch {
-    // corpo não-JSON / vazio — ignora, usa só o status.
-  }
-  const suffix = detail ? ` — ${detail}` : "";
-  return new Error(`${fallback} (HTTP ${res.status})${suffix}`);
+  return parseWithId(input, teamSchema);
 }
 
 /**

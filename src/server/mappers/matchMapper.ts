@@ -119,6 +119,30 @@ export function mapApiStatusToMatchStatus(short: string): MatchStatus {
   return "scheduled";
 }
 
+// ─── Normalização de data ──────────────────────────────────────────────────────
+
+/**
+ * Normaliza a data da API-Football para ISO 8601 UTC canônico com sufixo `Z`.
+ *
+ * A API pode entregar `fixture.date` com offset numérico (`+00:00`, `-03:00`).
+ * Sem normalizar, a ordenação lexicográfica por string (camada de serviço) deixa
+ * de ser cronológica quando há offsets heterogêneos. Convertendo tudo para `Z`
+ * via `Date.toISOString()`, garantimos `kickoffAt` canônico e ordenável por string.
+ *
+ * @param raw - Valor de `fixture.date` da API-Football
+ * @returns String ISO 8601 UTC com sufixo `Z` (ex.: "2026-06-11T15:00:00.000Z")
+ * @throws Error se a data for inválida/não parseável
+ */
+export function normalizeKickoffAt(raw: string): string {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(
+      `Data de partida inválida recebida da API-Football: "${raw}".`,
+    );
+  }
+  return date.toISOString();
+}
+
 // ─── Mapeamento de venue ───────────────────────────────────────────────────────
 
 /**
@@ -149,6 +173,7 @@ function mapVenue(
  * @returns Documento validado por matchSchema
  * @throws Error se homeTeamId/awayTeamId não estiverem no teamIdMap
  * @throws Error se o round não for reconhecido
+ * @throws Error se a data da partida (fixture.date) for inválida
  * @throws ZodError se o output não satisfizer matchSchema
  */
 export function mapApiFixtureToFirestore(
@@ -190,7 +215,7 @@ export function mapApiFixtureToFirestore(
   const doc = {
     homeTeamId,
     awayTeamId,
-    kickoffAt: raw.fixture.date,
+    kickoffAt: normalizeKickoffAt(raw.fixture.date),
     stage,
     round,
     groupId,

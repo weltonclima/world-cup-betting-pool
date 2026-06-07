@@ -51,12 +51,24 @@ export function apiFootballErrorResponse(err: unknown): NextResponse {
 
   if (err instanceof ZodError) {
     // Dado retornado pela API violou o schema do front (contrato quebrado).
+    // Loga a causa no servidor (não vai ao client) para diagnóstico em produção.
+    console.error(
+      "[apiFootball] Dados fora do contrato (ZodError) ao mapear resposta da API-Football:",
+      err.issues,
+    );
     return NextResponse.json(
       { error: "Dados recebidos fora do contrato esperado." },
       { status: 500 },
     );
   }
 
+  // Erros de negócio do mapper (time fora do teamIdMap / round não mapeado /
+  // data inválida) chegam aqui como Error genérico e cairiam em 500 opaco.
+  // Loga a causa no servidor (mensagem + stack), sem expor detalhes ao client.
+  console.error(
+    "[apiFootball] Erro inesperado ao obter/mapear dados da API-Football:",
+    err,
+  );
   return NextResponse.json(
     { error: "Erro inesperado ao obter os dados." },
     { status: 500 },

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { matchSchema } from "@/schemas";
 import type { MatchWithId } from "@/types";
 
+import { API_BASE, buildHttpError, parseWithId } from "./_apiClient";
+
 /**
  * Camada de serviço de partidas (integracao-api-football, TASK-05).
  *
@@ -25,59 +27,16 @@ import type { MatchWithId } from "@/types";
  * client-side (filtro + ordenação), sem endpoints extras.
  */
 
-/** Base relativa — funciona no client (browser resolve contra a origem atual). */
-const API_BASE = "/api";
-
-/**
- * Schema do `id` que a rede embute em cada partida (= `String(fixture.id)`).
- *
- * NÃO usamos `z.intersection(matchSchema, …)` nem `matchSchema.and(…)`: o
- * `matchSchema` tem um `.refine` (regra de placares por status) e a interseção em
- * Zod NÃO reaplica o refine do lado esquerdo, abrindo um buraco de validação.
- * Em vez disso validamos `id` separadamente e o restante com o `matchSchema`
- * intacto (refine preservado) — ver `parseMatchWithId`.
- */
-const idSchema = z.object({ id: z.string().min(1) });
-
 /**
  * Valida uma partida vinda da rede preservando o refine de placares do
- * `matchSchema`: separa `id` (validado por `idSchema`) do restante (validado por
- * `matchSchema`, que é `.strict()` e não conhece `id`).
+ * `matchSchema`: separa `id` do restante (validado por `matchSchema`, `.strict()`
+ * sem `id`). Usa o helper compartilhado `parseWithId`, que evita interseção para
+ * não perder o `.refine` (regra de placares por status) — ver `_apiClient.ts`.
  *
  * @throws ZodError se `id` ou o restante violarem o contrato.
  */
 function parseMatchWithId(input: unknown): MatchWithId {
-  const { id } = idSchema.parse(input);
-  // input é objeto (idSchema.parse acima já garantiu); separa id do restante.
-  const { id: _omit, ...rest } = input as Record<string, unknown>;
-  void _omit;
-  return { id, ...matchSchema.parse(rest) };
-}
-
-/**
- * Lê o corpo `{ error }` (se houver) e monta uma mensagem útil para o `Error`.
- * Tolera corpo ausente/ inválido sem mascarar o status HTTP.
- */
-async function buildHttpError(
-  res: Response,
-  fallback: string,
-): Promise<Error> {
-  let detail = "";
-  try {
-    const body: unknown = await res.json();
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-    ) {
-      detail = (body as { error: string }).error;
-    }
-  } catch {
-    // corpo não-JSON / vazio — ignora, usa só o status.
-  }
-  const suffix = detail ? ` — ${detail}` : "";
-  return new Error(`${fallback} (HTTP ${res.status})${suffix}`);
+  return parseWithId(input, matchSchema);
 }
 
 /**

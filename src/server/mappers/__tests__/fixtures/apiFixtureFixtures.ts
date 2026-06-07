@@ -181,6 +181,54 @@ export const fixtureRoundDesconhecido: FixtureResponse = {
   league: { round: "Playoff Round" },
 };
 
+/** Partida com data em offset +00:00 (deve normalizar para sufixo Z) */
+export const fixtureOffsetUtc: FixtureResponse = {
+  fixture: {
+    id: 7001,
+    date: "2026-06-11T15:00:00+00:00",
+    status: { short: "NS" },
+    venue: { id: 100, name: "MetLife Stadium", city: "East Rutherford" },
+  },
+  teams: {
+    home: { id: 6, name: "Brasil" },
+    away: { id: 9, name: "Espanha" },
+  },
+  goals: { home: null, away: null },
+  league: { round: "Group Stage - 1" },
+};
+
+/** Partida com data em offset -03:00 (deve normalizar para o instante em Z) */
+export const fixtureOffsetBrasilia: FixtureResponse = {
+  fixture: {
+    id: 7002,
+    date: "2026-06-11T12:00:00-03:00",
+    status: { short: "NS" },
+    venue: { id: 100, name: "MetLife Stadium", city: "East Rutherford" },
+  },
+  teams: {
+    home: { id: 6, name: "Brasil" },
+    away: { id: 9, name: "Espanha" },
+  },
+  goals: { home: null, away: null },
+  league: { round: "Group Stage - 1" },
+};
+
+/** Partida com data inválida (deve lançar erro no mapper) */
+export const fixtureDataInvalida: FixtureResponse = {
+  fixture: {
+    id: 7003,
+    date: "não-é-data",
+    status: { short: "NS" },
+    venue: { id: 100, name: "MetLife Stadium", city: "East Rutherford" },
+  },
+  teams: {
+    home: { id: 6, name: "Brasil" },
+    away: { id: 9, name: "Espanha" },
+  },
+  goals: { home: null, away: null },
+  league: { round: "Group Stage - 1" },
+};
+
 /** Partida com time ausente no teamIdMap (deve lançar erro) */
 export const fixtureTimeAusente: FixtureResponse = {
   fixture: {
