@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Gera saída estática em out/ (HTML + assets, sem servidor Node).
-  // Compatível com Firebase Hosting CDN (Opção A — static export).
-  output: "export",
-
-  // URLs sem extensão (.html) — Firebase Hosting usa cleanUrls: true no firebase.json.
+  // Runtime SSR (não mais static export): Route Handlers (src/app/api/*) e Middleware
+  // exigem servidor. Deploy via Firebase App Hosting (Cloud Run) — config apphosting.yaml
+  // + secret API_FOOTBALL_KEY pendentes na TASK-07b. Ver ai/plan/integracao-api-football.md.
   trailingSlash: false,
 
   // next/image em static export não tem servidor de otimização.
