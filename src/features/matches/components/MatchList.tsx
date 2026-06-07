@@ -94,8 +94,8 @@ function toMatchWithId(item: MatchListItem): MatchWithId {
     homeScore: item.homeScore,
     awayScore: item.awayScore,
     // Não usados pelo card na renderização — seleções chegam via homeTeam/awayTeam:
-    homeTeamId: item.id, // placeholder — card não consome este campo
-    awayTeamId: item.id, // placeholder — card não consome este campo
+    homeTeamId: "", // sentinela — card não consome este campo (seleção via homeTeam prop)
+    awayTeamId: "", // sentinela — card não consome este campo (seleção via awayTeam prop)
   };
 }
 

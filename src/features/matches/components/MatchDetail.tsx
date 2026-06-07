@@ -146,12 +146,6 @@ function MatchDetailSkeleton() {
       aria-label="Carregando detalhes do jogo"
       className="flex flex-col gap-4"
     >
-      {/* Back */}
-      <div
-        aria-hidden="true"
-        className="h-5 w-16 rounded bg-muted animate-pulse motion-reduce:animate-none"
-      />
-
       {/* Subtítulo */}
       <div
         aria-hidden="true"
@@ -282,6 +276,8 @@ export function MatchDetail({ id }: MatchDetailProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4 px-4 py-4 pb-20 max-w-2xl mx-auto">
+        {/* Escape route visível mesmo durante o carregamento */}
+        <BackButton />
         <MatchDetailSkeleton />
       </div>
     );
@@ -327,6 +323,9 @@ export function MatchDetail({ id }: MatchDetailProps) {
       {/* Botão de volta */}
       <BackButton />
 
+      {/* Título da página (h1 — topo da hierarquia de heading) */}
+      <h1 className="text-xl font-bold text-foreground">Detalhes do Jogo</h1>
+
       {/* Subtítulo contextual: fase + grupo */}
       <p className="text-sm text-muted-foreground">{subtitle}</p>
 
@@ -336,7 +335,7 @@ export function MatchDetail({ id }: MatchDetailProps) {
           {/* Mandante */}
           <div className="flex flex-col items-center gap-2">
             <TeamFlag team={match.homeTeam} size="lg" />
-            <span className="text-sm font-medium text-foreground text-center max-w-[100px]">
+            <span className="text-sm font-medium text-foreground text-center max-w-24">
               {match.homeTeam.name}
             </span>
           </div>
@@ -356,7 +355,7 @@ export function MatchDetail({ id }: MatchDetailProps) {
           {/* Visitante */}
           <div className="flex flex-col items-center gap-2">
             <TeamFlag team={match.awayTeam} size="lg" />
-            <span className="text-sm font-medium text-foreground text-center max-w-[100px]">
+            <span className="text-sm font-medium text-foreground text-center max-w-24">
               {match.awayTeam.name}
             </span>
           </div>
@@ -368,7 +367,7 @@ export function MatchDetail({ id }: MatchDetailProps) {
 
         {/* Card de info */}
         <div className="rounded-xl border border-border bg-card shadow-sm p-4 flex flex-col gap-3">
-          <SectionHeading>Detalhes do Jogo</SectionHeading>
+          <SectionHeading>Informações</SectionHeading>
           <DetailRow
             icon={<Calendar size={16} aria-hidden="true" />}
             label="Data"
