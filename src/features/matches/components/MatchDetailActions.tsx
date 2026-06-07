@@ -18,7 +18,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
-import type { MatchStatus, Prediction } from "@/types";
+import type { MatchStatus } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -29,8 +29,6 @@ export interface MatchDetailActionsProps {
   matchStatus: MatchStatus;
   /** Id da partida — usado para montar o href de navegação. */
   matchId: string;
-  /** Palpite existente do usuário; undefined quando não há palpite. */
-  prediction: Prediction | undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
-import type { MatchStatus, Prediction } from "@/types";
+import type { MatchStatus } from "@/types";
 
 import { MatchDetailActions } from "@/features/matches/components/MatchDetailActions";
 
@@ -15,14 +15,12 @@ const renderActions = (
   predictionStatus: MatchPredictionStatus,
   matchStatus: MatchStatus,
   matchId = "match-001",
-  prediction?: Prediction,
 ) =>
   render(
     <MatchDetailActions
       predictionStatus={predictionStatus}
       matchStatus={matchStatus}
       matchId={matchId}
-      prediction={prediction}
     />,
   );
 

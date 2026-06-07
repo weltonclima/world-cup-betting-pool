@@ -469,7 +469,6 @@ export function MatchDetail({ id }: MatchDetailProps) {
               predictionStatus={match.predictionStatus}
               matchStatus={match.status}
               matchId={id}
-              prediction={existingPrediction}
             />
           </div>
 
