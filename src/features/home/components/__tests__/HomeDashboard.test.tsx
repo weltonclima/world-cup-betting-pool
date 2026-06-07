@@ -136,6 +136,12 @@ describe("HomeDashboard — estado loading", () => {
     render(<HomeDashboard />);
     expect(screen.queryByText("Erro ao carregar dashboard")).toBeNull();
   });
+
+  it("T4b: exibe HomeHeaderSkeleton (data-testid) durante loading e ausência do greeting real", () => {
+    render(<HomeDashboard />);
+    expect(screen.getByTestId("home-header-skeleton")).toBeTruthy();
+    expect(screen.queryByText(/Olá, Ana Lima/)).toBeNull();
+  });
 });
 
 describe("HomeDashboard — estado error", () => {
@@ -258,5 +264,37 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
     render(<HomeDashboard />);
     // HomeHeader: name=null → "Olá 👋"
     expect(screen.getByText("Olá 👋")).toBeTruthy();
+  });
+
+  it("T23: exibe empty-state de NextMatchCard ('Nenhum jogo disponível') quando nextMatch é null", () => {
+    render(<HomeDashboard />);
+    // nextMatch is null in this suite's beforeEach setup (inherited from baseDashboardSuccess)
+    expect(screen.getByText("Nenhum jogo disponível")).toBeTruthy();
+  });
+
+  it("T24: exibe empty-state de LastResultsCard ('Nenhum resultado disponível') quando results é vazio", () => {
+    render(<HomeDashboard />);
+    // recentResults is [] in baseDashboardSuccess
+    expect(screen.getByText("Nenhum resultado disponível")).toBeTruthy();
+  });
+
+  it("T25: exibe empty-state de CurrentStageCard ('Fase não definida') quando stage é null", () => {
+    render(<HomeDashboard />);
+    // currentStage.stage is null in baseDashboardSuccess
+    expect(screen.getByText("Fase não definida")).toBeTruthy();
+  });
+
+  it("T26: exibe empty-state de NoticesCard ('Nenhum aviso no momento') quando notices é vazio", () => {
+    render(<HomeDashboard />);
+    // notices is [] in baseDashboardSuccess
+    expect(screen.getByText("Nenhum aviso no momento")).toBeTruthy();
+  });
+
+  it("T27: renderiza os 4 card empty-states simultâneamente sem crash (cobertura integrada)", () => {
+    render(<HomeDashboard />);
+    expect(screen.getByText("Nenhum jogo disponível")).toBeTruthy();
+    expect(screen.getByText("Nenhum resultado disponível")).toBeTruthy();
+    expect(screen.getByText("Fase não definida")).toBeTruthy();
+    expect(screen.getByText("Nenhum aviso no momento")).toBeTruthy();
   });
 });

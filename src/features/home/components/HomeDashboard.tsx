@@ -86,6 +86,7 @@ function ErrorState({ onRetry }: ErrorStateProps) {
 function HomeHeaderSkeleton() {
   return (
     <div
+      data-testid="home-header-skeleton"
       className="mb-6 flex items-center gap-3"
       aria-hidden="true"
     >
