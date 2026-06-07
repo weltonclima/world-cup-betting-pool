@@ -54,6 +54,10 @@ function TeamFlag({ team }: { team: ResolvedTeam }) {
       <img
         src={team.flagUrl}
         alt={team.name}
+        width={40}
+        height={28}
+        loading="lazy"
+        decoding="async"
         className="w-10 h-7 rounded-sm object-contain"
       />
     );

@@ -26,6 +26,8 @@ export interface MatchListItem {
   id: string;
   kickoffAt: string;
   stage: Stage;
+  // round/groupId espelham o matchSchema (`nullable().optional()`): `null` = sem grupo/rodada
+  // (mata-mata), `undefined` = ausente no doc. A UI deve tratar ambos como "não exibir".
   round: number | null | undefined;
   groupId: string | null | undefined;
   venue: MatchWithId["venue"];
