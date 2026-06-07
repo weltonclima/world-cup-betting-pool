@@ -7,7 +7,7 @@
 
 import type { CopaDataClient } from "./client";
 import type { OpenFootballData } from "./types";
-import { MOCK_COPA_DATA } from "./__tests__/fixtures/openfootballFixtures";
+import { MOCK_COPA_DATA } from "./mockData";
 
 export class MockCopaDataClient implements CopaDataClient {
   async getData(): Promise<OpenFootballData> {
