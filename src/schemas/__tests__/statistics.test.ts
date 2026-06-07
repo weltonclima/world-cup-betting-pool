@@ -39,6 +39,15 @@ describe("statistics", () => {
     ).toBe(true);
   });
 
+  it("aceita correctByStage com dezesseis-avos (TASK-01)", () => {
+    expect(
+      statisticsSchema.safeParse({
+        ...valid,
+        correctByStage: { "dezesseis-avos": 3 },
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejeita accuracy > 100", () => {
     expect(
       statisticsSchema.safeParse({ ...valid, accuracy: 101 }).success,
