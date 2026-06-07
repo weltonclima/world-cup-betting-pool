@@ -188,6 +188,47 @@ export function isPlaceholderId(id: string): boolean {
 }
 
 /**
+ * Converte um placeholder de seeding do openfootball em rótulo humano pt-BR (TASK-13).
+ *
+ * Usado pela UI da chave (Bracket/BracketMatchup) para exibir slots de mata-mata
+ * cujo time real ainda não foi resolvido (D-OF4 do PRD).
+ *
+ * - "1A"   → "1º Grupo A"
+ * - "2B"   → "2º Grupo B"
+ * - "3ABC" → "3º (Grupos A/B/C)"
+ * - "W74"  → "Vencedor jogo 74"
+ * - "L101" → "Perdedor jogo 101"
+ *
+ * Se `id` não for um placeholder (teamId real, ex.: "BRA"), retorna o próprio id.
+ *
+ * @param id - Placeholder literal ou teamId real.
+ * @returns Rótulo humano em pt-BR (ou o id original se já resolvido).
+ */
+export function humanizePlaceholder(id: string): string {
+  if (!isPlaceholderId(id)) return id;
+
+  const groupWinner = /^1([A-Z])$/.exec(id);
+  if (groupWinner) return `1º Grupo ${groupWinner[1]!}`;
+
+  const groupRunnerUp = /^2([A-Z])$/.exec(id);
+  if (groupRunnerUp) return `2º Grupo ${groupRunnerUp[1]!}`;
+
+  const bestThird = /^3([A-Z]{2,})$/.exec(id);
+  if (bestThird) {
+    const groups = [...bestThird[1]!].join("/");
+    return `3º (Grupos ${groups})`;
+  }
+
+  const matchWinner = /^W(\d+)$/.exec(id);
+  if (matchWinner) return `Vencedor jogo ${matchWinner[1]!}`;
+
+  const matchLoser = /^L(\d+)$/.exec(id);
+  if (matchLoser) return `Perdedor jogo ${matchLoser[1]!}`;
+
+  return id;
+}
+
+/**
  * Constrói a estrutura de slots da chave eliminatória a partir dos fixtures reais.
  *
  * Consome MatchWithId[] filtrado para partidas de mata-mata (stage !== "grupos").

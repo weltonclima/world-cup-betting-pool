@@ -70,3 +70,9 @@ export type {
   ThirdRankingEntry,
   ThirdsRankingResult,
 } from "./BestThirdsRanking";
+
+// Componente de Chave Interativa (TASK-13).
+export { BracketMatchup } from "./BracketMatchup";
+export type { BracketMatchupProps } from "./BracketMatchup";
+export { Bracket } from "./Bracket";
+export type { BracketProps, BracketScores } from "./Bracket";
