@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import type { UseQueryResult } from "@tanstack/react-query";
 
-import type { MatchWithId, Stage } from "@/types";
+import type { Stage } from "@/types";
 
 import { useMatches } from "./useMatches";
+import type { FilteredMatchesResult } from "./useGroupMatches";
 
 /**
  * Filtra partidas do cache `useMatches()` pela fase (stage) informada.
@@ -14,7 +14,7 @@ import { useMatches } from "./useMatches";
  *
  * @param stage - Fase da Copa (Stage enum: "grupos" | "oitavas" | "quartas" | etc.)
  */
-export function usePhaseMatches(stage: Stage): UseQueryResult<MatchWithId[]> {
+export function usePhaseMatches(stage: Stage): FilteredMatchesResult {
   const matchesQuery = useMatches();
 
   const filteredData = useMemo(() => {
@@ -27,10 +27,12 @@ export function usePhaseMatches(stage: Stage): UseQueryResult<MatchWithId[]> {
       );
   }, [matchesQuery.data, stage]);
 
-  // Retorna o formato UseQueryResult com os dados filtrados,
-  // preservando todos os outros campos de estado da query base.
+  // Retorna apenas o subset que os consumidores usam — sem cast inseguro.
+  // refetch é a referência estável do TanStack (não recriar — preserva identidade).
   return {
-    ...matchesQuery,
     data: filteredData,
-  } as UseQueryResult<MatchWithId[]>;
+    isLoading: matchesQuery.isLoading,
+    isError: matchesQuery.isError,
+    refetch: matchesQuery.refetch,
+  };
 }

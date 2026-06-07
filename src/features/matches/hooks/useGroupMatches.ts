@@ -1,11 +1,19 @@
 "use client";
 
 import { useMemo } from "react";
-import type { UseQueryResult } from "@tanstack/react-query";
 
 import type { MatchWithId } from "@/types";
 
 import { useMatches } from "./useMatches";
+
+/** Resultado derivado de partidas filtradas (subset estável de UseQueryResult). */
+export interface FilteredMatchesResult {
+  data: MatchWithId[] | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  /** refetch estável do TanStack Query (identidade preservada entre renders). */
+  refetch: () => unknown;
+}
 
 /**
  * Filtra partidas do cache `useMatches()` pelo groupId informado.
@@ -14,7 +22,7 @@ import { useMatches } from "./useMatches";
  *
  * @param groupId - ID do grupo ("A"–"L"), conforme match.groupId populado pelo mapper openfootball.
  */
-export function useGroupMatches(groupId: string): UseQueryResult<MatchWithId[]> {
+export function useGroupMatches(groupId: string): FilteredMatchesResult {
   const matchesQuery = useMatches();
 
   const filteredData = useMemo(() => {
@@ -27,10 +35,12 @@ export function useGroupMatches(groupId: string): UseQueryResult<MatchWithId[]> 
       );
   }, [matchesQuery.data, groupId]);
 
-  // Retorna o formato UseQueryResult com os dados filtrados,
-  // preservando todos os outros campos de estado da query base.
+  // Retorna apenas o subset que os consumidores usam — sem cast inseguro.
+  // refetch é a referência estável do TanStack (não recriar — preserva identidade).
   return {
-    ...matchesQuery,
     data: filteredData,
-  } as UseQueryResult<MatchWithId[]>;
+    isLoading: matchesQuery.isLoading,
+    isError: matchesQuery.isError,
+    refetch: matchesQuery.refetch,
+  };
 }

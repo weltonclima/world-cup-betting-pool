@@ -49,6 +49,14 @@ export function usePredictionDraft(uid: string): PredictionDraftAPI {
   // Ref para debounce timer — persiste entre renders sem causar re-render.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Ref sempre apontando para o estado mais recente do rascunho. A escrita
+  // debounced lê daqui (não de uma closure), evitando stale e mantendo o
+  // updater do setState PURO (React pode invocá-lo 2x em Strict Mode).
+  const latestDraftRef = useRef<DraftStore>(draft);
+  useEffect(() => {
+    latestDraftRef.current = draft;
+  }, [draft]);
+
   // Ler localStorage após mount (SSR-safe: window existe neste ponto).
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -78,24 +86,26 @@ export function usePredictionDraft(uid: string): PredictionDraftAPI {
 
   const setDraft = useCallback(
     (matchId: string, scores: { homeScore: number; awayScore: number }) => {
-      // Atualização síncrona do estado React — UI reflete imediatamente.
-      setDraftState((prev) => {
-        const next = { ...prev, [matchId]: scores };
+      // Atualização síncrona do estado React — updater PURO (sem side effects:
+      // React pode invocá-lo mais de uma vez, ex.: Strict Mode).
+      setDraftState((prev) => ({ ...prev, [matchId]: scores }));
 
-        // Debounce da escrita em localStorage.
-        if (typeof window !== "undefined") {
-          if (debounceRef.current) clearTimeout(debounceRef.current);
-          debounceRef.current = setTimeout(() => {
-            try {
-              localStorage.setItem(draftKey(uid), JSON.stringify(next));
-            } catch {
-              // Falha silenciosa: localStorage pode estar indisponível (quota, SSR-like, etc.)
-            }
-          }, DRAFT_DEBOUNCE_MS);
-        }
-
-        return next;
-      });
+      // Side effect FORA do updater: debounce da escrita em localStorage.
+      // Lê latestDraftRef (atualizado por useEffect) no disparo do timer, que
+      // ocorre após o commit do render — reflete o estado mais recente.
+      if (typeof window !== "undefined") {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          try {
+            localStorage.setItem(
+              draftKey(uid),
+              JSON.stringify(latestDraftRef.current),
+            );
+          } catch {
+            // Falha silenciosa: localStorage pode estar indisponível (quota etc.)
+          }
+        }, DRAFT_DEBOUNCE_MS);
+      }
     },
     [uid],
   );

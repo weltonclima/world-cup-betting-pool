@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useTeams } from "@/features/matches/hooks/useTeams";
@@ -67,11 +67,11 @@ export function useGroupPredictions(groupId: string): GroupPredictionsData {
   const isError =
     matchesQuery.isError || teamsQuery.isError || predictionsQuery.isError;
 
-  const refetch = () => {
+  const refetch = useCallback(() => {
     void matchesQuery.refetch();
     void teamsQuery.refetch();
     void predictionsQuery.refetch();
-  };
+  }, [matchesQuery.refetch, teamsQuery.refetch, predictionsQuery.refetch]);
 
   const items = useMemo<GroupPredictionItem[]>(() => {
     if (uid === null) return [];
@@ -93,7 +93,7 @@ export function useGroupPredictions(groupId: string): GroupPredictionsData {
           ? { homeScore: savedPred.homeScore, awayScore: savedPred.awayScore }
           : undefined;
 
-        const draftVal = draft.getDraft(match.id);
+        const draftVal = draft.allDrafts[match.id];
         const isLocked = isPredictionLocked(match, now);
 
         // Draft tem prioridade sobre saved.
@@ -122,7 +122,7 @@ export function useGroupPredictions(groupId: string): GroupPredictionsData {
         (a, b) =>
           new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime(),
       );
-  }, [uid, matchesQuery.data, teamsQuery.data, predictionsQuery.data, draft]);
+  }, [uid, matchesQuery.data, teamsQuery.data, predictionsQuery.data, draft.allDrafts]);
 
   const filledCount = useMemo(
     () => items.filter((i) => i.currentScores !== undefined).length,

@@ -166,6 +166,26 @@ describe("upsertPredictionsBatch — erros HTTP → PredictionServiceError", () 
     });
   });
 
+  it("T7b: status 502 → PredictionServiceError com mensagem de erro de dados da Copa", async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(502));
+
+    await expect(upsertPredictionsBatch(INPUTS)).rejects.toMatchObject({
+      name: "PredictionServiceError",
+      status: 502,
+      message: "Erro ao buscar dados da Copa. Tente novamente.",
+    });
+  });
+
+  it("T7c: status 504 → PredictionServiceError com mensagem de timeout", async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(504));
+
+    await expect(upsertPredictionsBatch(INPUTS)).rejects.toMatchObject({
+      name: "PredictionServiceError",
+      status: 504,
+      message: "Tempo limite ao buscar dados da Copa. Tente novamente.",
+    });
+  });
+
   it("T8: status 999 (não mapeado) → PredictionServiceError com FALLBACK_HTTP_MESSAGE", async () => {
     fetchMock.mockResolvedValueOnce(makeErrorResponse(999));
 
