@@ -248,6 +248,52 @@ describe("computeGroupStandings", () => {
       expect(entry.goalDifference).toBe(entry.goalsFor - entry.goalsAgainst);
     }
   });
+
+  it("duplicate matchId in predictions → último palpite prevalece", () => {
+    // Spec §4 step 3: "se houver duplicados de matchId, prevalece o último"
+    // Primeiro palpite: BRA perde (0×1). Segundo (duplicado): BRA vence (2×0).
+    // O resultado deve refletir o segundo (2×0).
+    const predictions: Prediction[] = [
+      makePred("m01", 0, 1), // BRA 0×1 ARG — deve ser sobrescrito
+      makePred("m01", 2, 0), // BRA 2×0 ARG — deve prevalecer
+    ];
+    const result = computeGroupStandings(GROUP_A_MATCHES, predictions);
+    const bra = result.find((e) => e.teamId === T1)!;
+    const arg = result.find((e) => e.teamId === T2)!;
+    // Se o último prevalece: BRA venceu (3pts), ARG perdeu (0pts)
+    expect(bra.points).toBe(3);
+    expect(bra.wins).toBe(1);
+    expect(bra.goalsFor).toBe(2);
+    expect(arg.points).toBe(0);
+    expect(arg.losses).toBe(1);
+  });
+
+  it("grupo com todos os jogos empatados 0×0 → todos com stats iguais, desempate por teamId ASC", () => {
+    // Cenário: round-robin completo de 4 times, todos os placares 0×0.
+    // Cada time joga 3 partidas, acumula 3 empates (3pts), saldo 0, gols pró 0.
+    // H2H entre qualquer subconjunto também está 0×0 → tudo empatado.
+    // Critério final: teamId ASC — team-arg(1º) < team-bra(2º) < team-fra(3º) < team-ger(4º).
+    const predictions: Prediction[] = [
+      makePred("m01", 0, 0), // BRA 0×0 ARG
+      makePred("m02", 0, 0), // FRA 0×0 GER
+      makePred("m03", 0, 0), // BRA 0×0 FRA
+      makePred("m04", 0, 0), // ARG 0×0 GER
+      makePred("m05", 0, 0), // BRA 0×0 GER
+      makePred("m06", 0, 0), // ARG 0×0 FRA
+    ];
+    const result = computeGroupStandings(GROUP_A_MATCHES, predictions);
+    expect(result).toHaveLength(4);
+    // Todos com 3pts, 3 empates, saldo 0, gols pró 0
+    for (const entry of result) {
+      expect(entry.points).toBe(3);
+      expect(entry.draws).toBe(3);
+      expect(entry.goalDifference).toBe(0);
+      expect(entry.goalsFor).toBe(0);
+    }
+    // Desempate final por teamId ASC
+    expect(result.map((e) => e.teamId)).toEqual([T2, T1, T3, T4]); // arg < bra < fra < ger
+    expect(result[0]?.position).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -347,6 +393,31 @@ describe("rankBestThirds", () => {
     // "aaa" < "zzz" → "aaa" fica em 1º no desempate por teamId ASC
     expect(result[0]?.teamId).toBe("aaa");
     expect(result[1]?.teamId).toBe("zzz");
+  });
+
+  it("com exatamente 8 grupos → retorna todos os 8 terceiros sem truncar", () => {
+    // Boundary: slice(0, 8) não deve cortar nenhum quando há exatamente 8 grupos.
+    const allStandings: Record<string, GroupStandings> = {};
+    for (let i = 0; i < 8; i++) {
+      const gId = `group-${String.fromCharCode(97 + i)}`;
+      allStandings[gId] = makeStandings([
+        { teamId: `t${i}-1`, points: 9, gd: 6, gf: 8 },
+        { teamId: `t${i}-2`, points: 6, gd: 2, gf: 5 },
+        { teamId: `t${i}-3`, points: 3, gd: i, gf: i + 1 },
+        { teamId: `t${i}-4`, points: 0, gd: -8, gf: 0 },
+      ]);
+    }
+    const result = rankBestThirds(allStandings);
+    // Deve retornar exatamente 8 (nenhum descartado, nenhum duplicado)
+    expect(result).toHaveLength(8);
+    // Todos têm posição-original === 3 (todos são terceiros colocados)
+    const teamIds = result.map((e) => e.teamId);
+    expect(new Set(teamIds).size).toBe(8); // sem duplicatas
+  });
+
+  it("sem grupos → retorna array vazio", () => {
+    const result = rankBestThirds({});
+    expect(result).toEqual([]);
   });
 
   it("grupo sem 3º colocado (posição 3 ausente) é ignorado", () => {
@@ -594,6 +665,56 @@ describe("computeProgress", () => {
     expect(r0.global.percentage).toBeGreaterThanOrEqual(0);
     expect(r0.global.percentage).toBeLessThanOrEqual(100);
     expect(r100.global.percentage).toBe(100);
+  });
+
+  it("múltiplas fases simultâneas → byStage acumula cada stage independentemente", () => {
+    // Cobre o cenário de copa completa: grupos, oitavas, quartas, semifinal, final
+    // Verifica que cada stage é contabilizado de forma independente em byStage.
+    const mGrupos1 = makeGroupMatch("g1", "t1", "t2", "group-a");
+    const mGrupos2 = makeGroupMatch("g2", "t3", "t4", "group-a");
+    const mOitavas: MatchWithId = { ...makeGroupMatch("o1", "t1", "t3"), stage: "oitavas", groupId: null };
+    const mQuartas: MatchWithId = { ...makeGroupMatch("q1", "t1", "t4"), stage: "quartas", groupId: null };
+    const mSemifinal: MatchWithId = { ...makeGroupMatch("s1", "t2", "t3"), stage: "semifinal", groupId: null };
+    const mFinal: MatchWithId = { ...makeGroupMatch("f1", "t1", "t2"), stage: "final", groupId: null };
+
+    // 4 de 6 partidas com palpite: g1, o1, q1, f1
+    const preds = [
+      makePred("g1", 1, 0),
+      makePred("o1", 2, 1),
+      makePred("q1", 1, 0),
+      makePred("f1", 3, 1),
+    ];
+    const matches = [mGrupos1, mGrupos2, mOitavas, mQuartas, mSemifinal, mFinal];
+    const r = computeProgress(preds, matches);
+
+    // Global: 4 de 6
+    expect(r.global.total).toBe(6);
+    expect(r.global.filled).toBe(4);
+    expect(r.global.percentage).toBe(66.7);
+
+    // Por stage:
+    expect(r.byStage.grupos?.total).toBe(2);
+    expect(r.byStage.grupos?.filled).toBe(1);   // só g1 tem palpite
+    expect(r.byStage.grupos?.percentage).toBe(50);
+
+    expect(r.byStage.oitavas?.total).toBe(1);
+    expect(r.byStage.oitavas?.filled).toBe(1);  // o1 tem palpite
+    expect(r.byStage.oitavas?.percentage).toBe(100);
+
+    expect(r.byStage.quartas?.total).toBe(1);
+    expect(r.byStage.quartas?.filled).toBe(1);
+    expect(r.byStage.quartas?.percentage).toBe(100);
+
+    expect(r.byStage.semifinal?.total).toBe(1);
+    expect(r.byStage.semifinal?.filled).toBe(0); // s1 sem palpite
+    expect(r.byStage.semifinal?.percentage).toBe(0);
+
+    expect(r.byStage.final?.total).toBe(1);
+    expect(r.byStage.final?.filled).toBe(1);
+    expect(r.byStage.final?.percentage).toBe(100);
+
+    // Todos os 5 stages presentes
+    expect(Object.keys(r.byStage)).toHaveLength(5);
   });
 
   it("2/3 = 66.7%", () => {
