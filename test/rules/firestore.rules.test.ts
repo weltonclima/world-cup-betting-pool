@@ -250,6 +250,10 @@ describe("Firestore Security Rules — predictions (ownership)", () => {
     await assertSucceeds(approvedDb().doc("predictions/p_outro").get());
   });
 
+  it("C13b: não autenticado não lê predictions", async () => {
+    await assertFails(unauthDb().doc("predictions/p_outro").get());
+  });
+
   it("C14: pending não cria palpite", async () => {
     await assertFails(
       pendingDb().doc("predictions/p3").set({
