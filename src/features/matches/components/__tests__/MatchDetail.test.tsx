@@ -31,11 +31,21 @@ vi.mock("@/hooks/useAuth", () => ({
 
 vi.mock("@/features/matches/hooks/useMatchDetail");
 
+vi.mock("@/features/predictions/hooks", () => ({
+  usePredictions: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
+  predictionsKeys: { all: () => ["predictions"] },
+  useUpsertPrediction: vi.fn(),
+  usePredictionsList: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
+}));
+
 // ── Importação após mock ────────────────────────────────────────────────────
 import { useMatchDetail } from "@/features/matches/hooks/useMatchDetail";
+import { usePredictions } from "@/features/predictions/hooks";
 import { MatchDetail } from "@/features/matches/components/MatchDetail";
+import type { Prediction } from "@/types";
 
 const mockedUseMatchDetail = vi.mocked(useMatchDetail);
+const mockedUsePredictions = vi.mocked(usePredictions);
 
 // ── Fixture de match ────────────────────────────────────────────────────────
 
@@ -202,5 +212,60 @@ describe("MatchDetail — estado sucesso", () => {
     render(<MatchDetail id="match-001" />);
     // Placar exibido como "2 × 1" no separador
     expect(screen.getByText("2 × 1")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bloco "Meu Palpite" (TASK-09)
+// ---------------------------------------------------------------------------
+
+const predictionFixture: Prediction = {
+  uid: "user-01",
+  matchId: "match-001",
+  homeScore: 2,
+  awayScore: 1,
+};
+
+describe("MatchDetail — bloco Meu Palpite", () => {
+  it("T-NOVO-A: exibe bloco 'Meu Palpite' quando existingPrediction está definido", () => {
+    mockedUseMatchDetail.mockReturnValue(
+      makeData({ match: { ...matchFixture, predictionStatus: "enviado" } }),
+    );
+    mockedUsePredictions.mockReturnValue({
+      data: [predictionFixture],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof usePredictions>);
+    render(<MatchDetail id="match-001" />);
+    expect(screen.getByText("Meu Palpite")).toBeTruthy();
+  });
+
+  it("T-NOVO-B: exibe placar palpitado corretamente (homeScore × awayScore)", () => {
+    mockedUseMatchDetail.mockReturnValue(
+      makeData({ match: { ...matchFixture, predictionStatus: "enviado" } }),
+    );
+    mockedUsePredictions.mockReturnValue({
+      data: [predictionFixture],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof usePredictions>);
+    render(<MatchDetail id="match-001" />);
+    // Os scores são exibidos como texto separados (não "2 × 1" num único nó)
+    expect(screen.getByText("2")).toBeTruthy();
+    expect(screen.getByText("1")).toBeTruthy();
+    // aria-label do bloco descreve o palpite completo
+    const block = screen.getByRole("img", { name: /seu palpite/i });
+    expect(block).toBeTruthy();
+  });
+
+  it("T-NOVO-C: bloco 'Meu Palpite' NÃO aparece quando prediction undefined", () => {
+    mockedUseMatchDetail.mockReturnValue(makeData({ match: matchFixture }));
+    mockedUsePredictions.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof usePredictions>);
+    render(<MatchDetail id="match-001" />);
+    expect(screen.queryByText("Meu Palpite")).toBeNull();
   });
 });
