@@ -19,3 +19,6 @@ ui-debug.log
 *-debug.log
 /emulator-data/
 serviceAccountKey.json
+
+# Vitest JSON output (scratch)
+vitest-*.json
