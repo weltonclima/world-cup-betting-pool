@@ -36,6 +36,9 @@ const HTTP_ERROR_MESSAGES: Record<number, string> = {
   422: "Os dados do palpite são inválidos.",
   423: "O prazo para este jogo foi encerrado.",
   500: "Erro ao salvar o palpite. Tente novamente.",
+  502: "Erro ao buscar dados da Copa. Tente novamente.",
+  503: "Serviço de dados da Copa temporariamente indisponível.",
+  504: "Tempo limite ao buscar dados da Copa. Tente novamente.",
 };
 
 const FALLBACK_HTTP_MESSAGE = "Ocorreu um erro inesperado. Tente novamente.";
@@ -97,4 +100,58 @@ export async function upsertPrediction(
       HTTP_ERROR_MESSAGES[response.status] ?? FALLBACK_HTTP_MESSAGE;
     throw new PredictionServiceError(response.status, message);
   }
+}
+
+// ─── Batch ───────────────────────────────────────────────────────────────────
+
+/** Item gravado com sucesso pelo endpoint batch. */
+export interface BatchSavedItem {
+  id: string;       // docId Firestore: "${uid}_${matchId}"
+  matchId: string;
+  homeScore: number;
+  awayScore: number;
+  created: boolean; // true = create, false = update
+}
+
+/** Item rejeitado pelo endpoint batch. */
+export interface BatchRejectedItem {
+  index: number;                                     // índice original no array de input
+  matchId: string | undefined;                       // undefined se o item era totalmente inválido
+  reason: "invalid" | "not_found" | "locked";
+  message: string;                                   // pt-BR do servidor
+}
+
+/** Resultado completo do upsert em lote. */
+export interface BatchUpsertResult {
+  saved: BatchSavedItem[];
+  rejected: BatchRejectedItem[];
+}
+
+/**
+ * Envia um lote de palpites ao Route Handler POST /api/predictions/batch.
+ * Usa credentials: "same-origin" (cookie de sessão httpOnly).
+ *
+ * Retorna { saved, rejected } — o caller (useUpsertPredictionsBatch) é responsável
+ * por exibir feedback agregado; rejeições parciais NÃO lançam exceção.
+ *
+ * @throws PredictionServiceError em erros de rota (401/403/422/500/502/503/504).
+ * @throws Error em falha de rede (fetch rejeita).
+ */
+export async function upsertPredictionsBatch(
+  inputs: UpsertPredictionInput[],
+): Promise<BatchUpsertResult> {
+  const response = await fetch("/api/predictions/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ predictions: inputs }),
+  });
+
+  if (!response.ok) {
+    const message =
+      HTTP_ERROR_MESSAGES[response.status] ?? FALLBACK_HTTP_MESSAGE;
+    throw new PredictionServiceError(response.status, message);
+  }
+
+  return response.json() as Promise<BatchUpsertResult>;
 }

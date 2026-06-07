@@ -216,12 +216,23 @@ describe("upsertPrediction — erros HTTP mapeados para PredictionServiceError",
     });
   }
 
-  it("status desconhecido (503) → PredictionServiceError com fallback pt-BR", async () => {
+  it("status 503 → PredictionServiceError com mensagem pt-BR de serviço indisponível (TASK-05)", async () => {
+    // 503 foi adicionado ao HTTP_ERROR_MESSAGES em TASK-05 (batch).
     fetchMock.mockResolvedValueOnce(makeErrorResponse(503));
 
     await expect(upsertPrediction(INPUT)).rejects.toMatchObject({
       name: "PredictionServiceError",
       status: 503,
+      message: "Serviço de dados da Copa temporariamente indisponível.",
+    });
+  });
+
+  it("status desconhecido (999) → PredictionServiceError com fallback pt-BR", async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(999));
+
+    await expect(upsertPrediction(INPUT)).rejects.toMatchObject({
+      name: "PredictionServiceError",
+      status: 999,
       message: "Ocorreu um erro inesperado. Tente novamente.",
     });
   });
