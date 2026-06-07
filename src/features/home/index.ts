@@ -1,2 +1,2 @@
-// Barrel da feature home. Reexporta o módulo público do dashboard inicial (preenchido em PRDs futuros).
-export {};
+// Barrel da feature home. Reexporta hooks, tipos e utilitários públicos (TASK-05).
+export * from "./hooks";

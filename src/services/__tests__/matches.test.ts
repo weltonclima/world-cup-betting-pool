@@ -72,10 +72,10 @@ function makeFinishedMatchData(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function snapshotWith(docsData: Array<Record<string, unknown>>) {
+function snapshotWith(docsData: Array<Record<string, unknown>>, ids?: string[]) {
   return {
     empty: docsData.length === 0,
-    docs: docsData.map((data) => ({ data: () => data })),
+    docs: docsData.map((data, i) => ({ id: ids?.[i] ?? `doc-${i}`, data: () => data })),
   } as unknown as Awaited<ReturnType<typeof getDocs>>;
 }
 
@@ -104,14 +104,15 @@ describe("getNextScheduledMatch", () => {
     expect(getDocsMock).toHaveBeenCalled();
   });
 
-  it("retorna Match validado quando há partida agendada", async () => {
+  it("retorna MatchWithId validado quando há partida agendada (inclui id do doc)", async () => {
     getDocsMock.mockResolvedValueOnce(
-      snapshotWith([makeScheduledMatchData({ homeTeamId: "team-bra" })]),
+      snapshotWith([makeScheduledMatchData({ homeTeamId: "team-bra" })], ["match-abc"]),
     );
 
     const result = await getNextScheduledMatch();
 
     expect(result).toMatchObject({
+      id: "match-abc",
       homeTeamId: "team-bra",
       status: "scheduled",
       homeScore: null,
@@ -162,19 +163,22 @@ describe("getRecentFinishedMatches", () => {
     expect(limitMock).toHaveBeenCalledWith(5);
   });
 
-  it("retorna array de Matches validados", async () => {
+  it("retorna array de MatchWithId validados (inclui id do doc)", async () => {
     getDocsMock.mockResolvedValueOnce(
-      snapshotWith([
-        makeFinishedMatchData({ homeScore: 3, awayScore: 0 }),
-        makeFinishedMatchData({ homeTeamId: "team-fra", homeScore: 1, awayScore: 1 }),
-      ]),
+      snapshotWith(
+        [
+          makeFinishedMatchData({ homeScore: 3, awayScore: 0 }),
+          makeFinishedMatchData({ homeTeamId: "team-fra", homeScore: 1, awayScore: 1 }),
+        ],
+        ["match-01", "match-02"],
+      ),
     );
 
     const result = await getRecentFinishedMatches();
 
     expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ homeScore: 3, awayScore: 0, status: "finished" });
-    expect(result[1]).toMatchObject({ homeTeamId: "team-fra" });
+    expect(result[0]).toMatchObject({ id: "match-01", homeScore: 3, awayScore: 0, status: "finished" });
+    expect(result[1]).toMatchObject({ id: "match-02", homeTeamId: "team-fra" });
   });
 
   it("retorna array vazio quando não há partidas finalizadas", async () => {
