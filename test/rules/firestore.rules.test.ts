@@ -135,6 +135,42 @@ describe("Firestore Security Rules — perfil users (role/status)", () => {
     );
   });
 
+  it("C8b: admin aprova gravando status + updatedAt juntos (PRD-01.2 service)", async () => {
+    await assertSucceeds(
+      adminDb()
+        .doc("users/pendingUser")
+        .update({ status: "approved", updatedAt: "2026-06-06T12:00:00.000Z" }),
+    );
+  });
+
+  it("C21: admin bloqueia usuário aprovado (approved→blocked)", async () => {
+    await assertSucceeds(
+      adminDb().doc("users/approvedUser").update({ status: "blocked" }),
+    );
+  });
+
+  it("C22: admin desbloqueia usuário (blocked→approved)", async () => {
+    await assertSucceeds(
+      adminDb().doc("users/blockedUser").update({ status: "approved" }),
+    );
+  });
+
+  it("C23: admin rejeita usuário pendente (pending→blocked)", async () => {
+    await assertSucceeds(
+      adminDb().doc("users/pendingUser").update({ status: "blocked" }),
+    );
+  });
+
+  it("C24: admin lê doc de terceiro (base da listagem do painel)", async () => {
+    await assertSucceeds(adminDb().doc("users/pendingUser").get());
+  });
+
+  it("C25: usuário comum não muda status de terceiro (defesa)", async () => {
+    await assertFails(
+      approvedDb().doc("users/pendingUser").update({ status: "approved" }),
+    );
+  });
+
   it("C19: perfil de terceiro não vaza (approved lendo users/adminUser)", async () => {
     await assertFails(approvedDb().doc("users/adminUser").get());
   });
