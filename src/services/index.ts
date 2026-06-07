@@ -21,5 +21,10 @@ export {
   getRecentFinishedMatches,
 } from "./matches";
 export { listAllTeams } from "./teams";
-export { listPredictionsByUid } from "./predictions";
+export {
+  listPredictionsByUid,
+  upsertPrediction,
+  PredictionServiceError,
+  type UpsertPredictionInput,
+} from "./predictions";
 export { getSystemSettings } from "./systemSettings";
