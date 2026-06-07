@@ -25,3 +25,10 @@ export type {
   PhaseHubItem,
   HubPhaseInput,
 } from "./PredictionsHub";
+
+// Tela Seleção de Grupo (TASK-08).
+export { GroupSelectionGrid, buildGroupSummaries } from "./GroupSelectionGrid";
+export type {
+  GroupSelectionGridProps,
+  GroupSummary,
+} from "./GroupSelectionGrid";
