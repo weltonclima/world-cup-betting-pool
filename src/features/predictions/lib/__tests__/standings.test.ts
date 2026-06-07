@@ -125,40 +125,90 @@ describe("computeGroupStandings", () => {
   });
 
   it("desempate por gols pró (pontos e saldo iguais)", () => {
-    // Dois times com 3pts e saldo 0, mas gols pró diferentes
+    // WR-01: cenário onde exatamente dois times (FRA e BRA) compartilham pontos E
+    // saldo idênticos, mas diferem em gols pró — o de maior gols pró deve rankear acima.
+    //
+    // FRA: vence m02 (FRA 3×2 GER) → 3pts, gf=3, ga=2, gd=+1
+    // BRA: vence m05 (BRA 2×1 GER) → 3pts, gf=2, ga=1, gd=+1
+    // Ambos: 3pts, saldo +1 — mas FRA tem gf=3 e BRA tem gf=2.
+    // FRA deve ficar acima de BRA pelo critério gols pró.
+    //
+    // Se o branch de gols pró fosse removido, o desempate cairia em teamId ASC:
+    // "team-bra" < "team-fra" → BRA ficaria acima de FRA (errado), e o teste falharia.
     const predictions: Prediction[] = [
-      makePred("m01", 2, 1), // BRA vence ARG 2×1 → BRA 3pts, saldo +1
-      makePred("m02", 1, 2), // GER vence FRA 2×1 → GER 3pts, saldo +1
-      makePred("m03", 0, 1), // FRA vence BRA 1×0 → FRA 3pts, BRA 3pts total
-      makePred("m04", 1, 0), // ARG vence GER 1×0 → ARG 3pts, GER 3pts total
-      // BRA: 3+0=3pts, +1-1=0 saldo, gols pró: 2+0=2
-      // GER: 0+3=3pts, +1-1=0 saldo, gols pró: 2+0=2  → mesmo; teamId desempata
+      makePred("m02", 3, 2), // FRA 3×2 GER → FRA: 3pts, gf=3, ga=2, gd=+1
+      makePred("m05", 2, 1), // BRA 2×1 GER → BRA: 3pts, gf=2, ga=1, gd=+1
+      // ARG: sem palpites → 0pts; GER: perde as duas → 0pts, gd=-2
     ];
     const result = computeGroupStandings(GROUP_A_MATCHES, predictions);
-    // Teste de estabilidade: teamId ASC desempata quando tudo mais é igual
-    const braPos = result.find((e) => e.teamId === T1)!.position;
-    const gerPos = result.find((e) => e.teamId === T4)!.position;
-    // BRA ("team-bra") < GER ("team-ger") → BRA acima de GER
-    expect(braPos).toBeLessThan(gerPos);
+
+    const fra = result.find((e) => e.teamId === T3)!;
+    const bra = result.find((e) => e.teamId === T1)!;
+
+    // Verificar pré-condição: mesmos pontos e saldo, gols pró diferentes
+    expect(fra.points).toBe(3);
+    expect(bra.points).toBe(3);
+    expect(fra.goalDifference).toBe(bra.goalDifference); // saldo igual
+    expect(fra.goalsFor).toBeGreaterThan(bra.goalsFor);  // gols pró diferente
+
+    // FRA (gf=3) deve rankear acima de BRA (gf=2)
+    expect(fra.position).toBeLessThan(bra.position);
   });
 
   it("desempate por confronto direto (pontos e saldo e gols pró iguais entre 2 times)", () => {
-    // BRA e ARG com pontos/saldo/gols-pró idênticos contra os outros dois,
-    // mas BRA venceu o confronto direto
-    const predictions: Prediction[] = [
-      makePred("m01", 1, 0), // BRA 1×0 ARG → BRA vence confronto direto
-      makePred("m03", 1, 0), // BRA 1×0 FRA
-      makePred("m05", 0, 1), // GER 1×0 BRA
-      makePred("m02", 0, 1), // GER 1×0 FRA
-      makePred("m04", 0, 1), // GER 1×0 ARG
-      makePred("m06", 1, 0), // ARG 1×0 FRA
-      // BRA: vitórias sobre ARG e FRA; derrota para GER → posição depende de saldo
-      // mas o confronto direto BRA vs ARG deve colocar BRA acima de ARG
+    // WR-02: dois times com stats globais IDÊNTICAS (pontos, saldo, gols pró),
+    // mas um venceu o outro no confronto direto.
+    // O vencedor do h2h tem teamId ALFABETICAMENTE POSTERIOR ao perdedor,
+    // portanto sem h2h o perdedor venceria (teamId ASC) — a lógica h2h deve prevalecer.
+    //
+    // Times: "team-aaa" (perdedor h2h, teamId menor) e "team-zzz" (vencedor h2h, teamId maior).
+    // Cenário (grupo de 4 — "team-aaa", "team-zzz", "team-mid1", "team-mid2"):
+    //   m-az: "team-aaa" 0×2 "team-zzz" → zzz vence h2h direto
+    //   m-ac: "team-aaa" 2×0 "team-mid1" → aaa recupera pts/gd/gf globais
+    //   m-zd: "team-zzz" 0×2 "team-mid2" → zzz perde pts/gd para igualar aaa
+    //
+    // Stats globais resultantes (com as 3 partidas acima com palpite):
+    //   "team-aaa": 1 vitória + 1 derrota = 3pts, gf=2, ga=2, gd=0
+    //   "team-zzz": 1 vitória + 1 derrota = 3pts, gf=2, ga=2, gd=0
+    //
+    // Sem h2h: teamId ASC → "team-aaa" (1º) antes de "team-zzz" (errado).
+    // Com h2h: "team-zzz" venceu "team-aaa" → "team-zzz" fica acima (correto).
+    // O teste falha se a lógica h2h for removida.
+    const TAA = "team-aaa";
+    const TZZ = "team-zzz";
+    const TMD1 = "team-mid1";
+    const TMD2 = "team-mid2";
+
+    const h2hMatches: MatchWithId[] = [
+      makeGroupMatch("m-az",  TAA,  TZZ,  "group-h2h"),
+      makeGroupMatch("m-ac",  TAA,  TMD1, "group-h2h"),
+      makeGroupMatch("m-zd",  TZZ,  TMD2, "group-h2h"),
+      makeGroupMatch("m-ad",  TAA,  TMD2, "group-h2h"),
+      makeGroupMatch("m-zc",  TZZ,  TMD1, "group-h2h"),
+      makeGroupMatch("m-cd",  TMD1, TMD2, "group-h2h"),
     ];
-    const result = computeGroupStandings(GROUP_A_MATCHES, predictions);
-    const braPos = result.find((e) => e.teamId === T1)!.position;
-    const argPos = result.find((e) => e.teamId === T2)!.position;
-    expect(braPos).toBeLessThan(argPos);
+
+    const predictions: Prediction[] = [
+      makePred("m-az",  0, 2), // "team-aaa" 0×2 "team-zzz" → zzz vence h2h
+      makePred("m-ac",  2, 0), // "team-aaa" 2×0 "team-mid1" → aaa recupera 3pts, gf=2, gd=0
+      makePred("m-zd",  0, 2), // "team-zzz" 0×2 "team-mid2" → zzz perde pts/gd, igualando aaa
+      // m-ad, m-zc, m-cd sem palpite — não afetam stats de aaa/zzz
+    ];
+
+    const result = computeGroupStandings(h2hMatches, predictions);
+
+    const zzz = result.find((e) => e.teamId === TZZ)!;
+    const aaa = result.find((e) => e.teamId === TAA)!;
+
+    // Verificar pré-condição: stats globais idênticas
+    expect(zzz.points).toBe(3);
+    expect(aaa.points).toBe(3);
+    expect(zzz.goalDifference).toBe(aaa.goalDifference); // saldo igual (0)
+    expect(zzz.goalsFor).toBe(aaa.goalsFor);             // gols pró iguais (2)
+
+    // "team-zzz" venceu o confronto direto → deve rankear acima de "team-aaa"
+    // (sem h2h, "team-aaa" < "team-zzz" → aaa ficaria na frente — resultado errado)
+    expect(zzz.position).toBeLessThan(aaa.position);
   });
 
   it("triplo empate com confronto direto — estabilidade de ordenação (questão aberta §1)", () => {
