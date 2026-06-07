@@ -35,7 +35,7 @@ export default function LoginPage() {
 
           <footer className="text-center text-sm text-muted-foreground">
             Não tem conta?{" "}
-            <Link href="/cadastro" className="font-medium text-primary hover:underline">
+            <Link href="/signup" className="font-medium text-primary hover:underline">
               Cadastre-se
             </Link>
           </footer>

@@ -132,13 +132,13 @@ describe("LoginForm", () => {
     expect(screen.queryByRole("link", { name: "Cadastre-se" })).toBeNull();
   });
 
-  it("'Esqueci minha senha' é um link para /esqueci-senha (PRD-01.1)", () => {
+  it("'Esqueci minha senha' é um link para /forgot-password (PRD-01.1)", () => {
     render(<LoginForm />);
 
     const forgot = screen.getByRole("link", {
       name: "Esqueci minha senha",
     });
-    expect(forgot.getAttribute("href")).toBe("/esqueci-senha");
+    expect(forgot.getAttribute("href")).toBe("/forgot-password");
     // Não é mais um placeholder com toast.
     expect(toastMock).not.toHaveBeenCalled();
   });

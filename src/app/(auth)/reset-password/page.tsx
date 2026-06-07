@@ -15,7 +15,7 @@ import { ResetVerifying } from "@/features/auth/ResetVerifying";
  * `ResetPasswordForm` usa `useSearchParams`, portanto vive dentro de um
  * `<Suspense>` (exigência do Next 15). Sem BottomNav: grupo `(auth)`.
  */
-export default function RedefinirSenhaPage() {
+export default function ResetPasswordPage() {
   return (
     <div className="auth-theme flex min-h-screen flex-col bg-background">
       <section className="flex flex-col items-center gap-6 px-6 pb-8 pt-12">

@@ -125,7 +125,7 @@ export function ResetPasswordForm() {
           </p>
         </div>
         <Link
-          href="/esqueci-senha"
+          href="/forgot-password"
           className={cn(buttonVariants({ variant: "default" }), "h-11 w-full")}
         >
           Solicitar novo link

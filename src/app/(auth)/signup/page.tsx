@@ -13,7 +13,7 @@ import { SignupForm } from "@/features/auth/SignupForm";
  * O usuário criado nasce `pending`; os guards do AuthLayout cuidam do
  * redirecionamento — esta tela não navega no sucesso.
  */
-export default function CadastroPage() {
+export default function SignupPage() {
   return (
     <div className="auth-light flex min-h-screen flex-col items-center bg-background px-6 py-10">
       <main

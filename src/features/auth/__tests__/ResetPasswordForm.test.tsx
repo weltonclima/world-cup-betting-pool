@@ -69,7 +69,7 @@ describe("ResetPasswordForm › validação do oobCode", () => {
     expect(verifyResetCodeMock).not.toHaveBeenCalled();
     expect(
       screen.getByRole("link", { name: "Solicitar novo link" }).getAttribute("href"),
-    ).toBe("/esqueci-senha");
+    ).toBe("/forgot-password");
   });
 
   it("oobCode válido → estado válido (renderiza o form)", async () => {

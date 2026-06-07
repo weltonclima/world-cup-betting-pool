@@ -10,7 +10,7 @@ import { ForgotPasswordForm } from "@/features/auth/ForgotPasswordForm";
  *
  * Sem BottomNav: o grupo `(auth)` não monta o AppShell.
  */
-export default function EsqueciSenhaPage() {
+export default function ForgotPasswordPage() {
   return (
     <div className="auth-theme flex min-h-screen flex-col bg-background">
       <section className="flex flex-col items-center gap-6 px-6 pb-8 pt-12">

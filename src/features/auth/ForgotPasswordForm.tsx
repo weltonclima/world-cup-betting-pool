@@ -28,7 +28,7 @@ import { sendPasswordReset } from "@/services/auth";
 /**
  * Formulário de solicitação de redefinição de senha (PRD-01.1, TASK-03).
  *
- * Rota única `(auth)/esqueci-senha` com dois estados locais:
+ * Rota única `(auth)/forgot-password` com dois estados locais:
  * - `form` (tela 02): campo e-mail + "Enviar link" + "Voltar para o login".
  * - `enviado` (tela 03): confirmação com o e-mail digitado + "Voltar para o login".
  *

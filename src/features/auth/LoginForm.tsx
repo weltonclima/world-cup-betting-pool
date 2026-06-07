@@ -100,7 +100,7 @@ export function LoginForm() {
               <div className="flex justify-end">
                 {/* Recuperação de senha (PRD-01.1) — rota dedicada. */}
                 <Link
-                  href="/esqueci-senha"
+                  href="/forgot-password"
                   className="text-sm font-medium text-primary hover:underline"
                 >
                   Esqueci minha senha
