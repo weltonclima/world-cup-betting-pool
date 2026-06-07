@@ -21,12 +21,14 @@ const {
   toastInfoMock,
   toastErrorMock,
   refreshProfileMock,
+  signOutMock,
   authState,
 } = vi.hoisted(() => ({
   pushMock: vi.fn<(href: string) => void>(),
   toastInfoMock: vi.fn<(message: string) => void>(),
   toastErrorMock: vi.fn<(message: string) => void>(),
   refreshProfileMock: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+  signOutMock: vi.fn<() => Promise<void>>(() => Promise.resolve()),
   authState: { status: "pending", error: null } as AuthState,
 }));
 
@@ -38,6 +40,12 @@ vi.mock("next/navigation", () => ({
 // Sonner (toasts).
 vi.mock("sonner", () => ({
   toast: { info: toastInfoMock, error: toastErrorMock },
+}));
+
+// Firebase client: o componente importa `firebaseAuth` (logout do botão Sair);
+// importar `@/firebase` real validaria env NEXT_PUBLIC_FIREBASE_* no load.
+vi.mock("@/firebase", () => ({
+  firebaseAuth: { signOut: signOutMock },
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -57,6 +65,8 @@ describe("PendingApprovalScreen", () => {
     authState.error = null;
     refreshProfileMock.mockReset();
     refreshProfileMock.mockResolvedValue(undefined);
+    signOutMock.mockReset();
+    signOutMock.mockResolvedValue(undefined);
     pushMock.mockReset();
     toastInfoMock.mockReset();
     toastErrorMock.mockReset();
@@ -76,9 +86,44 @@ describe("PendingApprovalScreen", () => {
     expect(
       screen.getByText(/Seu acesso está aguardando aprovação do administrador/i),
     ).toBeTruthy();
+  });
+
+  it("não promete email de aprovação (A6 — sem serviço de email)", () => {
+    render(<PendingApprovalScreen />);
+
     expect(
-      screen.getByText(/Você receberá um email quando sua conta for liberada/i),
-    ).toBeTruthy();
+      screen.queryByText(/Você receberá um email/i),
+    ).toBeNull();
+  });
+
+  it("clicar em 'Sair' faz logout e redireciona para /login", async () => {
+    render(<PendingApprovalScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Sair/i }));
+
+    await waitFor(() => {
+      expect(signOutMock).toHaveBeenCalledTimes(1);
+    });
+    expect(pushMock).toHaveBeenCalledWith("/login");
+  });
+
+  it("exibe toast de erro e reabilita o botão se o logout falhar", async () => {
+    signOutMock.mockRejectedValueOnce(new Error("network"));
+
+    render(<PendingApprovalScreen />);
+
+    const sairButton = screen.getByRole("button", { name: /Sair/i });
+    fireEvent.click(sairButton);
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        "Não foi possível sair. Tente novamente.",
+      );
+    });
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /Sair/i }),
+    ).not.toHaveProperty("disabled", true);
   });
 
   it("clicar em 'Atualizar Status' chama refreshProfile", async () => {

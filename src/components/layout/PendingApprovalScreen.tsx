@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, LoaderCircle } from "lucide-react";
+import { Clock, LoaderCircle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
+import { firebaseAuth } from "@/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
 /**
  * Tela para usuários com status "pending" (PRD-01, TASK-09).
  *
- * Layout claro conforme `docs/prd-01/aguardando.png`: título no topo, relógio +
- * textos no centro, botão "Atualizar status" na base. Classe `.auth-light` dá o
- * `--primary` verde ao botão (texto/borda) com contraste AA. Sem botão "Sair"
- * (segue o mock).
+ * Layout claro conforme `docs/prd-01-2/02-aguardando-aprovacao.png`: título no
+ * topo, relógio + textos no centro, botões "Atualizar status" e "Sair" na base.
+ * Classe `.auth-light` dá o `--primary` verde ao botão de status (texto/borda)
+ * com contraste AA. "Sair" faz logout via `firebaseAuth.signOut` →
+ * `router.push("/login")`, espelhando `BlockedScreen` (PRD-01.2, A6: sem email).
  *
  * Leitura de `status` pós-refresh sem corrida:
  * O `status` lido do `useAuth()` dentro do handler é o valor da closure daquele
@@ -31,9 +33,24 @@ export function PendingApprovalScreen() {
 
   // true enquanto a releitura do perfil está em andamento (desabilita o botão).
   const [refreshing, setRefreshing] = useState(false);
+  // true enquanto o logout está em andamento (desabilita ambos os botões).
+  const [signingOut, setSigningOut] = useState(false);
   // Contador incrementado após cada releitura concluída. Dispara o efeito de
   // decisão lendo o status/erro frescos do contexto. 0 = nenhum refresh ainda.
   const [refreshTick, setRefreshTick] = useState(0);
+
+  /** Efetua o logout via Firebase Auth e retorna à tela de login. */
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await firebaseAuth.signOut();
+      // (auth)/layout não ejeta usuário deslogado de /pending → redirect explícito.
+      router.push("/login");
+    } catch {
+      toast.error("Não foi possível sair. Tente novamente.");
+      setSigningOut(false);
+    }
+  }
 
   /** Releitura manual do perfil. A decisão é tomada no efeito abaixo. */
   async function handleRefresh() {
@@ -92,29 +109,47 @@ export function PendingApprovalScreen() {
           <p className="text-sm text-muted-foreground">
             Seu acesso está aguardando aprovação do administrador.
           </p>
-          <p className="text-sm text-muted-foreground">
-            Você receberá um email quando sua conta for liberada.
-          </p>
         </div>
       </div>
 
-      {/* Ação — base: releitura do perfil (texto/borda verde) */}
-      <Button
-        variant="outline"
-        onClick={() => void handleRefresh()}
-        disabled={refreshing}
-        aria-busy={refreshing}
-        className="h-11 w-full border-primary text-primary hover:bg-primary/10 hover:text-primary"
-      >
-        {refreshing ? (
-          <LoaderCircle
-            size={16}
-            aria-hidden="true"
-            className="animate-spin motion-reduce:animate-none"
-          />
-        ) : null}
-        {refreshing ? "Atualizando..." : "Atualizar status"}
-      </Button>
+      {/* Ações — base: releitura do perfil (verde) + logout (neutro) */}
+      <div className="flex flex-col gap-3">
+        <Button
+          variant="outline"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing || signingOut}
+          aria-busy={refreshing}
+          className="h-11 w-full border-primary text-primary hover:bg-primary/10 hover:text-primary"
+        >
+          {refreshing ? (
+            <LoaderCircle
+              size={16}
+              aria-hidden="true"
+              className="animate-spin motion-reduce:animate-none"
+            />
+          ) : null}
+          {refreshing ? "Atualizando..." : "Atualizar status"}
+        </Button>
+
+        <Button
+          variant="ghost"
+          onClick={() => void handleSignOut()}
+          disabled={refreshing || signingOut}
+          aria-busy={signingOut}
+          className="h-11 w-full"
+        >
+          {signingOut ? (
+            <LoaderCircle
+              size={16}
+              aria-hidden="true"
+              className="animate-spin motion-reduce:animate-none"
+            />
+          ) : (
+            <LogOut size={16} aria-hidden="true" />
+          )}
+          {signingOut ? "Saindo..." : "Sair"}
+        </Button>
+      </div>
     </div>
   );
 }
