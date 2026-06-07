@@ -23,6 +23,7 @@ import {
   type Transaction,
 } from "firebase-admin/firestore";
 import "../firebase/admin"; // garante inicialização (singleton) do Admin SDK
+import { syncRoleClaim } from "./syncRoleClaim";
 
 /** Caminho do doc de flag que marca se o primeiro admin já foi atribuído. */
 const BOOTSTRAP_DOC_PATH = "system_settings/bootstrap";
@@ -93,6 +94,24 @@ export const promoteFirstAdmin = onDocumentCreated(
     );
 
     if (result.promoted) {
+      // Reflete o role no custom claim do token (base p/ middleware TASK-10).
+      // Feito FORA da transação: claims do Auth não participam da transação do
+      // Firestore. Se falhar, o doc já está consistente (role:"admin") e o
+      // trigger onUpdate (syncRoleClaimOnUserUpdate) NÃO dispara aqui (foi um
+      // create) — por isso logamos como erro p/ correção manual/retry.
+      try {
+        await syncRoleClaim(uid, "admin");
+        logger.info(
+          `promoteFirstAdmin: custom claim role=admin gravado para ${uid}.`,
+        );
+      } catch (err) {
+        logger.error(
+          `promoteFirstAdmin: doc promovido mas falha ao gravar custom claim de ${uid}. ` +
+            `Token não terá role=admin até nova gravação.`,
+          err,
+        );
+      }
+
       logger.info(
         `promoteFirstAdmin: usuário ${uid} promovido a admin/approved (primeiro usuário).`,
       );
