@@ -11,3 +11,5 @@ export * from "./LastResultsCard";
 export * from "./CurrentStageCard";
 // Avisos (TASK-09)
 export * from "./NoticesCard";
+// Composição da página Home Dashboard (TASK-10)
+export * from "./HomeDashboard";

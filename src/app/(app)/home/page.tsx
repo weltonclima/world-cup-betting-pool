@@ -1,14 +1,12 @@
+import { HomeDashboard } from "@/features/home/components/HomeDashboard";
+
 /**
- * Placeholder da página inicial interna.
- * Conteúdo real será implementado em PRDs futuros.
+ * Página /home — entry point mínimo da Home Dashboard (TASK-10).
+ *
+ * Server Component intencional: sem diretiva "use client".
+ * AuthGuard + AppShell já estão no layout pai (src/app/(app)/layout.tsx).
+ * Toda a lógica de estado (loading/error/sucesso) está em <HomeDashboard>.
  */
 export default function HomePage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-foreground">Início</h1>
-      <p className="text-sm text-muted-foreground">
-        Dashboard em construção — conteúdo será adicionado nos próximos PRDs.
-      </p>
-    </div>
-  );
+  return <HomeDashboard />;
 }
