@@ -107,7 +107,7 @@ function ToggleButton({ label, selected, onClick }: ToggleButtonProps) {
       variant={selected ? "default" : "outline"}
       onClick={onClick}
       className={cn(
-        "rounded-lg h-9 px-3 text-sm shrink-0",
+        "rounded-lg min-h-11 px-3 text-sm shrink-0",
         "transition-colors duration-150",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       )}
@@ -389,7 +389,7 @@ export function MatchFiltersSheet({
             <Button
               type="button"
               variant="ghost"
-              className="w-full h-10 text-muted-foreground"
+              className="w-full h-11 text-muted-foreground"
               onClick={handleClear}
             >
               Limpar Filtros

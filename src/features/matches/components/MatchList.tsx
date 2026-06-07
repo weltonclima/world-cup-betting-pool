@@ -80,9 +80,8 @@ function regroupFilteredItems(
  * MatchCard usa internamente: id, kickoffAt, stage, round, groupId, venue,
  * status, homeScore, awayScore (para GroupLabel e CenterColumn).
  * homeTeamId/awayTeamId não são consumidos na renderização do card —
- * o card recebe as seleções já resolvidas via homeTeam/awayTeam props.
- * Passamos strings vazias apenas para satisfazer o tipo estrito (nonEmptyString
- * valida no parse, não em runtime após construção).
+ * o card recebe as seleções já resolvidas via homeTeam/awayTeam props — mas
+ * preservamos os ids reais do MatchListItem (não há motivo para descartá-los).
  */
 function toMatchWithId(item: MatchListItem): MatchWithId {
   return {
@@ -95,9 +94,9 @@ function toMatchWithId(item: MatchListItem): MatchWithId {
     status: item.status,
     homeScore: item.homeScore,
     awayScore: item.awayScore,
-    // Não usados pelo card na renderização — seleções chegam via homeTeam/awayTeam:
-    homeTeamId: "", // sentinela — card não consome este campo (seleção via homeTeam prop)
-    awayTeamId: "", // sentinela — card não consome este campo (seleção via awayTeam prop)
+    // Ids reais preservados (MatchListItem os expõe desde TASK-05); card os ignora na renderização:
+    homeTeamId: item.homeTeamId,
+    awayTeamId: item.awayTeamId,
   };
 }
 
