@@ -144,9 +144,9 @@ describe("NextMatchCard", () => {
       expect(screen.getByRole("article", { name: "Próximo Jogo" })).toBeTruthy();
     });
 
-    it("T15: exibe mensagem 'Nenhum jogo disponível'", () => {
+    it("T15: exibe mensagem 'Nenhum jogo agendado' (contrato §3.4.3)", () => {
       render(<NextMatchCard nextMatch={null} />);
-      expect(screen.getByText("Nenhum jogo disponível")).toBeTruthy();
+      expect(screen.getByText("Nenhum jogo agendado")).toBeTruthy();
     });
 
     it("T16: não exibe 'VS' no estado empty", () => {
@@ -180,6 +180,21 @@ describe("NextMatchCard", () => {
       const button = screen.getByText("Enviar Palpite");
       button.click();
       expect(handler).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("CTA com ctaHref (Link path — WR-02)", () => {
+    it("T23: passa ctaHref → renderiza âncora (role link) com href correto", () => {
+      render(<NextMatchCard nextMatch={baseMatch} ctaHref="/partidas/match-001" />);
+      const link = screen.getByRole("link", { name: "Enviar Palpite" });
+      expect(link).toBeTruthy();
+      expect(link.getAttribute("href")).toBe("/partidas/match-001");
+    });
+
+    it("T24: âncora CTA possui classe min-h-[44px] (área de toque mínima)", () => {
+      render(<NextMatchCard nextMatch={baseMatch} ctaHref="/partidas/match-001" />);
+      const link = screen.getByRole("link", { name: "Enviar Palpite" });
+      expect(link.className).toContain("min-h-[44px]");
     });
   });
 });

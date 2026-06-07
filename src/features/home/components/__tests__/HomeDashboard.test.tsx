@@ -67,7 +67,7 @@ const baseAuth: AuthContextValue = {
  */
 const baseDashboardSuccess: HomeDashboardData = {
   ranking: { position: 3, totalParticipants: 20, points: 8 },
-  performance: { totalCorrect: 4, accuracy: 25, gamesPredicted: null, wrong: null },
+  performance: { totalCorrect: 4, accuracy: 25, longestStreak: 0, gamesPredicted: 16 },
   nextMatch: null,
   recentResults: [],
   currentStage: { stage: null, roundLabel: null },
@@ -81,7 +81,7 @@ const baseDashboardSuccess: HomeDashboardData = {
 const dashboardLoading: HomeDashboardData = {
   ...baseDashboardSuccess,
   ranking: null,
-  performance: { totalCorrect: 0, accuracy: 0, gamesPredicted: null, wrong: null },
+  performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
   isLoading: true,
   isError: false,
 };
@@ -90,7 +90,7 @@ const dashboardLoading: HomeDashboardData = {
 const dashboardError: HomeDashboardData = {
   ...baseDashboardSuccess,
   ranking: null,
-  performance: { totalCorrect: 0, accuracy: 0, gamesPredicted: null, wrong: null },
+  performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
   isLoading: false,
   isError: true,
 };
@@ -249,7 +249,7 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
     mockUseDashboard.mockReturnValue({
       ...baseDashboardSuccess,
       ranking: null,
-      performance: { totalCorrect: 0, accuracy: 0, gamesPredicted: null, wrong: null },
+      performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
     });
   });
 
@@ -266,10 +266,10 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
     expect(screen.getByText("Olá 👋")).toBeTruthy();
   });
 
-  it("T23: exibe empty-state de NextMatchCard ('Nenhum jogo disponível') quando nextMatch é null", () => {
+  it("T23: exibe empty-state de NextMatchCard ('Nenhum jogo agendado') quando nextMatch é null", () => {
     render(<HomeDashboard />);
     // nextMatch is null in this suite's beforeEach setup (inherited from baseDashboardSuccess)
-    expect(screen.getByText("Nenhum jogo disponível")).toBeTruthy();
+    expect(screen.getByText("Nenhum jogo agendado")).toBeTruthy();
   });
 
   it("T24: exibe empty-state de LastResultsCard ('Nenhum resultado disponível') quando results é vazio", () => {
@@ -292,7 +292,7 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
 
   it("T27: renderiza os 4 card empty-states simultâneamente sem crash (cobertura integrada)", () => {
     render(<HomeDashboard />);
-    expect(screen.getByText("Nenhum jogo disponível")).toBeTruthy();
+    expect(screen.getByText("Nenhum jogo agendado")).toBeTruthy();
     expect(screen.getByText("Nenhum resultado disponível")).toBeTruthy();
     expect(screen.getByText("Fase não definida")).toBeTruthy();
     expect(screen.getByText("Nenhum aviso no momento")).toBeTruthy();

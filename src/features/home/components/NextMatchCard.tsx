@@ -169,7 +169,7 @@ export function NextMatchCard({
         <div className="flex flex-col items-center py-4 gap-2 text-muted-foreground">
           <Calendar size={24} aria-hidden="true" className="mx-auto mb-2 text-muted-foreground" />
           <p className="text-sm text-muted-foreground text-center">
-            Nenhum jogo disponível
+            Nenhum jogo agendado
           </p>
           <p className="text-xs text-muted-foreground text-center">
             Os jogos aparecem quando disponíveis

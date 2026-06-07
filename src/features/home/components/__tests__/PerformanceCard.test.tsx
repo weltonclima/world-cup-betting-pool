@@ -11,8 +11,8 @@ import type { PerformanceSummary } from "@/features/home/lib/homeDashboardHelper
 const mockSummary: PerformanceSummary = {
   totalCorrect: 12,
   accuracy: 25,
-  gamesPredicted: null,
-  wrong: null,
+  longestStreak: 4,
+  gamesPredicted: 48,
 };
 
 describe("PerformanceCard", () => {
@@ -39,18 +39,22 @@ describe("PerformanceCard", () => {
       expect(screen.getByText("25%")).toBeTruthy();
     });
 
-    it("exibe '—' para jogos palpitados quando gamesPredicted é null (MVP D1)", () => {
+    it("exibe maior sequência de acertos (longestStreak)", () => {
       render(<PerformanceCard summary={mockSummary} />);
-      const dashes = screen.getAllByText("—");
-      expect(dashes.length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText("4")).toBeTruthy();
     });
 
-    it("exibe labels de sub-métricas", () => {
+    it("exibe total de palpites (gamesPredicted)", () => {
+      render(<PerformanceCard summary={mockSummary} />);
+      expect(screen.getByText("48")).toBeTruthy();
+    });
+
+    it("exibe labels de sub-métricas conforme contrato §3.7", () => {
       render(<PerformanceCard summary={mockSummary} />);
       expect(screen.getByText("Acertos")).toBeTruthy();
       expect(screen.getByText("Aproveitamento")).toBeTruthy();
-      expect(screen.getByText("Jogos palpitados")).toBeTruthy();
-      expect(screen.getByText("Erros")).toBeTruthy();
+      expect(screen.getByText("Maior sequência")).toBeTruthy();
+      expect(screen.getByText("Palpites")).toBeTruthy();
     });
   });
 
@@ -69,10 +73,11 @@ describe("PerformanceCard", () => {
     it("exibe 0 acertos e 0% aproveitamento", () => {
       render(
         <PerformanceCard
-          summary={{ totalCorrect: 0, accuracy: 0, gamesPredicted: null, wrong: null }}
+          summary={{ totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 }}
         />,
       );
-      expect(screen.getByText("0")).toBeTruthy();
+      // Múltiplos zeros presentes — verificar por getAllByText
+      expect(screen.getAllByText("0").length).toBeGreaterThan(0);
       expect(screen.getByText("0%")).toBeTruthy();
     });
   });

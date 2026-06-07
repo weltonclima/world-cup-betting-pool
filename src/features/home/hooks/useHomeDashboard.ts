@@ -105,7 +105,7 @@ export function useHomeDashboard(): HomeDashboardData {
   if (uid === null) {
     return {
       ranking: null,
-      performance: { totalCorrect: 0, accuracy: 0, gamesPredicted: null, wrong: null },
+      performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
       nextMatch: null,
       recentResults: [],
       currentStage: { stage: null, roundLabel: null },

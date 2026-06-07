@@ -60,10 +60,13 @@ export interface RecentResult {
 export interface PerformanceSummary {
   totalCorrect: number;        // statistics.totalCorrect (0 se sem dados)
   accuracy: number;            // statistics.accuracy 0–100 (0 se sem dados)
-  /** null: sem statistics no MVP (D1 — campos não existem no schema). */
-  gamesPredicted: null;
-  /** null: sem statistics no MVP (D1). */
-  wrong: null;
+  /** Maior sequência de acertos (statistics.longestStreak; 0 se sem dados). */
+  longestStreak: number;
+  /**
+   * Total de palpites enviados — derivado de totalCorrect / (accuracy / 100) (D1).
+   * 0 quando accuracy é 0 (evita divisão por zero).
+   */
+  gamesPredicted: number;
 }
 
 /** Informação de fase atual. */
@@ -200,19 +203,20 @@ export function deriveRankingSummary(
 // ---------------------------------------------------------------------------
 
 /**
- * Extrai totalCorrect e accuracy de statistics.
- * gamesPredicted e wrong são null no MVP (D1 — sem esses campos no schema).
+ * Extrai totalCorrect, accuracy e longestStreak de statistics.
+ * gamesPredicted é derivado de totalCorrect / (accuracy / 100) (D1 — campo não existe no schema).
  * Quando statistics é null/undefined (usuário sem dados agregados ainda), retorna zeros.
  */
 export function derivePerformanceSummary(
   statistics: Statistics | null | undefined,
 ): PerformanceSummary {
-  return {
-    totalCorrect: statistics?.totalCorrect ?? 0,
-    accuracy: statistics?.accuracy ?? 0,
-    gamesPredicted: null,
-    wrong: null,
-  };
+  const totalCorrect = statistics?.totalCorrect ?? 0;
+  const accuracy = statistics?.accuracy ?? 0;
+  const longestStreak = statistics?.longestStreak ?? 0;
+  // Derivação D1: palpites = acertos / (aproveitamento / 100); evita divisão por zero.
+  const gamesPredicted =
+    accuracy > 0 ? Math.round(totalCorrect / (accuracy / 100)) : 0;
+  return { totalCorrect, accuracy, longestStreak, gamesPredicted };
 }
 
 // ---------------------------------------------------------------------------

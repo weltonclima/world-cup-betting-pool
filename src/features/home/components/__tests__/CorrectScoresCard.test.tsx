@@ -19,9 +19,10 @@ describe("CorrectScoresCard", () => {
       expect(screen.getByText("12")).toBeTruthy();
     });
 
-    it("exibe o label 'Placares exatos'", () => {
+    it("exibe o label 'Acertos'", () => {
       render(<CorrectScoresCard totalCorrect={12} />);
-      expect(screen.getByText("Placares exatos")).toBeTruthy();
+      // Tailwind uppercase: texto fonte "Acertos" (contrato §3.2)
+      expect(screen.getByText("Acertos")).toBeTruthy();
     });
 
     it("exibe 0 acertos corretamente", () => {
@@ -36,9 +37,9 @@ describe("CorrectScoresCard", () => {
       expect(screen.getByText("--")).toBeTruthy();
     });
 
-    it("ainda exibe o label 'Placares exatos'", () => {
+    it("ainda exibe o label 'Acertos'", () => {
       render(<CorrectScoresCard totalCorrect={null} />);
-      expect(screen.getByText("Placares exatos")).toBeTruthy();
+      expect(screen.getByText("Acertos")).toBeTruthy();
     });
   });
 });

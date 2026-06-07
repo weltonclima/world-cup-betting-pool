@@ -56,10 +56,7 @@ function SubMetrica({ value, label }: SubMetricaProps) {
 // ---------------------------------------------------------------------------
 
 export interface PerformanceCardProps {
-  /**
-   * Dados de desempenho do usuário.
-   * Per R1/D1: gamesPredicted e wrong são null no MVP — renderizar como "—".
-   */
+  /** Dados de desempenho do usuário. */
   summary: PerformanceSummary;
 }
 
@@ -68,19 +65,14 @@ export interface PerformanceCardProps {
 // ---------------------------------------------------------------------------
 
 /**
- * Card full-width "Meu Desempenho" com 4 sub-métricas.
- * gamesPredicted e wrong são null no MVP (D1) — exibidos como "—".
+ * Card full-width "Meu Desempenho" com 4 sub-métricas (contrato §3.7):
+ * Acertos | Aproveitamento | Maior sequência | Palpites.
  * Puramente apresentacional — sem hooks, sem fetch.
  */
 export function PerformanceCard({ summary }: PerformanceCardProps) {
-  const { totalCorrect, accuracy, gamesPredicted, wrong } = summary;
+  const { totalCorrect, accuracy, longestStreak, gamesPredicted } = summary;
 
   const accuracyDisplay = `${Math.round(accuracy)}%`;
-
-  // gamesPredicted e wrong são null no MVP (D1) — renderizar "—"
-  const gamesPredictedDisplay =
-    gamesPredicted === null ? "—" : String(gamesPredicted);
-  const wrongDisplay = wrong === null ? "—" : String(wrong);
 
   return (
     <article
@@ -94,8 +86,8 @@ export function PerformanceCard({ summary }: PerformanceCardProps) {
       <div className="grid grid-cols-2 gap-3 mt-3">
         <SubMetrica value={String(totalCorrect)} label="Acertos" />
         <SubMetrica value={accuracyDisplay} label="Aproveitamento" />
-        <SubMetrica value={gamesPredictedDisplay} label="Jogos palpitados" />
-        <SubMetrica value={wrongDisplay} label="Erros" />
+        <SubMetrica value={String(longestStreak)} label="Maior sequência" />
+        <SubMetrica value={String(gamesPredicted)} label="Palpites" />
       </div>
     </article>
   );

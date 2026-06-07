@@ -317,36 +317,47 @@ describe("deriveRankingSummary", () => {
 // ---------------------------------------------------------------------------
 
 describe("derivePerformanceSummary", () => {
-  it("statistics com dados → retorna totalCorrect e accuracy corretos", () => {
-    const stats = makeStatistics({ totalCorrect: 7, accuracy: 70 });
+  it("statistics com dados → retorna totalCorrect, accuracy e longestStreak corretos", () => {
+    const stats = makeStatistics({ totalCorrect: 7, accuracy: 70, longestStreak: 3 });
     const result = derivePerformanceSummary(stats);
     expect(result.totalCorrect).toBe(7);
     expect(result.accuracy).toBe(70);
-    expect(result.gamesPredicted).toBeNull();
-    expect(result.wrong).toBeNull();
+    expect(result.longestStreak).toBe(3);
   });
 
-  it("statistics null → zeros e nulls", () => {
+  it("gamesPredicted derivado de totalCorrect / (accuracy / 100) (D1)", () => {
+    // 7 acertos com 70% de aproveitamento → 10 palpites
+    const stats = makeStatistics({ totalCorrect: 7, accuracy: 70 });
+    const result = derivePerformanceSummary(stats);
+    expect(result.gamesPredicted).toBe(10);
+  });
+
+  it("gamesPredicted = 0 quando accuracy é 0 (evita divisão por zero)", () => {
+    const stats = makeStatistics({ totalCorrect: 0, accuracy: 0 });
+    const result = derivePerformanceSummary(stats);
+    expect(result.gamesPredicted).toBe(0);
+  });
+
+  it("statistics null → zeros", () => {
     const result = derivePerformanceSummary(null);
     expect(result.totalCorrect).toBe(0);
     expect(result.accuracy).toBe(0);
-    expect(result.gamesPredicted).toBeNull();
-    expect(result.wrong).toBeNull();
+    expect(result.longestStreak).toBe(0);
+    expect(result.gamesPredicted).toBe(0);
   });
 
-  it("statistics undefined → zeros e nulls", () => {
+  it("statistics undefined → zeros", () => {
     const result = derivePerformanceSummary(undefined);
     expect(result.totalCorrect).toBe(0);
     expect(result.accuracy).toBe(0);
-    expect(result.gamesPredicted).toBeNull();
-    expect(result.wrong).toBeNull();
+    expect(result.longestStreak).toBe(0);
+    expect(result.gamesPredicted).toBe(0);
   });
 
-  it("gamesPredicted e wrong sempre null (D1 — MVP sem esses campos)", () => {
-    const stats = makeStatistics({ totalCorrect: 3, accuracy: 30 });
+  it("longestStreak reflete statistics.longestStreak", () => {
+    const stats = makeStatistics({ longestStreak: 5 });
     const result = derivePerformanceSummary(stats);
-    expect(result.gamesPredicted).toBeNull();
-    expect(result.wrong).toBeNull();
+    expect(result.longestStreak).toBe(5);
   });
 });
 

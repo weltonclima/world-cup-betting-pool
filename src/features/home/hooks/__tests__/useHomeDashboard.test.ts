@@ -18,6 +18,7 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { UseQueryResult } from "@tanstack/react-query";
 import type { MatchWithId, Prediction, Ranking, Statistics, SystemSettings, TeamWithId } from "@/types";
 
 // ── mocks declarados antes dos imports do módulo ────────────────────────────
@@ -64,15 +65,16 @@ const mockSettings     = vi.mocked(useSystemSettings);
 // ── factory de UseQueryResult falso ──────────────────────────────────────────
 
 /**
- * Retorna um objeto mínimo que satisfaz a interface UseQueryResult.
+ * Retorna um objeto mínimo que satisfaz a interface UseQueryResult<T>.
  * Apenas os campos que useHomeDashboard realmente lê são fornecidos.
+ * Cast via `unknown` para evitar `any` (W-05).
  */
 function fakeQuery<T>(overrides: {
   data?: T;
   isLoading?: boolean;
   isError?: boolean;
   refetch?: () => Promise<unknown>;
-}) {
+}): UseQueryResult<T> {
   return {
     data: overrides.data,
     isLoading: overrides.isLoading ?? false,
@@ -98,8 +100,7 @@ function fakeQuery<T>(overrides: {
     errorUpdatedAt: 0,
     fetchStatus: "idle" as const,
     errorUpdateCount: 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  } as unknown as UseQueryResult<T>;
 }
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -277,8 +278,8 @@ describe("useHomeDashboard — estado neutro (uid=null)", () => {
     expect(result.current.performance).toEqual({
       totalCorrect: 0,
       accuracy: 0,
-      gamesPredicted: null,
-      wrong: null,
+      longestStreak: 0,
+      gamesPredicted: 0,
     });
   });
 

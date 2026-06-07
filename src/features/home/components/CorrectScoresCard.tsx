@@ -66,8 +66,9 @@ export function CorrectScoresCard({ totalCorrect }: CorrectScoresCardProps) {
 
       <span className="text-2xl font-bold text-foreground">{display}</span>
 
+      {/* Rótulo exibido com uppercase via Tailwind; texto fonte é "Acertos" (contrato §3.2). */}
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mt-auto">
-        Placares exatos
+        Acertos
       </span>
     </article>
   );

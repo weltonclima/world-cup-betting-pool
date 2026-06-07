@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Bell, Info } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import type { SystemNotice } from "@/features/home/lib/homeDashboardHelpers";
 
 // ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ function AvisoItem({ notice }: AvisoItemProps) {
     <div className="flex items-start gap-2 py-2 border-b border-border last:border-b-0">
       <Icon
         size={16}
-        className={`${className} shrink-0 mt-0.5`}
+        className={cn(className, "shrink-0 mt-0.5")}
         aria-hidden="true"
       />
       <span className="text-sm text-foreground">{notice.message}</span>

@@ -58,6 +58,7 @@ export function HomeHeader({ name, uid }: HomeHeaderProps) {
         </div>
 
         {/* Sino estático (MVP — R5: sem realtime) */}
+        {/* focus-visible mantido para quando disabled for removido (MVP+); usa token --ring do design-system. */}
         <button
           type="button"
           aria-label="Notificações (em breve)"
@@ -67,6 +68,7 @@ export function HomeHeader({ name, uid }: HomeHeaderProps) {
             "flex items-center justify-center size-11 rounded-full",
             "text-muted-foreground",
             "disabled:opacity-50 disabled:cursor-not-allowed",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           )}
         >
           <Bell size={20} aria-hidden="true" />
