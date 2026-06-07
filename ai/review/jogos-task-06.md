@@ -126,3 +126,30 @@ E rebaixar (ou manter) as seções como `<h2>` (já estão). Garantir h1 → h2 
 ---
 
 _Revisado: 2026-06-07 · Reviewer: Claude (gsd-code-reviewer + gsd-ui-auditor) · Veredicto: **rejected** (1 BLOCKER)_
+
+---
+
+## Re-review (BLOCKER fix)
+
+> Re-review focado · Commit: branch `feat/integracao-api-football` · Data: 2026-06-07
+> Escopo: apenas verificar a correção do BLOCKER e dos 2 WARNINGs apontados. Não é re-run completo.
+
+### Veredicto: **APPROVED**
+
+| Item | Status | Evidência |
+|---|---|---|
+| **BL-01** (h1 ausente / heading tree em h2) | ✅ **RESOLVIDO** | `MatchDetail.tsx:327` — `<h1>Detalhes do Jogo</h1>` único no componente; `SectionHeading` (`<h2>`, linha 133) renomeado para "Informações" (linha 370). Hierarquia agora h1 → h2 (4× h2: Informações, Status do Jogo, Status do Palpite, Ações), sem saltos. |
+| **WR-02** (`max-w-[100px]` arbitrary) | ✅ **RESOLVIDO** | Linhas 338 e 358 agora `max-w-24`; grep não encontra nenhum `max-w-[...]` remanescente. (`min-h-[44px]` permanece — aceitável por WCAG 2.5.5.) |
+| **WR-03** (back não visível no loading) | ✅ **RESOLVIDO** | `MatchDetail.tsx:280` — `<BackButton/>` real renderizado no estado loading, fora do skeleton; skeleton já não traz back falso. BackButton presente nos 4 estados (loading 280, error 290, 404 305, sucesso 324). |
+| WR-01 (título de página ausente) | ✅ Coberto pelo h1 (BL-01). |
+
+### Verificações técnicas
+
+- `getDiagnostics` em `MatchDetail.tsx`: **zero diagnostics**.
+- Sem `any`, sem `style={{}}` inline — confirmado por leitura.
+- **Regressão de teste:** nenhuma. T11 (`MatchDetail.test.tsx:152`) afirma `getByText("Detalhes do Jogo")` — continua passando pois o texto agora é o `<h1>` (não mais o `<h2>`). Nenhum teste depende de "Detalhes do Jogo" ser `<h2>`, conta `<h1>`/links, nem asserta "Informações". T14 (link "Voltar") inalterado.
+
+### Issues NOVOS introduzidos pela correção
+- Nenhum. (O loading passa a ter `<BackButton>` real + skeleton, mas nenhum teste conta links duplicados; comportamento correto e intencional.)
+
+_Re-revisado: 2026-06-07 · Reviewer: Claude · Veredicto: **approved**_

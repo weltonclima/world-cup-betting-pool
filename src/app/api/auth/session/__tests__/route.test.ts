@@ -28,11 +28,8 @@ vi.mock("@/server/firebaseAdmin", () => ({
   }),
 }));
 
-import {
-  DELETE,
-  POST,
-  SESSION_COOKIE_NAME,
-} from "@/app/api/auth/session/route";
+import { DELETE, POST } from "@/app/api/auth/session/route";
+import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 /** Helper: monta um NextRequest POST com corpo JSON. */
 function postRequest(body: unknown): NextRequest {

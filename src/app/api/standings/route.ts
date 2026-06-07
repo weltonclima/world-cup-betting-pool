@@ -15,12 +15,12 @@
 
 import { NextResponse } from "next/server";
 
-import { REVALIDATE } from "@/server/cache/tiers";
-
 import { apiFootballErrorResponse } from "../_lib/apiFootballError";
 import { fetchAllTeams, type TeamWithId } from "../_lib/apiFootballData";
 
-export const revalidate = REVALIDATE.grupos;
+// Literal estático obrigatório pelo Next.js (MemberExpression não é suportado).
+// Valor: REVALIDATE.grupos = 86400s (24h).
+export const revalidate = 86400;
 
 interface GroupStanding {
   groupId: string;

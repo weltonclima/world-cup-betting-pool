@@ -8,12 +8,12 @@
 
 import { NextResponse } from "next/server";
 
-import { REVALIDATE } from "@/server/cache/tiers";
-
 import { apiFootballErrorResponse } from "../_lib/apiFootballError";
 import { fetchAllTeams } from "../_lib/apiFootballData";
 
-export const revalidate = REVALIDATE.selecoes;
+// Literal estático obrigatório pelo Next.js (MemberExpression não é suportado).
+// Valor: REVALIDATE.selecoes = 86400s (24h).
+export const revalidate = 86400;
 
 export async function GET(): Promise<NextResponse> {
   try {

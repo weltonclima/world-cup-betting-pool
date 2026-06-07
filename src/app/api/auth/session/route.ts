@@ -20,13 +20,10 @@ export const runtime = "nodejs";
 // Nunca cachear respostas de auth.
 export const dynamic = "force-dynamic";
 
-/**
- * Nome do cookie de sessão. Reexportado a partir do módulo compartilhado
- * `@/server/auth/sessionCookie` (fonte única, sem dependências de runtime),
- * para manter a superfície pública deste Route Handler e alinhar com o
- * `middleware.ts` (edge) — evitando o literal duplicado.
- */
-export { SESSION_COOKIE_NAME };
+// SESSION_COOKIE_NAME: importado internamente apenas; não pode ser re-exportado
+// em um Route Handler (Next.js rejeita exports que não sejam verbos HTTP ou
+// config válidas). Consumidores devem importar direto de
+// @/server/auth/sessionCookie.
 
 /** Validade do session cookie: 5 dias (em ms para o Admin SDK, em s para o cookie). */
 const SESSION_EXPIRES_IN_MS = 5 * 24 * 60 * 60 * 1000;

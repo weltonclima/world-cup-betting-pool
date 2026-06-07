@@ -6,6 +6,8 @@
 
 ## Verdict: REJECTED
 
+> **Re-review (BLOCKER fix) — ver seção no fim do arquivo. Novo verdict: APPROVED.**
+
 - **BLOCKER:** 2
 - **WARNING:** 4
 - tsc: limpo (exit 0). IDE diagnostics: 0 em todos os arquivos alterados. Suite: 28 testes novos, build verde.
@@ -125,3 +127,29 @@ o widget como listbox e o usuário esperar setas. Operável, mas não conforme a
 ---
 
 _Reviewer: Claude (review skill, adversarial) — modelo Opus 4.8_
+
+---
+
+## Re-review (BLOCKER fix)
+
+> Re-review focada (não full re-run) após REJECTED. Commit na branch `feat/integracao-api-football`.
+> Escopo: B-01, B-02, W-02, W-03. Arquivos alterados lidos integralmente; IDE diagnostics
+> executado nos três.
+
+### Novo Verdict: APPROVED
+
+| Achado | Status | Evidência |
+|---|---|---|
+| B-01 (BLOCKER) | **CLEARED** | `MatchFiltersSheet.tsx:110` — `ToggleButton` agora `min-h-11` (44px). Base `size="sm"` é `h-7` (height:28px), mas `min-h-11` vence em CSS (min-height > height) → altura renderizada 44px. Cobre os ~9 botões de Fase + 4 de Status (todos via o mesmo `ToggleButton`). |
+| B-02 (BLOCKER) | **CLEARED** | `sheet.tsx:68` — close button `className="absolute top-3 right-3 min-h-11 min-w-11"`. Base `size="icon-sm"` é `size-7` (28px), mas `min-h-11`/`min-w-11` (44px) sobrescrevem → alvo de toque 44×44px. |
+| W-02 | **CLEARED** | `MatchList.tsx:98-99` — `toMatchWithId` agora passa `item.homeTeamId`/`item.awayTeamId` (ids reais; confirmados em `useMatchesList.ts:38,40,134-135`). Sentinela `""` removido; docstring atualizada. |
+| W-03 | **CLEARED** | `MatchFiltersSheet.tsx:384,392` — "Aplicar Filtros" e "Limpar Filtros" ambos `h-11` (44px). |
+| W-04 | **KNOWN WARNING (mantido)** | `role="listbox"` sem roving tabindex/setas. Tab + Enter/Espaço funcionam (operável); não-blocking conforme review original. |
+
+### Verificações adicionais
+- **IDE diagnostics:** 0 em `MatchFiltersSheet.tsx`, `sheet.tsx`, `MatchList.tsx`. ✔
+- **tsc/testes:** reportados limpos (tsc exit 0; 243/243 matches+ui verdes). Não re-executei a suíte
+  (re-review focada); arquivos de teste presentes (`__tests__/MatchFiltersSheet.test.tsx` etc.). ✔
+- **Nenhum novo issue** introduzido pelos quatro fixes.
+
+_Re-reviewer: Claude (review skill, adversarial) — modelo Opus 4.8_

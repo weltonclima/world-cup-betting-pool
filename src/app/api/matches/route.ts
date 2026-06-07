@@ -10,13 +10,13 @@
 
 import { NextResponse } from "next/server";
 
-import { REVALIDATE } from "@/server/cache/tiers";
-
 import { apiFootballErrorResponse } from "../_lib/apiFootballError";
 import { fetchAllMatches } from "../_lib/apiFootballData";
 
 // Cache de segmento (A5): teto fresco único; client segmenta por tier.
-export const revalidate = REVALIDATE.jogoAoVivo;
+// Literal estático obrigatório pelo Next.js (MemberExpression não é suportado).
+// Valor: REVALIDATE.jogoAoVivo = 60s (1min).
+export const revalidate = 60;
 
 export async function GET(): Promise<NextResponse> {
   try {
