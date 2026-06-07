@@ -49,3 +49,24 @@ export type {
   PredictedStandingsProps,
   Qualification,
 } from "./PredictedStandings";
+
+// Tela Resumo dos 12 Grupos (TASK-11).
+export { GroupsSummary } from "./GroupsSummary";
+export type { GroupsSummaryProps } from "./GroupsSummary";
+export {
+  buildGroupsSummary,
+  normalizeGroupId,
+} from "./groupsSummaryData";
+export type {
+  GroupsSummaryData,
+  GroupSummaryItem,
+  GroupSummaryTeam,
+} from "./groupsSummaryData";
+
+// Tela Ranking dos Melhores Terceiros (TASK-12).
+export { BestThirdsRanking, buildThirdsRanking } from "./BestThirdsRanking";
+export type {
+  BestThirdsRankingProps,
+  ThirdRankingEntry,
+  ThirdsRankingResult,
+} from "./BestThirdsRanking";
