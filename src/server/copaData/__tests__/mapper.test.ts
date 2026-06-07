@@ -88,6 +88,16 @@ describe("parseKickoffAt", () => {
   it("MAP-14: formato inválido lança Error", () => {
     expect(() => parseKickoffAt("2026-06-11", "horário inválido")).toThrow(Error);
   });
+
+  // OQ-5: UTC+0 (zero sem dígito duplo) deve produzir +00:00
+  it("MAP-EX1: 2026-06-11, 18:00 UTC+0 → 2026-06-11T18:00:00+00:00", () => {
+    expect(parseKickoffAt("2026-06-11", "18:00 UTC+0")).toBe("2026-06-11T18:00:00+00:00");
+  });
+
+  // offset de dois dígitos (ex.: UTC+10) deve produzir +10:00, não +010:00
+  it("MAP-EX2: 2026-07-01, 15:00 UTC+10 → 2026-07-01T15:00:00+10:00", () => {
+    expect(parseKickoffAt("2026-07-01", "15:00 UTC+10")).toBe("2026-07-01T15:00:00+10:00");
+  });
 });
 
 // ─── MAP-15..MAP-18: buildMatchId ────────────────────────────────────────────
@@ -107,6 +117,21 @@ describe("buildMatchId", () => {
 
   it("MAP-18: grupo Brazil × Egypt 2026-06-20 → 2026-06-20-brazil-egypt", () => {
     expect(buildMatchId(groupMatchNoTime)).toBe("2026-06-20-brazil-egypt");
+  });
+
+  // Nome com caractere especial & — slug colapsa para um único hífen
+  it("MAP-EX3: grupo com '&' no nome → slug normalizado sem hifens duplicados", () => {
+    const match = {
+      round: "Matchday 1",
+      date: "2026-06-12",
+      team1: "Bosnia & Herzegovina",
+      team2: "Switzerland",
+      group: "Group B",
+    };
+    const id = buildMatchId(match);
+    expect(id).toBe("2026-06-12-bosnia-herzegovina-switzerland");
+    // sem hifens consecutivos
+    expect(id).not.toMatch(/--/);
   });
 });
 
@@ -135,6 +160,11 @@ describe("resolveTeamId", () => {
 
   it("MAP-24: 1E → 1E (placeholder preservado)", () => {
     expect(resolveTeamId("1E")).toBe("1E");
+  });
+
+  // Placeholder de melhor terceiro de múltiplos grupos (ex.: "3ABC")
+  it("MAP-EX4: 3ABC → 3ABC (placeholder multi-letra preservado)", () => {
+    expect(resolveTeamId("3ABC")).toBe("3ABC");
   });
 
   it("MAP-25: nome desconhecido lança Error", () => {
