@@ -84,3 +84,12 @@ export type {
   KnockoutSection,
   PhaseNavLink,
 } from "./KnockoutPhaseScreen";
+
+// Tela Resumo Final + Enviado (TASK-15).
+export { FinalSummary, deriveFinalists } from "./FinalSummary";
+export type {
+  FinalSummaryProps,
+  FinalistSlot,
+  Finalists,
+  ScoresByMatchId,
+} from "./FinalSummary";
