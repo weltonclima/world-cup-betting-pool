@@ -17,11 +17,23 @@ export interface TeamResponse {
   group?: string;
 }
 
+/**
+ * Sede da partida (origem: fixture.venue da API-Football).
+ * name/city podem vir `null` quando a sede ainda não foi definida (TBD).
+ */
+export interface ApiVenue {
+  id: number | null;
+  name: string | null;
+  city: string | null;
+}
+
 export interface FixtureInfo {
   id: number;
   /** Data/hora em ISO 8601 */
   date: string;
   status: { short: string };
+  /** Estádio/sede; pode estar ausente ou com campos null (TBD) */
+  venue?: ApiVenue | null;
 }
 
 export interface FixtureResponse {
