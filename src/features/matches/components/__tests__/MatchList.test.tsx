@@ -20,6 +20,11 @@ vi.mock("@/firebase", () => ({
 // Mock do compositor (TASK-02)
 vi.mock("@/features/matches/hooks/useMatchesList");
 
+// Mock do MatchFiltersSheet (TASK-05) — evita portal/jsdom issues do Base UI
+vi.mock("@/features/matches/components/MatchFiltersSheet", () => ({
+  MatchFiltersSheet: () => null,
+}));
+
 // ── imports pós-mock ─────────────────────────────────────────────────────────
 
 import { useMatchesList } from "@/features/matches/hooks/useMatchesList";
@@ -46,6 +51,8 @@ function makeItem(overrides: Partial<MatchListItem> = {}): MatchListItem {
     status: "scheduled",
     homeScore: null,
     awayScore: null,
+    homeTeamId: "team-bra",
+    awayTeamId: "team-fra",
     homeTeam: { name: "Brasil", flagUrl: undefined },
     awayTeam: { name: "França", flagUrl: undefined },
     predictionStatus: "pendente",
@@ -64,6 +71,8 @@ const argentinaAlemanha = makeItem({
   id: "match-002",
   kickoffAt: "2026-06-14T19:00:00Z",
   groupId: "Grupo D",
+  homeTeamId: "team-arg",
+  awayTeamId: "team-ger",
   homeTeam: { name: "Argentina", flagUrl: undefined },
   awayTeam: { name: "Alemanha", flagUrl: undefined },
   predictionStatus: "enviado",
@@ -73,6 +82,8 @@ const espanhaJapao = makeItem({
   id: "match-003",
   kickoffAt: "2026-06-15T13:00:00Z",
   groupId: "Grupo E",
+  homeTeamId: "team-esp",
+  awayTeamId: "team-jpn",
   homeTeam: { name: "Espanha", flagUrl: undefined },
   awayTeam: { name: "Japão", flagUrl: undefined },
   predictionStatus: "bloqueado",

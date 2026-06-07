@@ -98,6 +98,8 @@ export function useMatchDetail(id: string): MatchDetailData {
     status: rawMatch.status,
     homeScore: rawMatch.homeScore,
     awayScore: rawMatch.awayScore,
+    homeTeamId: rawMatch.homeTeamId,
+    awayTeamId: rawMatch.awayTeamId,
     homeTeam: resolveTeam(rawMatch.homeTeamId, teamMap),
     awayTeam: resolveTeam(rawMatch.awayTeamId, teamMap),
     predictionStatus: deriveMatchPredictionStatus(rawMatch, predictions, now),

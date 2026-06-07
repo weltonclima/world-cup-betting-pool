@@ -49,6 +49,8 @@ const matchFixture: MatchListItem = {
   homeScore: null,
   awayScore: null,
   venue: { name: "Estádio Lusail", city: "Lusail" },
+  homeTeamId: "team-bra",
+  awayTeamId: "team-fra",
   homeTeam: { name: "Brasil", flagUrl: "https://example.com/br.png" },
   awayTeam: { name: "França", flagUrl: "https://example.com/fr.png" },
   predictionStatus: "pendente",

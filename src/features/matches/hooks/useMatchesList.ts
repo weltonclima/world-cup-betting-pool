@@ -34,6 +34,10 @@ export interface MatchListItem {
   status: MatchStatus;
   homeScore: number | null;
   awayScore: number | null;
+  /** Id do time mandante — exposto para filtro por seleção (TASK-05). */
+  homeTeamId: string;
+  /** Id do time visitante — exposto para filtro por seleção (TASK-05). */
+  awayTeamId: string;
   homeTeam: ResolvedTeam;
   awayTeam: ResolvedTeam;
   predictionStatus: MatchPredictionStatus;
@@ -127,6 +131,8 @@ export function useMatchesList(): MatchesListData {
     status: match.status,
     homeScore: match.homeScore,
     awayScore: match.awayScore,
+    homeTeamId: match.homeTeamId,
+    awayTeamId: match.awayTeamId,
     homeTeam: resolveTeam(match.homeTeamId, teamMap),
     awayTeam: resolveTeam(match.awayTeamId, teamMap),
     predictionStatus: deriveMatchPredictionStatus(match, predictions, now),

@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * MatchList — compositor da página Lista de Jogos `/matches` (TASK-04).
+ * MatchList — compositor da página Lista de Jogos `/matches` (TASK-04 + TASK-05).
  *
  * Responsabilidades:
  *  1. Chama `useMatchesList()` para obter view-model pronto.
- *  2. Mantém estado local de busca, filtros rápidos e controle do sheet.
- *  3. Aplica pipeline de filtro (busca + stage + predictionStatus) sobre flatList.
+ *  2. Mantém estado local de busca, filtros rápidos, teamId e controle do sheet.
+ *  3. Aplica pipeline de filtro (busca + stage + teamId + predictionStatus) sobre flatList.
  *  4. Re-agrupa o resultado filtrado preservando os labels de data originais.
- *  5. Renderiza header + estados (loading/error/empty) + seções por dia com MatchCard.
+ *  5. Renderiza header + sheet de filtros + estados (loading/error/empty) + seções por dia.
  *
  * Decisão arquitetural:
  *  - Busca opera sobre homeTeam.name/awayTeam.name (já resolvidos no view-model).
  *    Não reutiliza `searchMatchesByCountry` da lib (que recebe MatchWithId[]; aqui temos MatchListItem[]).
  *  - Re-agrupamento usa a estrutura de grupos original do hook para preservar labels pt-BR.
- *  - Sheet de filtros avançados: placeholder comentado — implementado na TASK-05.
+ *  - Sheet de filtros avançados (TASK-05): montado aqui, compartilha estado de filtros.
+ *  - filtersCount agora reflete o número real de filtros avançados ativos (stage + predictionStatus + teamId).
  *
- * Contrato visual: ai/screen/jogos-task-04.md
+ * Contrato visual: ai/screen/jogos-task-04.md + ai/screen/jogos-task-05.md
  */
 
 import { useState } from "react";
@@ -32,6 +33,7 @@ import type {
 } from "@/features/matches/hooks/useMatchesList";
 
 import { MatchCard } from "@/features/matches/components/MatchCard";
+import { MatchFiltersSheet } from "@/features/matches/components/MatchFiltersSheet";
 import { MatchListSkeleton } from "@/features/matches/components/MatchListSkeleton";
 import { MatchesEmptyState } from "@/features/matches/components/MatchesEmptyState";
 import { MatchesErrorState } from "@/features/matches/components/MatchesErrorState";
@@ -104,12 +106,14 @@ function toMatchWithId(item: MatchListItem): MatchWithId {
 // ---------------------------------------------------------------------------
 
 export function MatchList() {
-  // Estado local de busca e filtros rápidos
+  // Estado local de busca e filtros
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStage, setSelectedStage] = useState<Stage | undefined>(undefined);
   const [selectedPredictionStatus, setSelectedPredictionStatus] = useState<
     MatchPredictionStatus | undefined
   >(undefined);
+  // Filtro por seleção (teamId) — dimensão nova adicionada pelo sheet (TASK-05)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | undefined>(undefined);
 
   // Controle do sheet de filtros avançados (TASK-05)
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -130,13 +134,22 @@ export function MatchList() {
       ? afterSearch
       : afterSearch.filter((item) => item.stage === selectedStage);
 
-  // 3. Filtro de status de palpite
+  // 3. Filtro por seleção (teamId) — TASK-05
+  const afterTeamId =
+    selectedTeamId === undefined
+      ? afterStage
+      : afterStage.filter(
+          (item) =>
+            item.homeTeamId === selectedTeamId || item.awayTeamId === selectedTeamId,
+        );
+
+  // 4. Filtro de status de palpite
   const filteredList =
     selectedPredictionStatus === undefined
-      ? afterStage
-      : afterStage.filter((item) => item.predictionStatus === selectedPredictionStatus);
+      ? afterTeamId
+      : afterTeamId.filter((item) => item.predictionStatus === selectedPredictionStatus);
 
-  // 4. Re-agrupa preservando labels pt-BR dos grupos originais
+  // 5. Re-agrupa preservando labels pt-BR dos grupos originais
   const filteredIds = new Set(filteredList.map((item) => item.id));
   const filteredGroups = regroupFilteredItems(filteredIds, groups);
 
@@ -144,10 +157,14 @@ export function MatchList() {
   const hasActiveFilters =
     searchQuery.trim() !== "" ||
     selectedStage !== undefined ||
-    selectedPredictionStatus !== undefined;
+    selectedPredictionStatus !== undefined ||
+    selectedTeamId !== undefined;
 
-  // filtersCount: número de filtros avançados (sheet TASK-05 — por ora sempre 0)
-  const filtersCount = 0;
+  // filtersCount: número de filtros avançados ativos (TASK-05)
+  const filtersCount =
+    (selectedStage !== undefined ? 1 : 0) +
+    (selectedPredictionStatus !== undefined ? 1 : 0) +
+    (selectedTeamId !== undefined ? 1 : 0);
 
   // ---------------------------------------------------------------------------
   // Renderização
@@ -190,10 +207,26 @@ export function MatchList() {
         </div>
       )}
 
-      {/* TODO TASK-05: MatchFiltersSheet */}
-      {/* filtersOpen={filtersOpen} onClose={() => setFiltersOpen(false)} */}
-      {/* O sheet será montado aqui pela TASK-05. filtersOpen já está wired. */}
-      {filtersOpen && null /* placeholder: previne warning de variável não usada */}
+      {/* Sheet de filtros avançados (TASK-05) */}
+      <MatchFiltersSheet
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        selectedStage={selectedStage}
+        selectedPredictionStatus={selectedPredictionStatus}
+        selectedTeamId={selectedTeamId}
+        onApply={({ stage, predictionStatus, teamId }) => {
+          setSelectedStage(stage);
+          setSelectedPredictionStatus(predictionStatus);
+          setSelectedTeamId(teamId);
+          setFiltersOpen(false);
+        }}
+        onClear={() => {
+          setSelectedStage(undefined);
+          setSelectedPredictionStatus(undefined);
+          setSelectedTeamId(undefined);
+          setFiltersOpen(false);
+        }}
+      />
     </div>
   );
 }
