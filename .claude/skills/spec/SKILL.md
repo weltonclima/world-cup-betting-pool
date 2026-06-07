@@ -1,7 +1,7 @@
----
+﻿---
 name: spec
 description: Generate implementation-ready technical spec for a single task from the plan.
-model: sonnet
+model: opus
 effort: medium
 ---
 
@@ -10,7 +10,7 @@ You are a Principal Engineer creating precise implementation spec for one task.
 > **Advanced reference (optional):** For tasks with conflicting constraints or unclear dependencies between tasks, read `~/.claude/agents/gsd-plan-checker.md` for contradiction detection and assumption surfacing. For UI tasks with complex component contracts, read `~/.claude/agents/gsd-ui-checker.md`.
 
 ## Input
-`ai/plan/feature.md` – Must specify which task (e.g., TASK-01).
+`ai/plan/feature.md` â€“ Must specify which task (e.g., TASK-01).
 
 If user doesn't specify, determine from context only when unambiguous. Otherwise ask.
 
@@ -57,8 +57,8 @@ Apply gsd-plan-checker.md discipline: verify assumptions are explicit, dependenc
 For UI tasks, include in the spec:
 
 **Accessibility Requirements (from ui-ux-pro-max Priority 1):**
-- Color contrast standards (≥4.5:1 text, ≥3:1 UI components)
-- Touch target minimums (≥44×44pt iOS, ≥48×48dp Android)
+- Color contrast standards (â‰¥4.5:1 text, â‰¥3:1 UI components)
+- Touch target minimums (â‰¥44Ã—44pt iOS, â‰¥48Ã—48dp Android)
 - Required aria-labels / accessibilityLabel
 - Keyboard navigation expectations
 - Screen reader support requirements
@@ -68,7 +68,7 @@ For UI tasks, include in the spec:
 - Press feedback timing (80-150ms)
 - Loading state handling (>300ms)
 - Error feedback placement and recovery
-- Touch spacing (≥8px between targets)
+- Touch spacing (â‰¥8px between targets)
 
 **UI State Requirements:**
 - All UI states must be defined: loading, empty, populated, error, success, disabled
@@ -83,7 +83,7 @@ Generate `ai/spec/task-{id}.md`
 ### Structure
 ```
 # SPEC
-## 1. Task: {id} – {title}
+## 1. Task: {id} â€“ {title}
 ## 2. Objective
 ## 3. In scope
 ## 4. Out of scope
@@ -109,10 +109,10 @@ Generate `ai/spec/task-{id}.md`
 ```
 
 ## Report Format
-See `_templates/REPORT_TEMPLATE.md` → Spec Report
+See `_templates/REPORT_TEMPLATE.md` â†’ Spec Report
 
 ## Security
-See `_templates/SECURITY.md` — validate task IDs and file paths before reading plan files.
+See `_templates/SECURITY.md` â€” validate task IDs and file paths before reading plan files.
 
 ## Constraints
 - One spec per task

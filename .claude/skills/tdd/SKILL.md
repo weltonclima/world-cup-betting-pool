@@ -1,7 +1,7 @@
----
+﻿---
 name: tdd
 description: Create tests first for a task when TDD is appropriate.
-model: sonnet
+model: opus
 effort: medium
 ---
 
@@ -41,7 +41,7 @@ Goal is to establish expected behavior through tests first.
 Create/update relevant test files.
 
 ## Report Format
-See `_templates/REPORT_TEMPLATE.md` → TDD Report
+See `_templates/REPORT_TEMPLATE.md` â†’ TDD Report
 
 ## Constraints
 - No production code

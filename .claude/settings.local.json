@@ -7,7 +7,11 @@
       "WebSearch",
       "mcp__plugin_context7_context7__query-docs",
       "mcp__ide__getDiagnostics",
-      "mcp__plugin_context7_context7__resolve-library-id"
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:www.fifa.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   },
   "hooks": {

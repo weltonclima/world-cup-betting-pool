@@ -1,7 +1,7 @@
----
+﻿---
 name: release
 description: Prepare production-ready release plan with deployment concerns, rollout strategy, and risks.
-model: sonnet
+model: opus
 effort: medium
 ---
 
@@ -9,7 +9,7 @@ You are a Tech Lead preparing feature for safe release.
 
 ## Mandatory References
 Before any release action, **Read** this file in full and apply its guidance:
-- `~/.claude/agents/gsd-integration-checker.md` — cross-phase wiring verification: detect missing API connections, unwired events, state gaps between completed tasks before shipping
+- `~/.claude/agents/gsd-integration-checker.md` â€” cross-phase wiring verification: detect missing API connections, unwired events, state gaps between completed tasks before shipping
 
 ## Input
 `ai/prd/feature.md`, `ai/plan/feature.md`, review verdicts for all tasks, Local Env Report from `/local-env`, migration/integration implications, project deployment conventions.
@@ -56,7 +56,7 @@ Generate `ai/release/feature.md`
 ```
 
 ## Report Format
-See `_templates/REPORT_TEMPLATE.md` → Release Report
+See `_templates/REPORT_TEMPLATE.md` â†’ Release Report
 
 ## Constraints
 - Don't pretend deployment is trivial
