@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Clock, LoaderCircle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
-import { firebaseAuth } from "@/firebase";
+import { signOut } from "@/services/auth";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
@@ -43,7 +43,7 @@ export function PendingApprovalScreen() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await firebaseAuth.signOut();
+      await signOut();
       // (auth)/layout não ejeta usuário deslogado de /pending → redirect explícito.
       router.push("/login");
     } catch {

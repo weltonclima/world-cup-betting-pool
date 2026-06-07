@@ -3,7 +3,7 @@
 import { LogOut, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 
-import { firebaseAuth } from "@/firebase";
+import { signOut } from "@/services/auth";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -14,7 +14,7 @@ export function BlockedScreen() {
   /** Efetua o logout via Firebase Auth. */
   async function handleSignOut() {
     try {
-      await firebaseAuth.signOut();
+      await signOut();
     } catch {
       toast.error("Não foi possível sair. Tente novamente.");
     }

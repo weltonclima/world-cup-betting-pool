@@ -37,8 +37,22 @@ vi.mock("firebase/firestore", () => ({
   setDoc: vi.fn(),
 }));
 
+// currentUser.getIdToken usado por signIn para criar o session cookie (TASK-09).
+// Hoisted: referenciado pela fábrica de vi.mock("@/firebase") (içada ao topo).
+const { getIdTokenMock, currentUserRef } = vi.hoisted(() => ({
+  getIdTokenMock: vi.fn<(forceRefresh?: boolean) => Promise<string>>(),
+  currentUserRef: { value: null } as {
+    value: { getIdToken: ReturnType<typeof vi.fn> } | null;
+  },
+}));
+
 vi.mock("@/firebase", () => ({
-  firebaseAuth: { __tag: "auth" },
+  firebaseAuth: {
+    __tag: "auth",
+    get currentUser() {
+      return currentUserRef.value;
+    },
+  },
   firestore: { __tag: "firestore" },
 }));
 
@@ -63,6 +77,10 @@ const validInput: SignUpInput = {
   password: "secret123",
 };
 
+// fetch global mockado: signIn/signOut chamam /api/auth/session (TASK-09).
+// Best-effort no código; aqui controlamos para asserções determinísticas.
+const fetchMock = vi.fn<typeof fetch>();
+
 beforeEach(() => {
   signInMock.mockReset();
   createUserMock.mockReset();
@@ -74,6 +92,14 @@ beforeEach(() => {
   verifyCodeMock.mockReset();
   confirmResetMock.mockReset();
   docMock.mockReturnValue({} as ReturnType<typeof doc>);
+
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  getIdTokenMock.mockReset();
+  getIdTokenMock.mockResolvedValue("fresh-id-token");
+  currentUserRef.value = null;
 });
 
 afterEach(() => {
@@ -88,9 +114,26 @@ describe("signIn", () => {
 
     expect(signInMock).toHaveBeenCalledTimes(1);
     expect(signInMock).toHaveBeenCalledWith(
-      { __tag: "auth" },
+      expect.objectContaining({ __tag: "auth" }),
       "fulano@example.com",
       "secret123",
+    );
+  });
+
+  it("cria o session cookie (POST /api/auth/session) com idToken fresco", async () => {
+    signInMock.mockResolvedValue(fakeCredential);
+    currentUserRef.value = { getIdToken: getIdTokenMock };
+
+    await signIn("fulano@example.com", "secret123");
+
+    // getIdToken(true): força refresh p/ carregar o custom claim role (TASK-08).
+    expect(getIdTokenMock).toHaveBeenCalledWith(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/session",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ idToken: "fresh-id-token" }),
+      }),
     );
   });
 
@@ -112,7 +155,7 @@ describe("signUp", () => {
     await signUp(validInput);
 
     expect(createUserMock).toHaveBeenCalledWith(
-      { __tag: "auth" },
+      expect.objectContaining({ __tag: "auth" }),
       "fulano@example.com",
       "secret123",
     );
@@ -189,13 +232,18 @@ describe("signUp", () => {
 });
 
 describe("signOut", () => {
-  it("chama signOut do Firebase com o auth", async () => {
+  it("limpa o session cookie (DELETE) e chama signOut do Firebase", async () => {
     signOutMock.mockResolvedValue(undefined);
 
     await signOut();
 
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/session", {
+      method: "DELETE",
+    });
     expect(signOutMock).toHaveBeenCalledTimes(1);
-    expect(signOutMock).toHaveBeenCalledWith({ __tag: "auth" });
+    expect(signOutMock).toHaveBeenCalledWith(
+      expect.objectContaining({ __tag: "auth" }),
+    );
   });
 });
 
@@ -207,7 +255,7 @@ describe("sendPasswordReset", () => {
 
     expect(sendResetMock).toHaveBeenCalledTimes(1);
     expect(sendResetMock).toHaveBeenCalledWith(
-      { __tag: "auth" },
+      expect.objectContaining({ __tag: "auth" }),
       "fulano@example.com",
     );
   });
@@ -237,7 +285,10 @@ describe("verifyResetCode", () => {
 
     const email = await verifyResetCode("oob-code-123");
 
-    expect(verifyCodeMock).toHaveBeenCalledWith({ __tag: "auth" }, "oob-code-123");
+    expect(verifyCodeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ __tag: "auth" }),
+      "oob-code-123",
+    );
     expect(email).toBe("fulano@example.com");
   });
 
@@ -259,7 +310,7 @@ describe("confirmReset", () => {
 
     expect(confirmResetMock).toHaveBeenCalledTimes(1);
     expect(confirmResetMock).toHaveBeenCalledWith(
-      { __tag: "auth" },
+      expect.objectContaining({ __tag: "auth" }),
       "oob-code-123",
       "novaSenha1",
     );

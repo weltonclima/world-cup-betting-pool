@@ -32,11 +32,65 @@ export type SignUpInput = Pick<
 >;
 
 /**
+ * Endpoint do session cookie httpOnly (TASK-09). O client troca o ID token por
+ * um cookie `__session` verificável no servidor/edge (middleware da TASK-10).
+ */
+const SESSION_ENDPOINT = "/api/auth/session";
+
+/**
+ * Cria/renova o session cookie a partir do usuário recém-autenticado.
+ *
+ * `getIdToken(true)` força o refresh do token para carregar o custom claim
+ * `role` fresco (TASK-08) — o token em cache pode ter o claim antigo por até ~1h.
+ *
+ * Best-effort: falha aqui (rede/servidor) NÃO derruba o login no client (o
+ * Firebase Auth já autenticou). A ausência do cookie só bloqueia rotas
+ * protegidas por servidor; é logada para diagnóstico.
+ */
+async function createSessionCookie(): Promise<void> {
+  const user = firebaseAuth.currentUser;
+  if (!user) return;
+
+  try {
+    const idToken = await user.getIdToken(true);
+    const response = await fetch(SESSION_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken }),
+    });
+    if (!response.ok) {
+      console.error(
+        "Falha ao criar session cookie:",
+        response.status,
+      );
+    }
+  } catch (error) {
+    console.error("Erro ao criar session cookie:", error);
+  }
+}
+
+/**
+ * Remove o session cookie httpOnly (logout server-side). Best-effort: falha não
+ * impede o sign-out client do Firebase Auth.
+ */
+async function clearSessionCookie(): Promise<void> {
+  try {
+    await fetch(SESSION_ENDPOINT, { method: "DELETE" });
+  } catch (error) {
+    console.error("Erro ao limpar session cookie:", error);
+  }
+}
+
+/**
  * Autentica o usuário com e-mail e senha.
  * Propaga os erros do Firebase Auth (ex.: `auth/invalid-credential`).
+ *
+ * Após o sign-in, cria o session cookie httpOnly (TASK-09) para que o servidor/
+ * edge possa verificar a sessão. A criação do cookie é best-effort.
  */
 export async function signIn(email: string, password: string): Promise<void> {
   await signInWithEmailAndPassword(firebaseAuth, email, password);
+  await createSessionCookie();
 }
 
 /**
@@ -88,8 +142,13 @@ export async function signUp({
   }
 }
 
-/** Encerra a sessão atual no Firebase Auth. */
+/**
+ * Encerra a sessão atual no Firebase Auth e limpa o session cookie httpOnly
+ * (TASK-09). A limpeza do cookie é feita antes do sign-out client e é
+ * best-effort (não bloqueia o logout local).
+ */
 export async function signOut(): Promise<void> {
+  await clearSessionCookie();
   await firebaseSignOut(firebaseAuth);
 }
 

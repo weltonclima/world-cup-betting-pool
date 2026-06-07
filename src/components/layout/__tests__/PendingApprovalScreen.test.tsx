@@ -42,10 +42,11 @@ vi.mock("sonner", () => ({
   toast: { info: toastInfoMock, error: toastErrorMock },
 }));
 
-// Firebase client: o componente importa `firebaseAuth` (logout do botão Sair);
-// importar `@/firebase` real validaria env NEXT_PUBLIC_FIREBASE_* no load.
-vi.mock("@/firebase", () => ({
-  firebaseAuth: { signOut: signOutMock },
+// Serviço de auth: o componente chama `signOut()` (logout do botão Sair), que
+// internamente limpa o session cookie (TASK-09) e desloga do Firebase Auth.
+// Mockar o serviço evita validar env NEXT_PUBLIC_FIREBASE_* / fetch no load.
+vi.mock("@/services/auth", () => ({
+  signOut: signOutMock,
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
