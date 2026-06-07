@@ -160,8 +160,98 @@ describe("matches", () => {
 
   it("inferência de tipo", () => {
     expectTypeOf<Match["stage"]>().toEqualTypeOf<
-      "grupos" | "oitavas" | "quartas" | "semifinal" | "final"
+      "grupos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final"
     >();
     expectTypeOf<Match["homeScore"]>().toEqualTypeOf<number | null>();
+    expectTypeOf<Match["round"]>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<Match["venue"]>().toEqualTypeOf<
+      { name: string; city: string } | null | undefined
+    >();
+  });
+
+  it("aceita venue presente (name + city)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...scheduled,
+        venue: { name: "Estádio Nacional", city: "Brasília" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita venue null (TBD)", () => {
+    expect(
+      matchSchema.safeParse({ ...scheduled, venue: null }).success,
+    ).toBe(true);
+  });
+
+  it("aceita venue ausente (campo omitido)", () => {
+    // scheduled já não tem venue → passa pelo optional
+    expect(matchSchema.safeParse(scheduled).success).toBe(true);
+  });
+
+  it("rejeita venue com name vazio", () => {
+    expect(
+      matchSchema.safeParse({
+        ...scheduled,
+        venue: { name: "", city: "São Paulo" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita venue com city vazio", () => {
+    expect(
+      matchSchema.safeParse({
+        ...scheduled,
+        venue: { name: "Maracanã", city: "" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita venue com campo extra (.strict interno)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...scheduled,
+        venue: { name: "Maracanã", city: "Rio de Janeiro", country: "Brasil" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("aceita round presente (inteiro ≥ 1)", () => {
+    expect(
+      matchSchema.safeParse({ ...scheduled, round: 2 }).success,
+    ).toBe(true);
+  });
+
+  it("aceita round null (fase sem número, ex.: Final)", () => {
+    expect(
+      matchSchema.safeParse({ ...finished, stage: "final", round: null }).success,
+    ).toBe(true);
+  });
+
+  it("aceita round ausente (campo omitido)", () => {
+    // scheduled já não tem round → passa pelo optional
+    expect(matchSchema.safeParse(scheduled).success).toBe(true);
+  });
+
+  it("rejeita round 0 (< 1)", () => {
+    expect(
+      matchSchema.safeParse({ ...scheduled, round: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita round fracionário", () => {
+    expect(
+      matchSchema.safeParse({ ...scheduled, round: 1.5 }).success,
+    ).toBe(false);
+  });
+
+  it("aceita stage 'terceiro' (disputa 3º lugar)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...finished,
+        stage: "terceiro",
+        groupId: null,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ export const stageSchema = z.enum([
   "final",
 ]);
 
-// Escopo de ranking: as 5 fases + o ranking "geral".
+// Escopo de ranking: "geral" + as 5 fases de ranking (exclui "terceiro", que não tem ranking próprio).
 export const rankingScopeSchema = z.enum([
   "geral",
   "grupos",
