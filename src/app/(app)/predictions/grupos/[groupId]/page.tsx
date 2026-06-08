@@ -31,7 +31,6 @@ import {
 } from "@/features/matches/lib/matchesHelpers";
 import {
   useGroupPredictions,
-  usePredictionDraft,
   useUpsertPredictionsBatch,
 } from "@/features/predictions/hooks";
 import {
@@ -62,7 +61,6 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
   const uid = firebaseUser?.uid ?? null;
 
   const group = useGroupPredictions(groupId);
-  const draft = usePredictionDraft(uid ?? "");
   const batch = useUpsertPredictionsBatch(uid ?? "");
 
   // Fontes brutas para a classificação prevista (TASK-10): matches do grupo +
@@ -75,18 +73,10 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
   // uid ausente é tratado como loading (consistente com Hub/grid).
   const isLoading = uid === null || group.isLoading;
 
-  /**
-   * Auto-save local (R3): grava o rascunho apenas quando o par está completo
-   * (home e away números). Enquanto um lado é null, não persiste par parcial.
-   */
-  const handleScoreChange = useCallback(
-    (matchId: string, home: number | null, away: number | null) => {
-      if (home !== null && away !== null) {
-        draft.setDraft(matchId, { homeScore: home, awayScore: away });
-      }
-    },
-    [draft],
-  );
+  // Edição vai direto para a fonte única (`group.setScore`): atualiza o input ao
+  // vivo (parciais inclusos) e persiste no rascunho quando o par fica completo.
+  // ANTES havia uma 2ª instância de usePredictionDraft aqui, que NUNCA refletia
+  // nos inputs (eles liam de outra instância) — causa raiz do "não dá pra digitar".
 
   /**
    * Salvar Grupo (R5/R6): monta o payload com itens não bloqueados e com par
@@ -104,8 +94,9 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
       )
       .map((item) => ({
         matchId: item.matchId,
-        homeScore: item.currentScores!.homeScore,
-        awayScore: item.currentScores!.awayScore,
+        // Filtro acima garante ambos finitos; cast remove o `| null` do tipo.
+        homeScore: item.currentScores!.homeScore as number,
+        awayScore: item.currentScores!.awayScore as number,
       }));
 
     if (payload.length === 0) {
@@ -134,12 +125,19 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
   const predictionsFromDraft = useMemo<Prediction[]>(
     () =>
       group.items
-        .filter((item) => item.currentScores !== undefined)
+        // Só pares COMPLETOS entram na classificação prevista (ignora parciais
+        // em edição — um lado `null` não é um palpite válido).
+        .filter(
+          (item) =>
+            item.currentScores !== undefined &&
+            Number.isFinite(item.currentScores.homeScore) &&
+            Number.isFinite(item.currentScores.awayScore),
+        )
         .map((item) => ({
           uid: uid ?? "",
           matchId: item.matchId,
-          homeScore: item.currentScores!.homeScore,
-          awayScore: item.currentScores!.awayScore,
+          homeScore: item.currentScores!.homeScore as number,
+          awayScore: item.currentScores!.awayScore as number,
         })),
     [group.items, uid],
   );
@@ -171,7 +169,7 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
         isError={group.isError}
         isSaving={batch.isPending}
         onRetry={group.refetch}
-        onScoreChange={handleScoreChange}
+        onScoreChange={group.setScore}
         onSave={handleSave}
       />
 

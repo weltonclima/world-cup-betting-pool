@@ -328,6 +328,50 @@ describe("useGroupPredictions — refetch", () => {
   });
 });
 
+describe("useGroupPredictions — setScore (edição ao vivo, BUG round-trip)", () => {
+  it("setScore com UM lado (parcial) reflete no currentScores do item", () => {
+    // Reproduz o bug: digitar só o mandante deve PERSISTIR no input.
+    setupMocks({ predictions: [], draft: {} });
+    const { result } = renderHook(() => useGroupPredictions("A"));
+
+    act(() => {
+      result.current.setScore("m-01", 2, null);
+    });
+
+    const item = result.current.items.find((i) => i.matchId === "m-01");
+    expect(item?.currentScores).toEqual({ homeScore: 2, awayScore: null });
+  });
+
+  it("setScore com par completo persiste no draft (localStorage) e reflete", () => {
+    const draftMock = makeDraftMock({});
+    mockedUsePredictionDraft.mockReturnValue(draftMock);
+    const { result } = renderHook(() => useGroupPredictions("A"));
+
+    act(() => {
+      result.current.setScore("m-01", 2, 1);
+    });
+
+    const item = result.current.items.find((i) => i.matchId === "m-01");
+    expect(item?.currentScores).toEqual({ homeScore: 2, awayScore: 1 });
+    expect(draftMock.setDraft).toHaveBeenCalledWith("m-01", {
+      homeScore: 2,
+      awayScore: 1,
+    });
+  });
+
+  it("buffer de edição tem prioridade sobre o salvo", () => {
+    setupMocks({ predictions: [makePrediction("m-01", 0, 0)], draft: {} });
+    const { result } = renderHook(() => useGroupPredictions("A"));
+
+    act(() => {
+      result.current.setScore("m-01", 5, null);
+    });
+
+    const item = result.current.items.find((i) => i.matchId === "m-01");
+    expect(item?.currentScores).toEqual({ homeScore: 5, awayScore: null });
+  });
+});
+
 // Avoid open handles
 afterEach(() => {
   act(() => {});
