@@ -233,6 +233,10 @@
 - Recommended TDD: no
 - Recommended screen: no – n/a
 - Notes: Critério de aceite PRD: usuário não altera ranking; cálculo só backend.
+- **Carry-forward dos reviews:**
+  - TASK-01 WR-01/WR-02 (opcional): `.refine` `min≤max` em `distributionBucketSchema` e `lowestPoints≤highestPoints` em `poolStatsSchema` (dados server-generated).
+  - TASK-03 WR-01: comparar secret com `crypto.timingSafeEqual` nos DOIS endpoints (`/api/predictions/score` e `/api/rankings/recalc`).
+  - TASK-03 WR-02 (médio): `positionHistory` só deve fazer append quando o estado mudou (ex.: `finishedGeral` aumentou) — definir junto com a cadência do cron p/ não poluir a Tela 04 nem crescer sem limite.
 
 ## 4. Dependency map
 
