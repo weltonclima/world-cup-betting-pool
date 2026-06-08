@@ -1,10 +1,9 @@
+import { MyRanking } from "@/features/rankings";
+
 /**
- * Meu Ranking (Tela 02) — PRD-05. Shell pronto (TASK-07); conteúdo na TASK-10.
+ * Meu Ranking (Tela 02) — PRD-05, TASK-10.
+ * Server Component fino: renderiza o componente client `MyRanking`.
  */
 export default function MeuRankingPage() {
-  return (
-    <p className="text-sm text-muted-foreground">
-      Meu Ranking em construção — conteúdo na TASK-10.
-    </p>
-  );
+  return <MyRanking />;
 }
