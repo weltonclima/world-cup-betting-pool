@@ -13,4 +13,5 @@ export { GeneralRanking } from "./GeneralRanking";
 export { PhaseRanking } from "./PhaseRanking";
 export { MyRanking } from "./MyRanking";
 export { PoolStatsScreen } from "./PoolStatsScreen";
+export { Evolution } from "./Evolution";
 export * from "./charts";
