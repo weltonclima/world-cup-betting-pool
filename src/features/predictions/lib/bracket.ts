@@ -128,10 +128,10 @@ function parsePlaceholder(raw: string): BracketSlot {
     };
   }
 
-  // Melhor 3º de um conjunto de grupos: "3ABC", "3DEF", "3ABCD" etc.
-  const bestThirdMatch = /^3([A-Z]{2,})$/.exec(raw);
+  // Melhor 3º de um conjunto de grupos: "3A/B/C/D/F" (openfootball) ou "3ABC" (legado).
+  const bestThirdMatch = /^3([A-Z](?:\/?[A-Z])+)$/.exec(raw);
   if (bestThirdMatch) {
-    const candidateGroups = [...bestThirdMatch[1]!]; // "ABC" → ["A","B","C"]
+    const candidateGroups = bestThirdMatch[1]!.match(/[A-Z]/g) ?? []; // letras dos grupos
     return {
       teamId: raw,
       origin: "best-third",
@@ -184,7 +184,8 @@ function parsePlaceholder(raw: string): BracketSlot {
  * @returns true se placeholder; false se teamId real.
  */
 export function isPlaceholderId(id: string): boolean {
-  return /^(\d[A-Z]+|[WL]\d+)$/.test(id);
+  // Aceita "1A"/"2B", melhor-terceiro "3A/B/C/D/F" (grupos com "/"), "W74", "L101".
+  return /^(\d[A-Z]+(\/[A-Z]+)*|[WL]\d+)$/.test(id);
 }
 
 /**
@@ -193,11 +194,11 @@ export function isPlaceholderId(id: string): boolean {
  * Usado pela UI da chave (Bracket/BracketMatchup) para exibir slots de mata-mata
  * cujo time real ainda não foi resolvido (D-OF4 do PRD).
  *
- * - "1A"   → "1º Grupo A"
- * - "2B"   → "2º Grupo B"
- * - "3ABC" → "3º (Grupos A/B/C)"
- * - "W74"  → "Vencedor jogo 74"
- * - "L101" → "Perdedor jogo 101"
+ * - "1A"        → "1º Grupo A"
+ * - "2B"        → "2º Grupo B"
+ * - "3A/B/C/D/F" → "3º (Grupos A/B/C/D/F)"
+ * - "W74"       → "Vencedor jogo 74"
+ * - "L101"      → "Perdedor jogo 101"
  *
  * Se `id` não for um placeholder (teamId real, ex.: "BRA"), retorna o próprio id.
  *
@@ -213,9 +214,9 @@ export function humanizePlaceholder(id: string): string {
   const groupRunnerUp = /^2([A-Z])$/.exec(id);
   if (groupRunnerUp) return `2º Grupo ${groupRunnerUp[1]!}`;
 
-  const bestThird = /^3([A-Z]{2,})$/.exec(id);
+  const bestThird = /^3([A-Z](?:\/?[A-Z])+)$/.exec(id);
   if (bestThird) {
-    const groups = [...bestThird[1]!].join("/");
+    const groups = (bestThird[1]!.match(/[A-Z]/g) ?? []).join("/");
     return `3º (Grupos ${groups})`;
   }
 
@@ -338,10 +339,10 @@ export function resolveSlotTeam(
     return entry?.teamId ?? null;
   }
 
-  // Melhor 3º de um conjunto de grupos: "3ABC"
-  const bestThirdMatch = /^3([A-Z]{2,})$/.exec(placeholder);
+  // Melhor 3º de um conjunto de grupos: "3A/B/C/D/F" (openfootball) ou "3ABC" (legado)
+  const bestThirdMatch = /^3([A-Z](?:\/?[A-Z])+)$/.exec(placeholder);
   if (bestThirdMatch) {
-    const candidateGroupIds = new Set([...bestThirdMatch[1]!]); // "ABC" → {"A","B","C"}
+    const candidateGroupIds = new Set(bestThirdMatch[1]!.match(/[A-Z]/g) ?? []); // letras dos grupos
 
     // Encontrar o primeiro bestThird cujo teamId está na classificação de um dos grupos candidatos
     for (const third of bestThirds) {

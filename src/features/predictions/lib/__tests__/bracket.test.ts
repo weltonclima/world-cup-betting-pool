@@ -121,6 +121,7 @@ describe("isPlaceholderId", () => {
     ["1L", true],
     ["3ABC", true],
     ["3ABCD", true],
+    ["3A/B/C/D/F", true], // formato real openfootball 2026 (melhor 3º com "/")
     ["W73", true],
     ["W104", true],
     ["L101", true],
@@ -279,6 +280,12 @@ describe("resolveSlotTeam", () => {
   it("'3ABC' → melhor 3º entre grupos A, B, C (BOL, primeiro na lista bestThirds)", () => {
     // bestThirds[0] = BOL (grupo A) — BOL está em candidateGroups {A,B,C}
     const result = resolveSlotTeam("3ABC", standings, bestThirds, noResults);
+    expect(result).toBe("BOL");
+  });
+
+  it("'3A/B/C/D/F' (formato real openfootball) → melhor 3º entre A/B/C/D/F", () => {
+    // BOL (grupo A) está em candidateGroups {A,B,C,D,F}
+    const result = resolveSlotTeam("3A/B/C/D/F", standings, bestThirds, noResults);
     expect(result).toBe("BOL");
   });
 

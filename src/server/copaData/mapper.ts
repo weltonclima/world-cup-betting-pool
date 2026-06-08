@@ -102,14 +102,16 @@ export function buildMatchId(match: OpenFootballMatch): string {
 /**
  * Dado um valor team1/team2 do openfootball:
  * - Se for nome real: resolver via registry → retornar id (= code).
- * - Se for placeholder ("2A", "1E", "W74", "L101", "3ABC"): retornar o placeholder literal.
+ * - Se for placeholder ("2A", "1E", "W74", "L101", "3A/B/C/D/F"): retornar o placeholder literal.
  *
  * @throws Error se o nome não for um placeholder E não estiver no registry.
  */
 export function resolveTeamId(name: string): string {
-  // Padrão de placeholder: dígito(s)+letra(s) (ex.: "2A", "1E", "3ABC"),
-  // "W"+número (ex.: "W74"), "L"+número (ex.: "L101")
-  const isPlaceholder = /^(\d[A-Z]+|[WL]\d+)$/.test(name);
+  // Padrão de placeholder do openfootball:
+  //  - grupo: "1A".."1L" / "2A".."2L"
+  //  - melhor terceiro: "3A/B/C/D/F" (grupos candidatos separados por "/")
+  //  - vencedor/perdedor de jogo: "W74" / "L101"
+  const isPlaceholder = /^(\d[A-Z]+(\/[A-Z]+)*|[WL]\d+)$/.test(name);
   if (isPlaceholder) return name;
 
   const entry = resolveTeam(name);

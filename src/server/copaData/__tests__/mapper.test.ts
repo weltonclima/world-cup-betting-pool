@@ -167,6 +167,12 @@ describe("resolveTeamId", () => {
     expect(resolveTeamId("3ABC")).toBe("3ABC");
   });
 
+  // Formato REAL do openfootball 2026 para melhor terceiro (grupos com "/").
+  // Regressão: este formato fazia /api/matches retornar 500 (pego em /local-env).
+  it("MAP-EX5: 3A/B/C/D/F → preservado literal (formato real openfootball)", () => {
+    expect(resolveTeamId("3A/B/C/D/F")).toBe("3A/B/C/D/F");
+  });
+
   it("MAP-25: nome desconhecido lança Error", () => {
     expect(() => resolveTeamId("Time Desconhecido")).toThrow(Error);
   });
