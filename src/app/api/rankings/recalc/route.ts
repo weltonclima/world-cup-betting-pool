@@ -16,6 +16,7 @@ import {
 import { predictionSchema, userSchema } from "@/schemas";
 import type { Match, MatchWithId, RankingEntry } from "@/types";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
+import { safeSecretEqual } from "../../_lib/secret";
 
 // firebase-admin + cookies() exigem Node runtime; lê/grava Firestore → sem cache.
 export const runtime = "nodejs";
@@ -77,10 +78,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const cronSecret = process.env["RANKINGS_SECRET"];
   const headerSecret = request.headers.get("x-cron-secret");
 
-  let authorized =
-    cronSecret !== undefined &&
-    cronSecret.length > 0 &&
-    headerSecret === cronSecret;
+  let authorized = safeSecretEqual(cronSecret, headerSecret);
 
   const db = getAdminFirestore();
 
@@ -305,15 +303,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       (max, h) => (typeof h["round"] === "number" && h["round"] > max ? (h["round"] as number) : max),
       0,
     );
-    const positionHistory = [
-      ...prevHistory,
-      {
-        at: nowIso,
-        scope: "geral" as const,
-        position: geralPositionByUid.get(u.uid) ?? 1,
-        round: prevMaxRound + 1,
-      },
-    ];
+    const newPosition = geralPositionByUid.get(u.uid) ?? 1;
+    // Só registra novo ponto quando a posição geral MUDOU em relação ao último
+    // snapshot (TASK-14, WR-02 da TASK-03): evita poluir a Tela 04 e o crescimento
+    // ilimitado do histórico quando o recalc roda sem mudança de estado.
+    const last = prevHistory[prevHistory.length - 1];
+    const positionUnchanged =
+      last !== undefined &&
+      last["scope"] === "geral" &&
+      typeof last["position"] === "number" &&
+      last["position"] === newPosition;
+    const positionHistory = positionUnchanged
+      ? prevHistory
+      : [
+          ...prevHistory,
+          {
+            at: nowIso,
+            scope: "geral" as const,
+            position: newPosition,
+            round: prevMaxRound + 1,
+          },
+        ];
 
     await db.collection("statistics").doc(u.uid).set(
       {

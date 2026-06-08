@@ -54,8 +54,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---- predictions: leitura ampla (approved); escrita APENAS via Admin SDK ----
-    // D7: approved lê todos os palpites (rankings/comparações sociais).
+    // ---- predictions: leitura PRIVADA (só dono/admin); escrita APENAS via Admin SDK ----
+    // A5 (PRD-05, decidido = PRIVADO): o histórico de palpites é privado — cada
+    // usuário lê apenas os PRÓPRIOS palpites; admin lê todos. Isso REVERTE o D7
+    // anterior (leitura ampla por approved): a Tela 05 (Perfil) NÃO expõe palpites
+    // alheios; comparações sociais usam apenas os docs derivados `rankings`/`statistics`.
     // MOTIVO DO BLOQUEIO DE WRITE CLIENT:
     //   Partidas não estão no Firestore (servidas via Route Handlers — PRD-07 v2.0).
     //   As Rules não conseguem ler `kickoffAt` para verificar o bloqueio temporal.
@@ -63,7 +66,7 @@ service cloud.firestore {
     //   que bypassa as Rules por design e aplica o lock server-side de forma
     //   autoritativa. Write client-direto é negado a todos (incluindo admin).
     match /predictions/{predictionId} {
-      allow read:  if isApproved();
+      allow read:  if isApproved() && (isOwner(resource.data.uid) || isAdmin());
       allow write: if false; // write exclusivo do Admin SDK via Route Handler
     }
 
@@ -79,13 +82,21 @@ service cloud.firestore {
     // ---- Coleções do torneio: approved lê, admin escreve ----
     // As Cloud Functions populam estas coleções via Admin SDK, que bypassa
     // as Security Rules por design (TASK-09). isAdmin() cobre escrita manual
-    // via cliente admin. statistics/rankings são derivados (só Functions).
+    // via cliente admin.
     match /teams/{teamId}        { allow read: if isApproved(); allow write: if isAdmin(); }
     match /groups/{groupId}      { allow read: if isApproved(); allow write: if isAdmin(); }
     match /matches/{matchId}     { allow read: if isApproved(); allow write: if isAdmin(); }
-    match /rankings/{scope}      { allow read: if isApproved(); allow write: if isAdmin(); }
-    match /statistics/{uid}      { allow read: if isApproved(); allow write: if isAdmin(); }
     match /system_settings/{id}  { allow read: if isApproved(); allow write: if isAdmin(); }
+
+    // ---- Derivados do recálculo (PRD-05): approved lê, NINGUÉM escreve pelo cliente ----
+    // rankings/statistics/pool_stats são gerados exclusivamente pelo Route Handler
+    // /api/rankings/recalc (Admin SDK, que bypassa as Rules). Write client = negado a
+    // todos, inclusive admin (a pontuação só existe no backend — critério de aceite PRD-05).
+    // `pool_stats/current` é lido pela Tela 06 (Estatísticas Gerais) — sem este match,
+    // o deny-by-default bloquearia a leitura no cliente.
+    match /rankings/{scope}      { allow read: if isApproved(); allow write: if false; }
+    match /statistics/{uid}      { allow read: if isApproved(); allow write: if false; }
+    match /pool_stats/{id}       { allow read: if isApproved(); allow write: if false; }
 
     // ---- Deny-by-default: qualquer outro path ----
     // Redundante (não casar já nega), mantido como afirmação explícita.

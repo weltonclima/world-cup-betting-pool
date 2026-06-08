@@ -237,6 +237,23 @@
     --chart-1: oklch(0.46 0.16 150);
 }
 
+/*
+ * Dark mode dos temas verdes (TASK-14, carry-forward WR-01 de TASK-07 / WR-02 de
+ * TASK-08/10/13). No dark, o verde 0.46 com texto branco e o verde-sobre-fundo-escuro
+ * caem abaixo de AA. Eleva --primary p/ ~0.72 (verde mais claro) com --primary-foreground
+ * escuro → contraste AA do tab ativo, CTA e realce "Você" no dark mode. Light inalterado.
+ */
+.dark .palpites-theme,
+.dark .ranking-theme {
+    --primary: oklch(0.72 0.16 150);
+    --primary-foreground: oklch(0.205 0.02 150);
+    --ring: oklch(0.72 0.16 150);
+    --sidebar-primary: oklch(0.72 0.16 150);
+}
+.dark .ranking-theme {
+    --chart-1: oklch(0.72 0.16 150);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

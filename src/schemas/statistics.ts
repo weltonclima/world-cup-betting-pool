@@ -42,7 +42,12 @@ export const distributionBucketSchema = z
     max: z.int().min(0), // limite superior (inclusive)
     count: z.int().min(0), // participantes na faixa
   })
-  .strict();
+  .strict()
+  // TASK-14 (carry-forward WR-01 da TASK-01): faixa coerente (dados server-generated).
+  .refine((b) => b.min <= b.max, {
+    message: "min deve ser <= max",
+    path: ["min"],
+  });
 
 // Estatísticas agregadas do bolão (doc único — path definido na TASK-03).
 export const poolStatsSchema = z
@@ -56,4 +61,9 @@ export const poolStatsSchema = z
     totalCorrect: z.int().min(0), // total de placares exatos do bolão
     distribution: z.array(distributionBucketSchema), // faixas de pontuação
   })
-  .strict();
+  .strict()
+  // TASK-14 (carry-forward WR-02 da TASK-01): menor <= maior (dados server-generated).
+  .refine((p) => p.lowestPoints <= p.highestPoints, {
+    message: "lowestPoints deve ser <= highestPoints",
+    path: ["lowestPoints"],
+  });

@@ -9,6 +9,29 @@ import { predictionSchema } from "@/schemas";
 import { scorePrediction } from "@/features/predictions/lib";
 import { fetchAllMatches } from "@/server/copaData";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
+import { safeSecretEqual } from "../../_lib/secret";
+
+/**
+ * Encadeamento (TASK-14): após pontuar, dispara o recálculo de rankings/estatísticas.
+ * Best-effort e não-fatal — só roda quando RANKINGS_SECRET está configurado (cron/produção);
+ * falha de rede apenas loga (o recalc também roda no próprio cron como fallback).
+ */
+async function chainRecalc(request: NextRequest): Promise<void> {
+  const secret = process.env["RANKINGS_SECRET"];
+  if (secret === undefined || secret.length === 0) return;
+  try {
+    const url = new URL("/api/rankings/recalc", request.url);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "x-cron-secret": secret },
+    });
+    if (!res.ok) {
+      console.warn("[score] recalc encadeado retornou status", res.status);
+    }
+  } catch (err) {
+    console.warn("[score] recalc encadeado falhou:", err);
+  }
+}
 
 // Node runtime: firebase-admin + cookies() de next/headers exigem Node.
 export const runtime = "nodejs";
@@ -34,10 +57,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const cronSecret = process.env["SCORE_SECRET"];
   const headerSecret = request.headers.get("x-cron-secret");
 
-  let authorized =
-    cronSecret !== undefined &&
-    cronSecret.length > 0 &&
-    headerSecret === cronSecret;
+  let authorized = safeSecretEqual(cronSecret, headerSecret);
 
   // ─── 2. Autorização: sessão admin (fallback) ──────────────────────────────
   if (!authorized) {
@@ -135,6 +155,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const scoredMatches = finishedMatches.length;
   const updatedPredictions = perMatchCounts.reduce((sum, n) => sum + n, 0);
+
+  // Encadeia o recálculo de rankings/estatísticas (best-effort).
+  await chainRecalc(request);
 
   return NextResponse.json({ scoredMatches, updatedPredictions }, { status: 200 });
 }
