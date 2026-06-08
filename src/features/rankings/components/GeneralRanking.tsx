@@ -108,6 +108,7 @@ function RankingPodium({
           <li key={entry.uid} className={cn("flex-1", visualOrder[i])}>
             <Link
               href={`/rankings/perfil/${entry.uid}`}
+              aria-label={`${entry.position}º lugar: ${entry.name ?? entry.nickname}, ${entry.points} pontos${you ? " (você)" : ""}`}
               className={cn(
                 "flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
