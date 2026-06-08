@@ -224,6 +224,19 @@
     --sidebar-primary: oklch(0.46 0.16 150);
 }
 
+/*
+ * Tema da seção Ranking (PRD-05, MASTER §2.4-ranking). Escopo local na rota /rankings.
+ * Mesmo verde validado AA de .auth-theme/.palpites-theme. --chart-1 fica verde para a
+ * linha do gráfico de evolução e as barras de distribuição herdarem a identidade.
+ */
+.ranking-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
