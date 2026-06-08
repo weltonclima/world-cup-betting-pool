@@ -32,13 +32,22 @@ export function compareRanking(
   if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy; // accuracy DESC
   if (a.wrong !== b.wrong) return a.wrong - b.wrong; // wrong ASC
 
-  // firstPredictionAt ASC, ausente por último
+  // firstPredictionAt ASC, ausente por último.
+  // Compara por instante (Date.parse) — ISO com offsets diferentes pode representar o
+  // mesmo instante; comparação lexicográfica de string seria incorreta nesse caso.
   const fa = a.firstPredictionAt;
   const fb = b.firstPredictionAt;
   if (fa !== fb) {
     if (fa === undefined) return 1;
     if (fb === undefined) return -1;
-    return fa < fb ? -1 : 1;
+    const ta = Date.parse(fa);
+    const tb = Date.parse(fb);
+    if (Number.isNaN(ta) || Number.isNaN(tb)) {
+      // Fallback defensivo (datas já validadas por isoDateTime upstream): compara string.
+      if (fa !== fb) return fa < fb ? -1 : 1;
+    } else if (ta !== tb) {
+      return ta - tb; // mesmo instante → cai para o desempate por uid
+    }
   }
 
   return a.uid.localeCompare(b.uid); // fallback estável

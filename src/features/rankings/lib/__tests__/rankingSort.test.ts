@@ -66,6 +66,24 @@ describe("rankingSort", () => {
     expect(ranked.map((r) => r.uid)).toEqual(["alpha", "zeta"]);
   });
 
+  it("compara firstPredictionAt por instante, não por string (offsets ISO)", () => {
+    // "2026-06-01T07:00:00-03:00" == "2026-06-01T10:00:00Z" (mesmo instante)
+    // "2026-06-01T09:00:00Z" é mais cedo → deve vir primeiro apesar da string maior.
+    const ranked = rankParticipants([
+      p("a", 10, { accuracy: 50, wrong: 3, firstPredictionAt: "2026-06-01T07:00:00-03:00" }),
+      p("b", 10, { accuracy: 50, wrong: 3, firstPredictionAt: "2026-06-01T09:00:00Z" }),
+    ]);
+    expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
+  });
+
+  it("mesmo instante com offsets diferentes desempata por uid", () => {
+    const ranked = rankParticipants([
+      p("zeta", 10, { accuracy: 50, wrong: 3, firstPredictionAt: "2026-06-01T10:00:00Z" }),
+      p("alpha", 10, { accuracy: 50, wrong: 3, firstPredictionAt: "2026-06-01T07:00:00-03:00" }),
+    ]);
+    expect(ranked.map((r) => r.uid)).toEqual(["alpha", "zeta"]);
+  });
+
   it("não muta a entrada", () => {
     const input = [p("a", 5), p("b", 10)];
     const snapshot = JSON.stringify(input);
