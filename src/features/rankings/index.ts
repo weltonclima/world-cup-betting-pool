@@ -1,2 +1,3 @@
-// Barrel da feature rankings. Reexporta o módulo público de rankings (preenchido em PRDs futuros).
-export {};
+// Barrel público da feature rankings (PRD-05).
+export * from "./hooks";
+export * from "./lib";
