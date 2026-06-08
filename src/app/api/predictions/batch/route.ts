@@ -1,6 +1,5 @@
 import "server-only"; // garante que não vaza para o bundle client
 
-import { z } from "zod";
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
@@ -13,33 +12,14 @@ import {
 } from "@/features/predictions/lib";
 import { fetchAllMatches } from "@/server/copaData";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
+// Schema/constantes em módulo irmão: arquivo de rota não pode exportar símbolos
+// que não sejam de rota (contrato de tipos do Next 15). Ver `_schema.ts`.
+import { batchInputSchema } from "./_schema";
 
 // Node runtime: firebase-admin + cookies() de next/headers exigem Node.
 export const runtime = "nodejs";
 // Force dynamic: lê cookies e grava no Firestore — sem cache.
 export const dynamic = "force-dynamic";
-
-// ---------------------------------------------------------------------------
-// Schema de validação do body do lote
-// ---------------------------------------------------------------------------
-
-/** Total de jogos da Copa do Mundo 2026. */
-export const BATCH_MAX_SIZE = 104;
-
-/**
- * batchInputSchema — valida estrutura do body do POST /api/predictions/batch.
- *
- * Valida apenas que `predictions` existe e tem tamanho entre 1 e 104.
- * A validação item a item ocorre no loop (erros vão para `rejected`).
- */
-export const batchInputSchema = z.object({
-  predictions: z
-    .array(z.unknown())
-    .min(1, "O lote deve conter pelo menos 1 palpite.")
-    .max(BATCH_MAX_SIZE, `O lote não pode exceder ${BATCH_MAX_SIZE} palpites.`),
-});
-
-export type BatchInput = z.infer<typeof batchInputSchema>;
 
 // ---------------------------------------------------------------------------
 // Tipos de resposta
