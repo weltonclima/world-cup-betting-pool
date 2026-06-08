@@ -237,6 +237,7 @@
   - TASK-01 WR-01/WR-02 (opcional): `.refine` `min≤max` em `distributionBucketSchema` e `lowestPoints≤highestPoints` em `poolStatsSchema` (dados server-generated).
   - TASK-03 WR-01: comparar secret com `crypto.timingSafeEqual` nos DOIS endpoints (`/api/predictions/score` e `/api/rankings/recalc`).
   - TASK-03 WR-02 (médio): `positionHistory` só deve fazer append quando o estado mudou (ex.: `finishedGeral` aumentou) — definir junto com a cadência do cron p/ não poluir a Tela 04 nem crescer sem limite.
+  - TASK-07 WR-01 (a11y dark, médio): adicionar `.dark .ranking-theme` (e `.dark .palpites-theme`) com verde `--primary` mais claro (~oklch 0.72) + `--primary-foreground` escuro — contraste AA do tab ativo/CTA no dark mode. Light mode já é AA.
 
 ## 4. Dependency map
 

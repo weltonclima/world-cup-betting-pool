@@ -38,6 +38,7 @@ export function RankingSubNav() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-11 items-center border-b-2 px-4 text-sm transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   active
                     ? "border-primary font-semibold text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground",
