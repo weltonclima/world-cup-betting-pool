@@ -11,8 +11,16 @@ export {
 
 export { listUsersByStatus, updateUserStatus } from "./users";
 
-// Serviços da Home Dashboard (PRD-02, TASK-03).
-export { getGeneralRanking } from "./rankings";
+// Serviços de ranking (PRD-02 Home + PRD-05 Ranking).
+export {
+  getGeneralRanking,
+  getRankingByScope,
+  getGroupRanking,
+  getUserRanking,
+  getParticipantProfile,
+  getPoolStats,
+  type UserRankingResult,
+} from "./rankings";
 export { getStatistics } from "./statistics";
 export {
   listMatches,
