@@ -54,7 +54,7 @@ export function GroupsSummary({
   onRetry,
 }: GroupsSummaryProps) {
   return (
-    <section className="flex flex-col gap-4 px-4 py-4">
+    <section className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-foreground">
           Resumo dos Grupos
@@ -242,7 +242,7 @@ function GroupsSummarySkeleton() {
 function GroupsSummaryError({ onRetry }: { onRetry: () => void }) {
   return (
     <div
-      role="status"
+      role="alert"
       className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center shadow-sm"
     >
       <AlertCircle size={24} className="text-destructive" aria-hidden="true" />

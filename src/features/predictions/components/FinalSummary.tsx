@@ -323,7 +323,7 @@ export function FinalSummary({
   else if (!hasPending) ctaLabel = "Tudo enviado";
 
   return (
-    <section className="flex flex-col gap-4 px-4 py-4">
+    <section className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-foreground">Resumo Final</h1>
         <p className="text-sm text-muted-foreground">

@@ -27,7 +27,15 @@ import {
 import { computeProgress } from "@/features/predictions/lib";
 import type { Stage } from "@/types";
 
-/** Ordem fixa das 7 fases no Hub + rótulo e destino de cada uma. */
+/**
+ * Ordem fixa das 6 fases no Hub + rótulo e destino de cada uma.
+ *
+ * A disputa de 3º lugar (`terceiro`) NÃO é uma fase própria no Hub: ela é
+ * preenchida junto com a Final na rota `/predictions/chave/final` (PRD03-11).
+ * Por isso o card "Final" agrega as métricas de `final` + `terceiro` (ver
+ * abaixo), mantendo o grafo de fases coerente com as rotas e o wizard (6 fases)
+ * e evitando link para uma rota inexistente `/chave/terceiro` (404).
+ */
 const HUB_PHASES: ReadonlyArray<{ stage: Stage; title: string; href: string }> = [
   { stage: "grupos", title: "Fase de Grupos", href: "/predictions/grupos" },
   {
@@ -38,12 +46,7 @@ const HUB_PHASES: ReadonlyArray<{ stage: Stage; title: string; href: string }> =
   { stage: "oitavas", title: "Oitavas de Final", href: "/predictions/chave/oitavas" },
   { stage: "quartas", title: "Quartas de Final", href: "/predictions/chave/quartas" },
   { stage: "semifinal", title: "Semifinal", href: "/predictions/chave/semifinal" },
-  {
-    stage: "terceiro",
-    title: "Disputa de 3º Lugar",
-    href: "/predictions/chave/terceiro",
-  },
-  { stage: "final", title: "Final", href: "/predictions/chave/final" },
+  { stage: "final", title: "Final e 3º Lugar", href: "/predictions/chave/final" },
 ];
 
 export default function PredictionsHubPage() {
@@ -69,12 +72,15 @@ export default function PredictionsHubPage() {
   const phases = useMemo<PhaseHubItem[]>(() => {
     const inputs: HubPhaseInput[] = HUB_PHASES.map((p) => {
       const stageMetrics = progress.byStage[p.stage];
+      // O card "Final" agrega final + terceiro (3º lugar é preenchido na mesma rota).
+      const extra =
+        p.stage === "final" ? progress.byStage["terceiro"] : undefined;
       return {
         stage: p.stage,
         title: p.title,
         href: p.href,
-        gamesCount: stageMetrics?.total ?? 0,
-        filledCount: stageMetrics?.filled ?? 0,
+        gamesCount: (stageMetrics?.total ?? 0) + (extra?.total ?? 0),
+        filledCount: (stageMetrics?.filled ?? 0) + (extra?.filled ?? 0),
       };
     });
     return buildHubPhases(inputs);
