@@ -12,3 +12,4 @@ export {
   type EvolutionResult,
 } from "./evolution";
 export { buildDistribution } from "./distribution";
+export { paginate, type Page } from "./pagination";

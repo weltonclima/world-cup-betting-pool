@@ -9,4 +9,5 @@ export {
   RankingErrorState,
   type RankingErrorStateProps,
 } from "./RankingErrorState";
+export { GeneralRanking } from "./GeneralRanking";
 export * from "./charts";
