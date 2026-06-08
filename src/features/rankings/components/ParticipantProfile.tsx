@@ -96,7 +96,7 @@ function ProfileIdentity({
           {initials(displayName)}
         </AvatarFallback>
       </Avatar>
-      <h1 className="text-xl font-semibold text-foreground">{displayName}</h1>
+      <h2 className="text-xl font-semibold text-foreground">{displayName}</h2>
       <p className="text-sm text-muted-foreground">@{entry.nickname}</p>
     </section>
   );
@@ -170,9 +170,9 @@ function StagePerformance({
 }): JSX.Element {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-semibold text-foreground">
+      <h3 className="text-lg font-semibold text-foreground">
         Desempenho por Fase
-      </h2>
+      </h3>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {STAGE_LABELS.map(({ scope, label }) => {
           const pts = stats ? (stats.correctByStage[scope] ?? 0) : null;
