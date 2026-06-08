@@ -16,6 +16,9 @@ export const userSchema = z
     email: z.email(),
     role: roleSchema,
     status: userStatusSchema,
+    // Avatar do usuário (PRD-06, D-A2): data URL JPEG base64 comprimido no client
+    // (sem Firebase Storage). Opcional — usuário sem foto cai no fallback de iniciais.
+    avatarUrl: z.string().optional(),
     createdAt: isoDateTime.optional(), // (assumido) auditoria
     updatedAt: isoDateTime.optional(), // (assumido) auditoria
   })

@@ -10,5 +10,11 @@ import { AdminGuard } from "@/components/layout/AdminGuard";
  * Cobre /admin e qualquer sub-rota futura por composição do App Router.
  */
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  return <AdminGuard>{children}</AdminGuard>;
+  return (
+    <AdminGuard>
+      <div className="admin-theme flex flex-col gap-4 pb-20 md:pb-4">
+        {children}
+      </div>
+    </AdminGuard>
+  );
 }

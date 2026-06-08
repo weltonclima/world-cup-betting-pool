@@ -238,13 +238,54 @@
 }
 
 /*
+ * Tema da seção Perfil (PRD-06). Mesmo verde validado AA das demais seções
+ * (auth/palpites/ranking). Escopo local na rota /profile via .profile-theme.
+ * Mocks PRD06-01..06 são verdes (badge status, CTA "Salvar Nova Senha"); o
+ * vermelho de "Encerrar Sessão" continua vindo de --destructive (não tematizado).
+ */
+.profile-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
+ * Tema da Central de Notificações (PRD-08). Mesmo verde validado AA; escopo
+ * local na rota /notificacoes (filtros, switches, ícones, CTAs do detalhe).
+ */
+.notifications-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
+ * Tema da área Administração (PRD-07). Mesmo verde validado AA; escopo local em
+ * /admin (banner do dashboard, badges, filtros de logs).
+ */
+.admin-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
  * Dark mode dos temas verdes (TASK-14, carry-forward WR-01 de TASK-07 / WR-02 de
  * TASK-08/10/13). No dark, o verde 0.46 com texto branco e o verde-sobre-fundo-escuro
  * caem abaixo de AA. Eleva --primary p/ ~0.72 (verde mais claro) com --primary-foreground
  * escuro → contraste AA do tab ativo, CTA e realce "Você" no dark mode. Light inalterado.
  */
 .dark .palpites-theme,
-.dark .ranking-theme {
+.dark .ranking-theme,
+.dark .profile-theme,
+.dark .notifications-theme,
+.dark .admin-theme {
     --primary: oklch(0.72 0.16 150);
     --primary-foreground: oklch(0.205 0.02 150);
     --ring: oklch(0.72 0.16 150);

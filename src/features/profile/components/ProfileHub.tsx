@@ -1,0 +1,240 @@
+"use client";
+
+import { useRef, useState, type JSX } from "react";
+import Link from "next/link";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  Activity,
+  BarChart3,
+  Camera,
+  KeyRound,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  ScrollText,
+  Settings,
+  UserCheck,
+  Users,
+  UserX,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
+
+import { useProfile, useUpdateProfile } from "../hooks";
+import {
+  AvatarImageError,
+  fileToCompressedDataUrl,
+} from "../lib/imageToDataUrl";
+import { ProfileMenuItem } from "./ProfileMenuItem";
+
+/** Iniciais (até 2) a partir do nome para o fallback do avatar. */
+function initials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  approved: "Participante Ativo",
+  pending: "Aguardando Aprovação",
+  blocked: "Conta Bloqueada",
+};
+
+/** Tela 01 — Meu Perfil (hub) (PRD06-01). */
+export function ProfileHub(): JSX.Element {
+  const { profile } = useProfile();
+  const updateProfile = useUpdateProfile();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  if (!profile) {
+    return (
+      <p className="text-sm text-muted-foreground">Carregando perfil…</p>
+    );
+  }
+
+  const memberSince = profile.createdAt
+    ? format(new Date(profile.createdAt), "dd/MM/yyyy", { locale: ptBR })
+    : null;
+
+  async function handleAvatarChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // permite reselecionar o mesmo arquivo
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const avatarUrl = await fileToCompressedDataUrl(file);
+      await updateProfile.mutateAsync({ avatarUrl });
+      toast.success("Foto de perfil atualizada.");
+    } catch (error) {
+      toast.error(
+        error instanceof AvatarImageError
+          ? error.message
+          : "Não foi possível atualizar a foto. Tente novamente.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Engrenagem → Configurações */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-foreground">Meu Perfil</h1>
+        <Link
+          href="/profile/configuracoes"
+          aria-label="Configurações"
+          className={cn(buttonVariants({ variant: "ghost" }), "size-11")}
+        >
+          <Settings size={20} aria-hidden="true" />
+        </Link>
+      </div>
+
+      {/* Card de identidade */}
+      <section className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+        <div className="relative">
+          <Avatar className="size-24">
+            {profile.avatarUrl ? (
+              <AvatarImage src={profile.avatarUrl} alt={`Foto de ${profile.name}`} />
+            ) : null}
+            <AvatarFallback className="text-2xl">
+              {initials(profile.name)}
+            </AvatarFallback>
+          </Avatar>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarChange}
+          />
+          <Button
+            type="button"
+            size="icon"
+            aria-label="Alterar foto de perfil"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute right-0 bottom-0 size-8 rounded-full"
+          >
+            <Camera size={16} aria-hidden="true" />
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <p className="text-xl font-semibold text-foreground">{profile.name}</p>
+          <p className="text-sm text-muted-foreground">@{profile.nickname}</p>
+          {memberSince ? (
+            <p className="text-xs text-muted-foreground">
+              Participante desde {memberSince}
+            </p>
+          ) : null}
+        </div>
+
+        <Badge className="bg-primary text-primary-foreground">
+          {STATUS_LABEL[profile.status] ?? profile.status}
+        </Badge>
+      </section>
+
+      {/* Menu de navegação */}
+      <nav aria-label="Menu do perfil" className="flex flex-col gap-2">
+        <ProfileMenuItem
+          icon={BarChart3}
+          title="Estatísticas Pessoais"
+          subtitle="Acompanhe seu desempenho"
+          href="/profile/estatisticas"
+        />
+        <ProfileMenuItem
+          icon={ListChecks}
+          title="Histórico de Palpites"
+          subtitle="Veja todos os seus palpites"
+          href="/profile/historico"
+        />
+        <ProfileMenuItem
+          icon={KeyRound}
+          title="Alterar Senha"
+          subtitle="Atualize sua senha de acesso"
+          href="/profile/senha"
+        />
+        <ProfileMenuItem
+          icon={Settings}
+          title="Configurações"
+          subtitle="Preferências do aplicativo"
+          href="/profile/configuracoes"
+        />
+      </nav>
+
+      {/* Administração — só para admin (PRD-07.1, role-gated) */}
+      {profile.role === "admin" ? (
+        <section aria-labelledby="admin-section" className="flex flex-col gap-2">
+          <h2
+            id="admin-section"
+            className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            Administração
+          </h2>
+          <ProfileMenuItem
+            icon={LayoutDashboard}
+            title="Dashboard"
+            subtitle="Visão geral do sistema"
+            href="/admin/dashboard"
+          />
+          <ProfileMenuItem
+            icon={UserCheck}
+            title="Gerenciar Aprovações"
+            subtitle="Usuários pendentes"
+            href="/admin/usuarios/pendentes"
+          />
+          <ProfileMenuItem
+            icon={Users}
+            title="Usuários Ativos"
+            subtitle="Aprovados"
+            href="/admin/usuarios/aprovados"
+          />
+          <ProfileMenuItem
+            icon={UserX}
+            title="Usuários Bloqueados"
+            subtitle="Bloqueados"
+            href="/admin/usuarios/bloqueados"
+          />
+          <ProfileMenuItem
+            icon={Activity}
+            title="Status da API"
+            subtitle="Saúde da API-Football"
+            href="/admin/api-status"
+          />
+          <ProfileMenuItem
+            icon={ScrollText}
+            title="Logs do Sistema"
+            subtitle="Eventos e auditoria"
+            href="/admin/logs"
+          />
+        </section>
+      ) : null}
+
+      {/* Encerrar sessão */}
+      <Link
+        href="/profile/logout"
+        className={cn(
+          buttonVariants({ variant: "outline" }),
+          "h-12 w-full gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive",
+        )}
+      >
+        <LogOut size={18} aria-hidden="true" />
+        Encerrar Sessão
+      </Link>
+    </div>
+  );
+}

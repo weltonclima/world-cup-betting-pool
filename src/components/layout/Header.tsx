@@ -7,6 +7,7 @@ import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 
 /** Barra de topo fixa com identidade da aplicação. */
 export function Header() {
@@ -26,14 +27,16 @@ export function Header() {
           Bolão dos Parças
         </span>
 
-        {/* Ações do usuário — entrada admin role-gated (PRD-01.2, A3 camada 1) */}
+        {/* Ações do usuário — sino de notificações (PRD-08) + entrada admin
+            role-gated (PRD-01.2, A3 camada 1) */}
         <div aria-label="Ações do usuário" className="flex items-center gap-1">
+          <NotificationBell />
           {role === "admin" ? (
             // Navegação → link real (role="link"). Estilizado como botão ghost
             // via buttonVariants; não usa o primitive Button (que imporia
             // semântica de botão a um elemento de navegação).
             <Link
-              href="/admin"
+              href="/admin/dashboard"
               aria-label="Painel admin"
               aria-current={isAdminRoute ? "page" : undefined}
               className={cn(buttonVariants({ variant: "ghost" }), "size-11")}

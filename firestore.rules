@@ -98,6 +98,35 @@ service cloud.firestore {
     match /statistics/{uid}      { allow read: if isApproved(); allow write: if false; }
     match /pool_stats/{id}       { allow read: if isApproved(); allow write: if false; }
 
+    // ---- system_logs (PRD-07): auditoria admin-only e imutável ----
+    // Gravado client-side pelo admin (sem Cloud Function — Spark). Leitura
+    // admin-only (tela Logs). Sem update/delete: log é append-only (não forjável
+    // a posteriori). NÃO usa isApproved pois é exclusivo de admin.
+    match /system_logs/{logId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ---- notifications (PRD-08): cada um lê as suas; admin cria p/ terceiros ----
+    // Sem Cloud Function: o admin (client) cria notificação de Sistema no doc do
+    // usuário-alvo (aprovação/bloqueio). O dono lê e marca como lida, sem poder
+    // trocar o destinatário. Imutável quanto a `userId`; sem delete.
+    match /notifications/{notificationId} {
+      allow read:   if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      allow update: if isOwner(resource.data.userId) &&
+                    request.resource.data.userId == resource.data.userId;
+      allow delete: if false;
+    }
+
+    // ---- notificationPreferences (PRD-08): só o dono (doc id = uid) ----
+    match /notificationPreferences/{uid} {
+      allow read:           if isOwner(uid);
+      allow create, update: if isOwner(uid) && request.resource.data.userId == uid;
+      allow delete:         if false;
+    }
+
     // ---- Deny-by-default: qualquer outro path ----
     // Redundante (não casar já nega), mantido como afirmação explícita.
     match /{document=**} {

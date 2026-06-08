@@ -6,6 +6,7 @@ export {
   sendPasswordReset,
   verifyResetCode,
   confirmReset,
+  changePassword,
   type SignUpInput,
 } from "./auth";
 
@@ -36,3 +37,13 @@ export {
   type UpsertPredictionInput,
 } from "./predictions";
 export { getSystemSettings } from "./systemSettings";
+export {
+  listNotifications,
+  getNotification,
+  markAsRead,
+  markAllAsRead,
+  createNotification,
+  getPreferences,
+  updatePreferences,
+} from "./notifications";
+export { createLog, listLogs } from "./systemLogs";

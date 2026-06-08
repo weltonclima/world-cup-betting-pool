@@ -53,3 +53,23 @@ export async function updateUserStatus(
     updatedAt: new Date().toISOString(),
   });
 }
+
+/**
+ * Atualiza campos editáveis do PRÓPRIO perfil (PRD-06, decisão D-A2): apelido e
+ * avatar (data URL base64). Grava SOMENTE `nickname`/`avatarUrl` informados +
+ * `updatedAt` — nunca `role`/`status`/`email`/`uid` (alinhado à Security Rule
+ * que libera o dono a atualizar o doc desde que role/status não mudem).
+ *
+ * `avatarUrl` é uma data URL JPEG comprimida no client (`imageToDataUrl`) — sem
+ * Firebase Storage (compat. Spark). O caller deve garantir o teto de tamanho
+ * (limite de 1MB do doc Firestore).
+ */
+export async function updateProfile(
+  uid: string,
+  fields: { nickname?: string; avatarUrl?: string },
+): Promise<void> {
+  const patch: Record<string, string> = { updatedAt: new Date().toISOString() };
+  if (fields.nickname !== undefined) patch.nickname = fields.nickname;
+  if (fields.avatarUrl !== undefined) patch.avatarUrl = fields.avatarUrl;
+  await updateDoc(doc(firestore, "users", uid), patch);
+}
