@@ -1,10 +1,9 @@
+import { PoolStatsScreen } from "@/features/rankings";
+
 /**
- * Estatísticas Gerais (Tela 06) — PRD-05. Shell pronto (TASK-07); conteúdo na TASK-13.
+ * Estatísticas Gerais (Tela 06) — PRD-05, TASK-13.
+ * Server Component fino: o conteúdo client vive em `PoolStatsScreen`.
  */
 export default function EstatisticasPage() {
-  return (
-    <p className="text-sm text-muted-foreground">
-      Estatísticas Gerais em construção — conteúdo na TASK-13.
-    </p>
-  );
+  return <PoolStatsScreen />;
 }
