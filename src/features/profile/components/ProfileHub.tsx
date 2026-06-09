@@ -27,10 +27,8 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
 import { useProfile, useUpdateProfile } from "../hooks";
-import {
-  AvatarImageError,
-  fileToCompressedDataUrl,
-} from "../lib/imageToDataUrl";
+import { AvatarImageError, validateImageInput } from "../lib/imageToDataUrl";
+import { AvatarCropModal } from "./AvatarCropModal";
 import { ProfileMenuItem } from "./ProfileMenuItem";
 
 /** Iniciais (até 2) a partir do nome para o fallback do avatar. */
@@ -54,7 +52,8 @@ export function ProfileHub(): JSX.Element {
   const { profile } = useProfile();
   const updateProfile = useUpdateProfile();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
 
   if (!profile) {
     return (
@@ -66,26 +65,42 @@ export function ProfileHub(): JSX.Element {
     ? format(new Date(profile.createdAt), "dd/MM/yyyy", { locale: ptBR })
     : null;
 
-  async function handleAvatarChange(
+  // Seleção do arquivo: valida e abre o modal de recorte. Input disparado por
+  // clique direto no botão (gesto do usuário) para compatibilidade com iOS
+  // Safari; o modal abre via onChange, nunca programaticamente.
+  function handleAvatarChange(
     event: React.ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
+  ): void {
     const file = event.target.files?.[0];
     event.target.value = ""; // permite reselecionar o mesmo arquivo
     if (!file) return;
-
-    setUploading(true);
     try {
-      const avatarUrl = await fileToCompressedDataUrl(file);
-      await updateProfile.mutateAsync({ avatarUrl });
-      toast.success("Foto de perfil atualizada.");
+      validateImageInput(file);
     } catch (error) {
       toast.error(
         error instanceof AvatarImageError
           ? error.message
-          : "Não foi possível atualizar a foto. Tente novamente.",
+          : "Não foi possível usar essa imagem.",
       );
+      return;
+    }
+    setPendingFile(file);
+    setCropOpen(true);
+  }
+
+  function closeCrop(): void {
+    setCropOpen(false);
+    setPendingFile(null);
+  }
+
+  async function handleCropConfirm(avatarUrl: string): Promise<void> {
+    try {
+      await updateProfile.mutateAsync({ avatarUrl });
+      toast.success("Foto de perfil atualizada.");
+    } catch {
+      toast.error("Não foi possível atualizar a foto. Tente novamente.");
     } finally {
-      setUploading(false);
+      closeCrop();
     }
   }
 
@@ -125,13 +140,20 @@ export function ProfileHub(): JSX.Element {
             type="button"
             size="icon"
             aria-label="Alterar foto de perfil"
-            disabled={uploading}
+            disabled={cropOpen || updateProfile.isPending}
             onClick={() => fileInputRef.current?.click()}
             className="absolute right-0 bottom-0 size-8 rounded-full"
           >
             <Camera size={16} aria-hidden="true" />
           </Button>
         </div>
+
+        <AvatarCropModal
+          open={cropOpen}
+          file={pendingFile}
+          onConfirm={handleCropConfirm}
+          onCancel={closeCrop}
+        />
 
         <div className="flex flex-col gap-0.5">
           <p className="text-xl font-semibold text-foreground">{profile.name}</p>

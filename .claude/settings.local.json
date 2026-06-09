@@ -4,28 +4,18 @@
       "PowerShell(*)",
       "Bash(*)",
       "Skill(*)",
-      "WebSearch",
-      "mcp__plugin_context7_context7__query-docs",
-      "mcp__ide__getDiagnostics",
+      "mcp__zai-mcp-server__analyze_image",
       "mcp__plugin_context7_context7__resolve-library-id",
-      "WebFetch(domain:en.wikipedia.org)",
-      "WebFetch(domain:www.fifa.com)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/skill-model-guard.js\"",
-            "timeout": 5
-          }
-        ]
-      }
+      "mcp__plugin_context7_context7__query-docs",
+      "mcp__plugin_expo_expo__read_documentation",
+      "mcp__plugin_expo_expo__build_run",
+      "mcp__plugin_expo_expo__build_list",
+      "mcp__plugin_expo_expo__build_info",
+      "mcp__plugin_expo_expo__build_logs",
+      "mcp__plugin_expo_expo__build_submit",
+      "mcp__plugin_expo_expo__workflow_validate",
+      "mcp__plugin_expo_expo__testflight_crashes",
+      "mcp__plugin_expo_expo__testflight_feedback"
     ]
   }
 }

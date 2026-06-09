@@ -6,4 +6,5 @@ export { PredictionHistory } from "./PredictionHistory";
 export { ChangePasswordForm } from "./ChangePasswordForm";
 export { SettingsMenu } from "./SettingsMenu";
 export { EditProfileForm } from "./EditProfileForm";
+export { AvatarCropModal } from "./AvatarCropModal";
 export { LogoutConfirm } from "./LogoutConfirm";

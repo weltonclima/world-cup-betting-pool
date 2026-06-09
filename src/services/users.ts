@@ -2,7 +2,6 @@ import {
   collection,
   doc,
   getDocs,
-  orderBy,
   query,
   updateDoc,
   where,
@@ -25,15 +24,30 @@ import type { User, UserStatus } from "@/types";
  * Lista os usuários de `users` com o `status` dado, ordenados por `createdAt`
  * (mais antigos primeiro). Cada doc é validado por `userSchema` — doc fora do
  * schema faz a Promise rejeitar (propaga `ZodError`), sem fallback silencioso.
+ *
+ * A ordenação é feita EM MEMÓRIA (não via `orderBy` do Firestore) de propósito:
+ * `where status== + orderBy createdAt` exige índice composto e — pior — o
+ * `orderBy("createdAt")` DESCARTA silenciosamente docs sem o campo `createdAt`
+ * (que o schema marca como opcional: admin promovido por Cloud Function e docs
+ * seedados não têm `createdAt`). Isso fazia o painel admin zerar/subcontar.
+ * Filtrando só por `status` (campo único, sem índice composto) e ordenando aqui,
+ * todos os docs aparecem; os sem `createdAt` vão para o fim.
  */
 export async function listUsersByStatus(status: UserStatus): Promise<User[]> {
   const q = query(
     collection(firestore, "users"),
     where("status", "==", status),
-    orderBy("createdAt"),
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => userSchema.parse(d.data()));
+  const users = snapshot.docs.map((d) => userSchema.parse(d.data()));
+  // Ascendente por `createdAt` (ISO 8601 → comparável lexicograficamente).
+  // Docs sem `createdAt` (campo opcional) caem para o fim, sem serem descartados.
+  return users.sort((a, b) => {
+    if (a.createdAt === b.createdAt) return 0;
+    if (a.createdAt === undefined) return 1;
+    if (b.createdAt === undefined) return -1;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
 }
 
 /**

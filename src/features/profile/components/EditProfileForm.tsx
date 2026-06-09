@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Form,
   FormControl,
@@ -21,10 +22,8 @@ import {
 } from "@/components/ui/form";
 
 import { useProfile, useUpdateProfile } from "../hooks";
-import {
-  AvatarImageError,
-  fileToCompressedDataUrl,
-} from "../lib/imageToDataUrl";
+import { AvatarImageError, validateImageInput } from "../lib/imageToDataUrl";
+import { AvatarCropModal } from "./AvatarCropModal";
 
 const editProfileSchema = z.object({
   nickname: z.string().trim().min(1, { message: "Informe seu apelido." }),
@@ -46,7 +45,8 @@ export function EditProfileForm(): JSX.Element {
   const { profile } = useProfile();
   const updateProfile = useUpdateProfile();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
 
   const form = useForm<EditProfileValues>({
     resolver: zodResolver(editProfileSchema),
@@ -57,25 +57,40 @@ export function EditProfileForm(): JSX.Element {
     return <p className="text-sm text-muted-foreground">Carregando…</p>;
   }
 
-  async function onAvatar(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
+  // Seleção do arquivo: valida e abre o modal de recorte (o recorte+compressão
+  // ocorrem dentro do modal). O input é disparado por clique direto no botão
+  // (gesto do usuário) para compatibilidade com iOS Safari.
+  function onAvatar(event: React.ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0];
-    event.target.value = "";
+    event.target.value = ""; // permite reselecionar o mesmo arquivo
     if (!file) return;
-    setUploading(true);
     try {
-      const avatarUrl = await fileToCompressedDataUrl(file);
-      await updateProfile.mutateAsync({ avatarUrl });
-      toast.success("Foto atualizada.");
+      validateImageInput(file);
     } catch (error) {
       toast.error(
         error instanceof AvatarImageError
           ? error.message
-          : "Não foi possível atualizar a foto.",
+          : "Não foi possível usar essa imagem.",
       );
+      return;
+    }
+    setPendingFile(file);
+    setCropOpen(true);
+  }
+
+  function closeCrop(): void {
+    setCropOpen(false);
+    setPendingFile(null);
+  }
+
+  async function onCropConfirm(avatarUrl: string): Promise<void> {
+    try {
+      await updateProfile.mutateAsync({ avatarUrl });
+      toast.success("Foto atualizada.");
+    } catch {
+      toast.error("Não foi possível atualizar a foto.");
     } finally {
-      setUploading(false);
+      closeCrop();
     }
   }
 
@@ -112,7 +127,7 @@ export function EditProfileForm(): JSX.Element {
             type="button"
             size="icon"
             aria-label="Alterar foto de perfil"
-            disabled={uploading}
+            disabled={cropOpen || updateProfile.isPending}
             onClick={() => fileInputRef.current?.click()}
             className="absolute right-0 bottom-0 size-8 rounded-full"
           >
@@ -121,20 +136,29 @@ export function EditProfileForm(): JSX.Element {
         </div>
       </div>
 
+      <AvatarCropModal
+        open={cropOpen}
+        file={pendingFile}
+        onConfirm={onCropConfirm}
+        onCancel={closeCrop}
+      />
+
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
           className="flex flex-col gap-4"
           noValidate
         >
-          <FormItem>
-            <FormLabel>Nome</FormLabel>
+          {/* Campos estáticos (somente leitura): Label simples, fora de
+              FormField — FormLabel exige contexto de FormField e lançaria. */}
+          <div className="grid gap-2">
+            <Label>Nome</Label>
             <Input value={profile.name} disabled readOnly />
-          </FormItem>
-          <FormItem>
-            <FormLabel>E-mail</FormLabel>
+          </div>
+          <div className="grid gap-2">
+            <Label>E-mail</Label>
             <Input value={profile.email} disabled readOnly />
-          </FormItem>
+          </div>
 
           <FormField
             control={form.control}

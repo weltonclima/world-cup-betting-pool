@@ -45,43 +45,76 @@ export function dataUrlByteSize(dataUrl: string): number {
 }
 
 /**
- * Calcula as dimensões de saída mantendo proporção, limitadas a
- * `MAX_AVATAR_DIMENSION` (puro/testável).
+ * Calcula o recorte quadrado centralizado (center-crop) da imagem de origem e a
+ * dimensão de saída — puro/testável. O avatar é sempre quadrado: pegamos o maior
+ * quadrado central do source (lado = menor dimensão) e o reescalamos para `out`
+ * (limitado a `max`, SEM upscale acima do lado original). Assim a imagem gravada
+ * já é quadrada, eliminando a distorção na exibição (box quadrado) na origem.
+ *
+ * @returns `sx`/`sy` (canto do recorte no source), `side` (lado do recorte) e
+ *          `out` (lado do quadrado de saída).
  */
-export function scaledDimensions(
+export function squareCrop(
   width: number,
   height: number,
   max: number = MAX_AVATAR_DIMENSION,
-): { width: number; height: number } {
-  if (width <= max && height <= max) return { width, height };
-  const ratio = width / height;
-  return ratio >= 1
-    ? { width: max, height: Math.round(max / ratio) }
-    : { width: Math.round(max * ratio), height: max };
+): { sx: number; sy: number; side: number; out: number } {
+  const side = Math.min(width, height);
+  const sx = Math.floor((width - side) / 2);
+  const sy = Math.floor((height - side) / 2);
+  const out = Math.min(side, max);
+  return { sx, sy, side, out };
 }
 
 /**
- * Converte um `File`/`Blob` de imagem em data URL JPEG comprimida sob
- * `MAX_AVATAR_BYTES`. Browser-only (usa `Image`/`<canvas>`). Reduz a qualidade
- * progressivamente; se nem na menor qualidade couber, lança `AvatarImageError`.
+ * Recorte quadrado em coordenadas da imagem NATURAL (px): `x`/`y` = canto
+ * superior-esquerdo, `size` = lado do quadrado. Origem do recorte escolhido pelo
+ * usuário no modal (TASK-02).
  */
-export async function fileToCompressedDataUrl(
-  file: File,
-  maxBytes: number = MAX_AVATAR_BYTES,
-): Promise<string> {
-  validateImageInput(file);
+export type CropRect = { x: number; y: number; size: number };
 
-  const bitmap = await loadImage(file);
-  const { width, height } = scaledDimensions(bitmap.width, bitmap.height);
+/**
+ * Ajusta um `CropRect` para caber inteiramente dentro da imagem natural
+ * (puro/testável). Garante: `size` entre 1 e o menor lado; `x`/`y` ≥ 0 e o
+ * quadrado sem ultrapassar as bordas direita/inferior. Defesa contra coords
+ * inválidas vindas da UI.
+ */
+export function clampCropRect(
+  crop: CropRect,
+  naturalWidth: number,
+  naturalHeight: number,
+): CropRect {
+  const maxSide = Math.min(naturalWidth, naturalHeight);
+  const size = Math.min(Math.max(Math.round(crop.size), 1), maxSide);
+  const x = Math.min(Math.max(Math.round(crop.x), 0), naturalWidth - size);
+  const y = Math.min(Math.max(Math.round(crop.y), 0), naturalHeight - size);
+  return { x, y, size };
+}
 
+/**
+ * Desenha um recorte quadrado `source` (lado `side`) de `img` num canvas de saída
+ * quadrado `out` e comprime para JPEG sob `maxBytes`, reduzindo a qualidade
+ * progressivamente. Lança `AvatarImageError` se nem na menor qualidade couber.
+ * Núcleo compartilhado por `fileToCompressedDataUrl` e `cropRectToCompressedDataUrl`.
+ */
+function drawAndCompress(
+  img: CanvasImageSource,
+  sx: number,
+  sy: number,
+  side: number,
+  out: number,
+  maxBytes: number,
+): string {
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = out;
+  canvas.height = out;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     throw new AvatarImageError("Não foi possível processar a imagem.");
   }
-  ctx.drawImage(bitmap, 0, 0, width, height);
+  // Recorte quadrado (side²) → quadrado de saída (out²): proporção 1:1 em ambos,
+  // logo sem esticar.
+  ctx.drawImage(img, sx, sy, side, side, 0, 0, out, out);
 
   // Tenta qualidades decrescentes até caber sob o teto.
   for (const quality of [0.8, 0.65, 0.5, 0.4, 0.3]) {
@@ -91,6 +124,40 @@ export async function fileToCompressedDataUrl(
   throw new AvatarImageError(
     "Não foi possível comprimir a imagem o suficiente. Tente outra foto.",
   );
+}
+
+/**
+ * Converte um `File`/`Blob` de imagem em data URL JPEG comprimida sob
+ * `MAX_AVATAR_BYTES`. Browser-only (usa `Image`/`<canvas>`). Recorte quadrado
+ * central automático. Reduz a qualidade progressivamente; se nem na menor
+ * couber, lança `AvatarImageError`.
+ */
+export async function fileToCompressedDataUrl(
+  file: File,
+  maxBytes: number = MAX_AVATAR_BYTES,
+): Promise<string> {
+  validateImageInput(file);
+
+  const bitmap = await loadImage(file);
+  const { sx, sy, side, out } = squareCrop(bitmap.width, bitmap.height);
+  return drawAndCompress(bitmap, sx, sy, side, out, maxBytes);
+}
+
+/**
+ * Recorta um quadrado arbitrário (`crop`, coords da imagem natural) de um
+ * `HTMLImageElement` já carregado e devolve a data URL JPEG comprimida sob
+ * `maxBytes`. Aplica `clampCropRect` internamente (defesa contra coords fora dos
+ * limites). Saída limitada a `MAX_AVATAR_DIMENSION` (sem upscale acima do lado do
+ * recorte). Browser-only. Base do modal de recorte (TASK-02).
+ */
+export function cropRectToCompressedDataUrl(
+  img: HTMLImageElement,
+  crop: CropRect,
+  maxBytes: number = MAX_AVATAR_BYTES,
+): Promise<string> {
+  const { x, y, size } = clampCropRect(crop, img.naturalWidth, img.naturalHeight);
+  const out = Math.min(size, MAX_AVATAR_DIMENSION);
+  return Promise.resolve(drawAndCompress(img, x, y, size, out, maxBytes));
 }
 
 /** Carrega o arquivo em um `HTMLImageElement` (browser-only). */

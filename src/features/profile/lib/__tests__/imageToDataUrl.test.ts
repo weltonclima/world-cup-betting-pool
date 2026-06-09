@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   AvatarImageError,
+  clampCropRect,
   dataUrlByteSize,
-  scaledDimensions,
+  squareCrop,
   validateImageInput,
   MAX_INPUT_BYTES,
 } from "@/features/profile/lib/imageToDataUrl";
@@ -44,16 +45,84 @@ describe("dataUrlByteSize", () => {
   });
 });
 
-describe("scaledDimensions", () => {
-  it("não amplia imagem pequena", () => {
-    expect(scaledDimensions(100, 80, 256)).toEqual({ width: 100, height: 80 });
+describe("squareCrop", () => {
+  it("recorta quadrado central em paisagem", () => {
+    expect(squareCrop(1024, 512, 256)).toEqual({
+      sx: 256,
+      sy: 0,
+      side: 512,
+      out: 256,
+    });
   });
 
-  it("limita lado maior (paisagem)", () => {
-    expect(scaledDimensions(1024, 512, 256)).toEqual({ width: 256, height: 128 });
+  it("recorta quadrado central em retrato", () => {
+    expect(squareCrop(512, 1024, 256)).toEqual({
+      sx: 0,
+      sy: 256,
+      side: 512,
+      out: 256,
+    });
   });
 
-  it("limita lado maior (retrato)", () => {
-    expect(scaledDimensions(512, 1024, 256)).toEqual({ width: 128, height: 256 });
+  it("não amplia imagem menor que o limite (out = lado do recorte)", () => {
+    expect(squareCrop(100, 80, 256)).toEqual({
+      sx: 10,
+      sy: 0,
+      side: 80,
+      out: 80,
+    });
+  });
+});
+
+describe("clampCropRect", () => {
+  it("mantém recorte já dentro dos limites", () => {
+    expect(clampCropRect({ x: 10, y: 10, size: 50 }, 200, 200)).toEqual({
+      x: 10,
+      y: 10,
+      size: 50,
+    });
+  });
+
+  it("zera coordenadas negativas", () => {
+    expect(clampCropRect({ x: -5, y: -10, size: 50 }, 200, 200)).toEqual({
+      x: 0,
+      y: 0,
+      size: 50,
+    });
+  });
+
+  it("reposiciona recorte que ultrapassa a borda direita/inferior", () => {
+    // x + size = 230 > 200 → x = 150 (200 - 50). Idem para y.
+    expect(clampCropRect({ x: 180, y: 180, size: 50 }, 200, 200)).toEqual({
+      x: 150,
+      y: 150,
+      size: 50,
+    });
+  });
+
+  it("limita size ao menor lado da imagem", () => {
+    // size 300 > min(200,150) → size = 150; reposiciona para caber.
+    expect(clampCropRect({ x: 0, y: 0, size: 300 }, 200, 150)).toEqual({
+      x: 0,
+      y: 0,
+      size: 150,
+    });
+  });
+
+  it("garante size mínimo de 1", () => {
+    expect(clampCropRect({ x: 0, y: 0, size: 0 }, 200, 200)).toEqual({
+      x: 0,
+      y: 0,
+      size: 1,
+    });
+  });
+
+  it("arredonda coordenadas fracionárias (Pointer Events entregam floats)", () => {
+    // x=10.7→11, y=10.2→10, size=49.6→50; ainda cabe em 200×200.
+    expect(clampCropRect({ x: 10.7, y: 10.2, size: 49.6 }, 200, 200)).toEqual({
+      x: 11,
+      y: 10,
+      size: 50,
+    });
   });
 });
