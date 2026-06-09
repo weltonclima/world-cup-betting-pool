@@ -33,12 +33,21 @@ describe("shared › enums", () => {
     expect(userStatusSchema.safeParse("deleted").success).toBe(false);
   });
 
-  it("stageSchema aceita as 6 fases e rejeita fora do enum", () => {
-    for (const s of ["grupos", "oitavas", "quartas", "semifinal", "terceiro", "final"]) {
+  it("stageSchema aceita as 7 fases e rejeita fora do enum", () => {
+    for (const s of [
+      "grupos",
+      "dezesseis-avos",
+      "oitavas",
+      "quartas",
+      "semifinal",
+      "terceiro",
+      "final",
+    ]) {
       expect(stageSchema.safeParse(s).success).toBe(true);
     }
     expect(stageSchema.safeParse("terceiro_lugar").success).toBe(false);
     expect(stageSchema.safeParse("geral").success).toBe(false);
+    expect(stageSchema.safeParse("round-of-32").success).toBe(false); // slug inválido
   });
 
   it("rankingScopeSchema aceita geral + 5 fases", () => {
@@ -53,6 +62,10 @@ describe("shared › enums", () => {
       expect(rankingScopeSchema.safeParse(s).success).toBe(true);
     }
     expect(rankingScopeSchema.safeParse("repescagem").success).toBe(false);
+  });
+
+  it("rankingScopeSchema não inclui dezesseis-avos (sem ranking de 16 avos)", () => {
+    expect(rankingScopeSchema.safeParse("dezesseis-avos").success).toBe(false);
   });
 
   it("matchStatusSchema aceita válidos e rejeita inválidos", () => {
@@ -106,7 +119,13 @@ describe("shared › inferência de tipos", () => {
       "pending" | "approved" | "blocked"
     >();
     expectTypeOf<Stage>().toEqualTypeOf<
-      "grupos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final"
+      | "grupos"
+      | "dezesseis-avos"
+      | "oitavas"
+      | "quartas"
+      | "semifinal"
+      | "terceiro"
+      | "final"
     >();
     expectTypeOf<RankingScope>().toEqualTypeOf<
       "geral" | "grupos" | "oitavas" | "quartas" | "semifinal" | "final"

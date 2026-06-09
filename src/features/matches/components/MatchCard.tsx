@@ -111,6 +111,7 @@ function GroupLabel({ match }: { match: MatchWithId }) {
     // Fases de mata-mata: usar a fase em pt-BR
     const STAGE_LABEL: Record<string, string> = {
       grupos: "Fase de Grupos",
+      "dezesseis-avos": "Dezesseis Avos de Final",
       oitavas: "Oitavas de Final",
       quartas: "Quartas de Final",
       semifinal: "Semifinal",

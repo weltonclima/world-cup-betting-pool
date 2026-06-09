@@ -1,24 +1,22 @@
 "use client";
 
 /**
- * MatchDetailActions — CTAs contextuais da tela de detalhe do jogo (TASK-06).
+ * MatchDetailActions — CTAs contextuais da tela de detalhe do jogo (TASK-09).
  *
- * Renderiza botões de ação contextualizada por `predictionStatus` + `matchStatus`.
- * TODOS os botões são disabled/placeholder — PRD-04 (formulário de palpite) ainda
- * não existe. Nenhum botão usa `href` para rotas inexistentes.
+ * Três estados funcionais:
+ *   - "Enviar Palpite"   → sem palpite + não-travado → Link /matches/[id]/predict
+ *   - "Editar Palpite"   → com palpite + não-travado → Link /matches/[id]/predict
+ *   - "Palpite bloqueado" → travado (match não-scheduled ou predictionStatus bloqueado)
+ *                          → botão disabled com ícone Lock
  *
- * Contrato visual: ai/screen/jogos-task-06.md §12
+ * Contrato visual: ai/screen/palpites-task-09.md §3
  */
 
-import {
-  BarChart2,
-  Eye,
-  Info,
-  Pencil,
-  Send,
-} from "lucide-react";
+import { Lock, Pencil, Send } from "lucide-react";
+import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
 import type { MatchStatus } from "@/types";
 
@@ -29,104 +27,8 @@ import type { MatchStatus } from "@/types";
 export interface MatchDetailActionsProps {
   predictionStatus: MatchPredictionStatus;
   matchStatus: MatchStatus;
-}
-
-interface ActionConfig {
-  label: string;
-  ariaLabel: string;
-  variant: "default" | "outline" | "ghost";
-  icon: React.ReactNode;
-}
-
-// ---------------------------------------------------------------------------
-// Derivação de ações por contexto
-// ---------------------------------------------------------------------------
-
-function deriveActions(
-  predictionStatus: MatchPredictionStatus,
-  matchStatus: MatchStatus,
-): ActionConfig[] {
-  const verInfoPartida: ActionConfig = {
-    label: "Ver Informações da Partida",
-    ariaLabel: "Ver informações da partida (disponível em breve)",
-    variant: "outline",
-    icon: <Info size={16} aria-hidden="true" />,
-  };
-
-  const visualizarPalpite: ActionConfig = {
-    label: "Visualizar Palpite",
-    ariaLabel: "Visualizar palpite (disponível em breve)",
-    variant: "outline",
-    icon: <Eye size={16} aria-hidden="true" />,
-  };
-
-  const verResultado: ActionConfig = {
-    label: "Visualizar Resultado & Estatísticas",
-    ariaLabel: "Visualizar resultado e estatísticas (disponível em breve)",
-    variant: "outline",
-    icon: <BarChart2 size={16} aria-hidden="true" />,
-  };
-
-  // Jogo encerrado (independente do status de palpite — bloqueado com finished)
-  if (matchStatus === "finished") {
-    return [
-      {
-        ...visualizarPalpite,
-        variant: "default",
-        ariaLabel: "Visualizar palpite (disponível em breve)",
-      },
-      verInfoPartida,
-      verResultado,
-    ];
-  }
-
-  // Jogo ao vivo (bloqueado)
-  if (matchStatus === "live") {
-    return [
-      {
-        ...visualizarPalpite,
-        variant: "default",
-        ariaLabel: "Visualizar palpite (disponível em breve)",
-      },
-      verInfoPartida,
-    ];
-  }
-
-  // Jogo scheduled — diferencia pelo status do palpite
-  if (predictionStatus === "enviado") {
-    return [
-      {
-        label: "Editar Palpite",
-        ariaLabel: "Editar palpite (disponível em breve)",
-        variant: "default",
-        icon: <Pencil size={16} aria-hidden="true" />,
-      },
-      visualizarPalpite,
-      verInfoPartida,
-    ];
-  }
-
-  if (predictionStatus === "pendente") {
-    return [
-      {
-        label: "Enviar Palpite",
-        ariaLabel: "Enviar palpite (disponível em breve)",
-        variant: "default",
-        icon: <Send size={16} aria-hidden="true" />,
-      },
-      verInfoPartida,
-    ];
-  }
-
-  // bloqueado + scheduled (kickoffAt passou mas status ainda não atualizou)
-  return [
-    {
-      ...visualizarPalpite,
-      variant: "default",
-      ariaLabel: "Visualizar palpite (disponível em breve)",
-    },
-    verInfoPartida,
-  ];
+  /** Id da partida — usado para montar o href de navegação. */
+  matchId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -136,30 +38,70 @@ function deriveActions(
 /**
  * CTAs contextuais para a tela de detalhe do jogo.
  *
- * Todos os botões são desabilitados (PRD-04 pendente). A lógica de habilitação
- * será adicionada em TASK-04 (PRD-04) sem alterar esta interface.
+ * Estado travado: botão outline disabled com ícone Lock + texto descritivo.
+ * Estado habilitado: Button asChild com Link → navegação para /matches/[id]/predict.
  */
 export function MatchDetailActions({
   predictionStatus,
   matchStatus,
+  matchId,
 }: MatchDetailActionsProps) {
-  const actions = deriveActions(predictionStatus, matchStatus);
+  const isLocked =
+    matchStatus !== "scheduled" || predictionStatus === "bloqueado";
 
-  return (
-    <div className="flex flex-col gap-3">
-      {actions.map((action) => (
+  const predictHref = `/matches/${matchId}/predict`;
+
+  // Estado bloqueado — botão desabilitado (comunica via ícone + texto + aria)
+  if (isLocked) {
+    return (
+      <div className="flex flex-col gap-3">
         <Button
-          key={action.label}
-          variant={action.variant}
+          variant="outline"
           disabled
           aria-disabled="true"
-          aria-label={action.ariaLabel}
+          aria-label="Palpite bloqueado — prazo encerrado"
           className="w-full min-h-[44px] justify-start gap-2"
         >
-          {action.icon}
-          {action.label}
+          <Lock size={16} aria-hidden="true" />
+          Palpite bloqueado
         </Button>
-      ))}
+      </div>
+    );
+  }
+
+  // Com palpite — Editar Palpite (Link habilitado estilizado como Button)
+  if (predictionStatus === "enviado") {
+    return (
+      <div className="flex flex-col gap-3">
+        <Link
+          href={predictHref}
+          aria-label="Editar palpite para este jogo"
+          className={cn(
+            buttonVariants({ variant: "default" }),
+            "w-full min-h-[44px] justify-start gap-2",
+          )}
+        >
+          <Pencil size={16} aria-hidden="true" />
+          Editar Palpite
+        </Link>
+      </div>
+    );
+  }
+
+  // Sem palpite — Enviar Palpite (Link habilitado estilizado como Button)
+  return (
+    <div className="flex flex-col gap-3">
+      <Link
+        href={predictHref}
+        aria-label="Enviar palpite para este jogo"
+        className={cn(
+          buttonVariants({ variant: "default" }),
+          "w-full min-h-[44px] justify-start gap-2",
+        )}
+      >
+        <Send size={16} aria-hidden="true" />
+        Enviar Palpite
+      </Link>
     </div>
   );
 }

@@ -27,6 +27,8 @@ import Link from "next/link";
 
 import type { MatchPredictionStatus, ResolvedTeam } from "@/features/matches/lib/matchesHelpers";
 import { useMatchDetail } from "@/features/matches/hooks/useMatchDetail";
+import { usePredictions } from "@/features/predictions/hooks";
+import { useAuth } from "@/hooks/useAuth";
 import type { Stage } from "@/types";
 
 import { GameStatusBadge } from "./GameStatusBadge";
@@ -49,6 +51,7 @@ export interface MatchDetailProps {
 
 const STAGE_LABELS: Record<Stage, string> = {
   grupos: "Fase de Grupos",
+  "dezesseis-avos": "Dezesseis Avos de Final",
   oitavas: "Oitavas de Final",
   quartas: "Quartas de Final",
   semifinal: "Semifinal",
@@ -272,6 +275,12 @@ function DetailRow({
 export function MatchDetail({ id }: MatchDetailProps) {
   const { match, isLoading, isError, refetch } = useMatchDetail(id);
 
+  // uid + palpite do usuário — mesmo query key em cache (sem request extra)
+  const { firebaseUser } = useAuth();
+  const uid = firebaseUser?.uid ?? null;
+  const { data: predictions } = usePredictions(uid);
+  const existingPrediction = predictions?.find((p) => p.matchId === id);
+
   // Estado: loading
   if (isLoading) {
     return (
@@ -413,6 +422,44 @@ export function MatchDetail({ id }: MatchDetailProps) {
             <p className="text-xs text-muted-foreground">{predictionMessage}</p>
           </div>
 
+          {/* Meu Palpite (só quando há palpite registrado) */}
+          {existingPrediction && (
+            <>
+              <div className="border-t border-border" />
+              <div className="flex flex-col gap-2">
+                <SectionHeading>Meu Palpite</SectionHeading>
+                <div
+                  className="flex items-center justify-center gap-6 py-2"
+                  role="img"
+                  aria-label={`Seu palpite: ${match.homeTeam.name} ${existingPrediction.homeScore} a ${existingPrediction.awayScore} ${match.awayTeam.name}`}
+                >
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-xs text-muted-foreground font-medium truncate max-w-20 text-center">
+                      {match.homeTeam.name}
+                    </span>
+                    <span className="text-4xl font-bold text-foreground tabular-nums">
+                      {existingPrediction.homeScore}
+                    </span>
+                  </div>
+                  <span
+                    className="text-xl font-bold text-muted-foreground"
+                    aria-hidden="true"
+                  >
+                    ×
+                  </span>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-xs text-muted-foreground font-medium truncate max-w-20 text-center">
+                      {match.awayTeam.name}
+                    </span>
+                    <span className="text-4xl font-bold text-foreground tabular-nums">
+                      {existingPrediction.awayScore}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           {/* Divisor */}
           <div className="border-t border-border" />
 
@@ -422,6 +469,7 @@ export function MatchDetail({ id }: MatchDetailProps) {
             <MatchDetailActions
               predictionStatus={match.predictionStatus}
               matchStatus={match.status}
+              matchId={id}
             />
           </div>
 

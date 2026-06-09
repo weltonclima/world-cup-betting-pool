@@ -1,7 +1,12 @@
 /**
+ * @deprecated Substituído por `@/server/copaData` (TASK-17).
+ *
  * Helpers de busca + mapeamento + validação compartilhados pelos Route Handlers
  * da API-Football (TASK-04). Mantém a lógica de montar teamIdMap/teamGroupMap em
  * um único lugar (consumido por /api/matches e /api/matches/[id]).
+ *
+ * Os Route Handlers foram migrados para `@/server/copaData` (openfootball).
+ * Mantido como referência histórica — sem imports de produção apontando para cá.
  *
  * Como teams NÃO são persistidos no Firestore, o id do doc = `String(team.id)`
  * da API (matches idem: id = `String(fixture.id)`).

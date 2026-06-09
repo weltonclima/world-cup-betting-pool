@@ -135,14 +135,25 @@ describe("MatchFiltersSheet — Seção Fase", () => {
     expect(btn.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("T5: opções de fase estão presentes", () => {
+  it("T5: opções de fase estão presentes (incluindo 16 Avos — TASK-01)", () => {
     render(<MatchFiltersSheet {...makeProps()} />);
     expect(screen.getByRole("button", { name: "Fase de Grupos" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "16 Avos" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Oitavas" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Quartas" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Semifinal" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "3º Lugar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Final" })).toBeTruthy();
+  });
+
+  it("T5b: botão '16 Avos' seleciona dezesseis-avos como rascunho (TASK-01)", () => {
+    render(<MatchFiltersSheet {...makeProps()} />);
+    const btn = screen.getByRole("button", { name: "16 Avos" });
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "Todas as fases" }).getAttribute("aria-pressed"),
+    ).toBe("false");
   });
 
   it("T6: clicar em 'Fase de Grupos' marca como selecionado (aria-pressed=true)", () => {

@@ -10,3 +10,6 @@ export { useMatchesList } from "./useMatchesList";
 export type { MatchListItem, MatchListItemDaySection, MatchesListData } from "./useMatchesList";
 export { useMatchDetail } from "./useMatchDetail";
 export type { MatchDetailItem, MatchDetailData } from "./useMatchDetail";
+// Agrupadores derivados (TASK-05)
+export { useGroupMatches } from "./useGroupMatches";
+export { usePhaseMatches } from "./usePhaseMatches";

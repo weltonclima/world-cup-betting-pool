@@ -149,6 +149,14 @@ describe("parseRound › fase de grupos", () => {
 });
 
 describe("parseRound › mata-mata", () => {
+  it('"Round of 32" → dezesseis-avos, round null, groupId null', () => {
+    expect(parseRound("Round of 32")).toEqual({
+      stage: "dezesseis-avos",
+      round: null,
+      groupId: null,
+    });
+  });
+
   it('"Round of 16" → oitavas, round null, groupId null', () => {
     expect(parseRound("Round of 16")).toEqual({
       stage: "oitavas",

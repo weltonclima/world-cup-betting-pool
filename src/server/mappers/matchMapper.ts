@@ -22,6 +22,7 @@ export type MatchStatus = z.infer<typeof matchStatusSchema>;
  */
 const ROUND_TO_STAGE_MAP: Record<string, Stage> = {
   "Group Stage": "grupos",
+  "Round of 32": "dezesseis-avos", // Copa 2026: 16 avos de final
   "Round of 16": "oitavas",
   "Quarter-finals": "quartas",
   "Semi-finals": "semifinal",

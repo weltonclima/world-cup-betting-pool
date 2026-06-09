@@ -1,2 +1,9 @@
-// Barrel da feature profile. Reexporta o módulo público de perfil (preenchido em PRDs futuros).
-export {};
+// Barrel público da feature profile (PRD-06).
+export * from "./components";
+export * from "./hooks";
+export {
+  changePasswordSchema,
+  passwordRules,
+  passwordMeetsRules,
+  type ChangePasswordValues,
+} from "./schemas";

@@ -98,6 +98,39 @@ A tela de **Login** usa layout de **duas zonas** (ref. `docs/prd-01/login.png`),
 
 **Logo:** Login usa `public/logo-login.png` (troféu **verde**, ref. `login.png`). A tela **Pending** NÃO usa essas classes (mantém tema claro). **Cadastro** será ajustado em iteração futura (decisão adiada).
 
+### 2.4-palpites Tema da área de Palpites em Massa (`.palpites-theme`)
+
+A jornada de palpites em massa (PRD03-01..16, feature `palpites-massa`) usa **shell + CTA + barra + realce de seleção em verde**, conforme os wireframes. Isso é uma **decisão de tema** (remapear `--primary`/`--ring`), não semântica de acerto/erro — por isso **não** reusa `--color-win/loss/draw` (que continuam reservados para semântica esportiva: ✓ de grupo concluído usa `text-win`).
+
+Implementado como **classe de escopo `.palpites-theme`** em `globals.css` (à la `.auth-theme`), aplicada no container raiz da rota `/predictions` (TASK-07). Reusa o **mesmo verde validado AA** de `.auth-theme` (troféu da identidade).
+
+| Classe | Token | Valor oklch | Uso |
+|---|---|---|---|
+| `.palpites-theme` | `--primary` | `0.46 0.16 150` | CTA, barra de progresso, realce |
+| `.palpites-theme` | `--primary-foreground` | `0.985 0 0` | Texto branco sobre primary |
+| `.palpites-theme` | `--ring` | `0.46 0.16 150` | Focus ring verde |
+| `.palpites-theme` | `--sidebar-primary` | `0.46 0.16 150` | Item ativo da nav no escopo |
+
+**Decisão de contraste (WCAG AA):** `--primary` verde médio-escuro (`~0.46`) com foreground branco → CTA (branco sobre verde) e elementos `text-primary` (verde sobre branco/card claro) ambos ≥ AA. Mesma escolha de `.auth-theme`. Cards internos permanecem em superfície clara neutra; só o shell/CTA/barra/realce ficam verdes. As primitivas (`ProgressBar`, `PhaseCard`, `GroupCard`, `CompactScoreInput`) são neutras-por-token e herdam o verde **dentro** do escopo.
+
+### 2.4-ranking Tema da seção Ranking (`.ranking-theme`) — PRD-05
+
+Os screenshots do PRD-05 são **verdes**; o app é neutro. Decisão do Tech Lead: **verde com escopo no Ranking**, via classe `.ranking-theme` em `globals.css` (mesmo padrão de `.auth-theme`/`.palpites-theme`), aplicada no container raiz de `/rankings` (TASK-07). **Não** re-tematiza o app globalmente. Reusa o **mesmo verde validado AA** (troféu da identidade).
+
+| Classe | Token | Valor oklch | Uso |
+|---|---|---|---|
+| `.ranking-theme` | `--primary` | `0.46 0.16 150` | Header de destaque, aba ativa, CTA, botão "Tentar Novamente" |
+| `.ranking-theme` | `--primary-foreground` | `0.985 0 0` | Texto branco sobre primary (header verde) |
+| `.ranking-theme` | `--ring` | `0.46 0.16 150` | Focus ring verde |
+| `.ranking-theme` | `--chart-1` | `0.46 0.16 150` | Linha do gráfico de evolução + barras de distribuição |
+
+**Regras de uso (tokens, sem hex):**
+- Header de destaque ("Sua Posição Atual", "Visão Geral do Bolão"): `bg-primary text-primary-foreground`.
+- Destaque "Você" (linha do usuário no ranking): `bg-primary/10 text-foreground` + badge `bg-primary text-primary-foreground`; contraste AA garantido.
+- Aba ativa (`RankingSubNav`): `text-primary font-semibold` + sublinhado `border-primary` (cor NÃO é único indicador — peso + borda).
+- Evolução: subiu = `text-primary` + ArrowUp; caiu = `text-destructive` + ArrowDown; manteve = `text-muted-foreground` + Minus.
+- `--color-win`/`--color-loss` (já em globals.css) seguem reservados à semântica de acerto/erro de palpite, não ao tema.
+
 ### 2.4 Extensões semânticas para esportes (a adicionar em globals.css quando necessário)
 
 Estes tokens **não existem ainda** — devem ser adicionados em `globals.css` quando PRDs de features precisarem:

@@ -36,3 +36,14 @@ export const predictionInputSchema = z.object({
   homeScore: scoreSchema,
   awayScore: scoreSchema,
 });
+
+// ---------------------------------------------------------------------------
+// Schema do formulário (TASK-07) — sem matchId (injetado antes do submit).
+// Usado pelo React Hook Form + zodResolver no PredictionForm.
+// ---------------------------------------------------------------------------
+export const predictionFormSchema = z.object({
+  homeScore: scoreSchema,
+  awayScore: scoreSchema,
+});
+
+export type PredictionFormValues = z.infer<typeof predictionFormSchema>;

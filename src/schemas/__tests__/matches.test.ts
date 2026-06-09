@@ -160,7 +160,7 @@ describe("matches", () => {
 
   it("inferência de tipo", () => {
     expectTypeOf<Match["stage"]>().toEqualTypeOf<
-      "grupos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final"
+      "grupos" | "dezesseis-avos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final"
     >();
     expectTypeOf<Match["homeScore"]>().toEqualTypeOf<number | null>();
     expectTypeOf<Match["round"]>().toEqualTypeOf<number | null | undefined>();

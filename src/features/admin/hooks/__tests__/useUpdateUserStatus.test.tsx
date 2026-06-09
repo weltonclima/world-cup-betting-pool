@@ -5,6 +5,8 @@ import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { updateUserStatus } from "@/services/users";
+import { createNotification } from "@/services/notifications";
+import { createLog } from "@/services/systemLogs";
 import {
   InvalidStatusTransitionError,
   useUpdateUserStatus,
@@ -15,8 +17,15 @@ vi.mock("@/services/users", () => ({
   listUsersByStatus: vi.fn(),
   updateUserStatus: vi.fn(),
 }));
+vi.mock("@/services/systemLogs", () => ({ createLog: vi.fn() }));
+vi.mock("@/services/notifications", () => ({ createNotification: vi.fn() }));
+vi.mock("@/firebase", () => ({
+  firebaseAuth: { currentUser: { uid: "admin1" } },
+}));
 
 const updateMock = vi.mocked(updateUserStatus);
+const createLogMock = vi.mocked(createLog);
+const createNotificationMock = vi.mocked(createNotification);
 
 function setup() {
   const client = new QueryClient({
@@ -126,5 +135,39 @@ describe("useUpdateUserStatus", () => {
       }),
     ).rejects.toBe(err);
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("T10: aprovação grava log + notificação de Sistema (best-effort)", async () => {
+    updateMock.mockResolvedValueOnce(undefined);
+    createLogMock.mockResolvedValueOnce("log1");
+    createNotificationMock.mockResolvedValueOnce("notif1");
+    const { result } = setup();
+
+    await result.current.mutateAsync({ uid: "u1", from: "pending", to: "approved" });
+
+    expect(createLogMock).toHaveBeenCalledOnce();
+    expect(createLogMock.mock.calls[0]![0]).toMatchObject({
+      type: "user_approved",
+      actorUid: "admin1",
+      targetUid: "u1",
+    });
+    expect(createNotificationMock).toHaveBeenCalledOnce();
+    expect(createNotificationMock.mock.calls[0]![0]).toMatchObject({
+      userId: "u1",
+      type: "system",
+      title: "Cadastro aprovado",
+    });
+  });
+
+  it("T11: falha no log/notif NÃO derruba a mutação", async () => {
+    updateMock.mockResolvedValueOnce(undefined);
+    createLogMock.mockRejectedValueOnce(new Error("log down"));
+    createNotificationMock.mockRejectedValueOnce(new Error("notif down"));
+    const { result } = setup();
+
+    await expect(
+      result.current.mutateAsync({ uid: "u1", from: "pending", to: "approved" }),
+    ).resolves.toBeUndefined();
+    expect(updateMock).toHaveBeenCalledWith("u1", "approved");
   });
 });

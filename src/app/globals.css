@@ -209,6 +209,92 @@
     --input: oklch(0.922 0 0);
 }
 
+/*
+ * Área de Palpites em Massa — shell verde dos wireframes (PRD03-01..16).
+ * Escopo local aplicado no container raiz da rota /predictions; remapeia apenas
+ * primary/ring/sidebar-primary para o verde da identidade. Reusa o verde já
+ * validado de `.auth-theme` (mesma decisão de contraste WCAG AA: branco sobre
+ * verde ~0.46 e verde sobre branco ambos ≥ AA). Documentado em MASTER.md
+ * (§2.4-palpites) e na decisão de tela TASK-06 (§6).
+ */
+.palpites-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+}
+
+/*
+ * Tema da seção Ranking (PRD-05, MASTER §2.4-ranking). Escopo local na rota /rankings.
+ * Mesmo verde validado AA de .auth-theme/.palpites-theme. --chart-1 fica verde para a
+ * linha do gráfico de evolução e as barras de distribuição herdarem a identidade.
+ */
+.ranking-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
+ * Tema da seção Perfil (PRD-06). Mesmo verde validado AA das demais seções
+ * (auth/palpites/ranking). Escopo local na rota /profile via .profile-theme.
+ * Mocks PRD06-01..06 são verdes (badge status, CTA "Salvar Nova Senha"); o
+ * vermelho de "Encerrar Sessão" continua vindo de --destructive (não tematizado).
+ */
+.profile-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
+ * Tema da Central de Notificações (PRD-08). Mesmo verde validado AA; escopo
+ * local na rota /notificacoes (filtros, switches, ícones, CTAs do detalhe).
+ */
+.notifications-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
+ * Tema da área Administração (PRD-07). Mesmo verde validado AA; escopo local em
+ * /admin (banner do dashboard, badges, filtros de logs).
+ */
+.admin-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
+ * Dark mode dos temas verdes (TASK-14, carry-forward WR-01 de TASK-07 / WR-02 de
+ * TASK-08/10/13). No dark, o verde 0.46 com texto branco e o verde-sobre-fundo-escuro
+ * caem abaixo de AA. Eleva --primary p/ ~0.72 (verde mais claro) com --primary-foreground
+ * escuro → contraste AA do tab ativo, CTA e realce "Você" no dark mode. Light inalterado.
+ */
+.dark .palpites-theme,
+.dark .ranking-theme,
+.dark .profile-theme,
+.dark .notifications-theme,
+.dark .admin-theme {
+    --primary: oklch(0.72 0.16 150);
+    --primary-foreground: oklch(0.205 0.02 150);
+    --ring: oklch(0.72 0.16 150);
+    --sidebar-primary: oklch(0.72 0.16 150);
+}
+.dark .ranking-theme {
+    --chart-1: oklch(0.72 0.16 150);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -25,7 +25,9 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
-      className={cn("aspect-square size-full", className)}
+      // object-cover: imagem não-quadrada é recortada (center) em vez de
+      // esticada (default object-fit:fill distorcia o avatar).
+      className={cn("aspect-square size-full object-cover", className)}
       {...props}
     />
   );

@@ -1,9 +1,6 @@
-import { UsersPanel } from "@/features/admin/components/UsersPanel";
+import { redirect } from "next/navigation";
 
-/**
- * Painel administrativo (PRD-01.2). Gating em `(app)/admin/layout.tsx`
- * (AdminGuard). O boundary "use client" começa em `UsersPanel`.
- */
+/** `/admin` redireciona para o Dashboard (PRD-07.1, TASK-08). */
 export default function AdminPage() {
-  return <UsersPanel />;
+  redirect("/admin/dashboard");
 }

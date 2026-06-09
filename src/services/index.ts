@@ -6,13 +6,22 @@ export {
   sendPasswordReset,
   verifyResetCode,
   confirmReset,
+  changePassword,
   type SignUpInput,
 } from "./auth";
 
 export { listUsersByStatus, updateUserStatus } from "./users";
 
-// Serviços da Home Dashboard (PRD-02, TASK-03).
-export { getGeneralRanking } from "./rankings";
+// Serviços de ranking (PRD-02 Home + PRD-05 Ranking).
+export {
+  getGeneralRanking,
+  getRankingByScope,
+  getGroupRanking,
+  getUserRanking,
+  getParticipantProfile,
+  getPoolStats,
+  type UserRankingResult,
+} from "./rankings";
 export { getStatistics } from "./statistics";
 export {
   listMatches,
@@ -21,5 +30,20 @@ export {
   getRecentFinishedMatches,
 } from "./matches";
 export { listAllTeams } from "./teams";
-export { listPredictionsByUid } from "./predictions";
+export {
+  listPredictionsByUid,
+  upsertPrediction,
+  PredictionServiceError,
+  type UpsertPredictionInput,
+} from "./predictions";
 export { getSystemSettings } from "./systemSettings";
+export {
+  listNotifications,
+  getNotification,
+  markAsRead,
+  markAllAsRead,
+  createNotification,
+  getPreferences,
+  updatePreferences,
+} from "./notifications";
+export { createLog, listLogs } from "./systemLogs";

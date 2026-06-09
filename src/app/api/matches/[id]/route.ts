@@ -1,20 +1,18 @@
 /**
- * GET /api/matches/[id] (TASK-04) — uma partida pelo id (= String(fixture.id)).
+ * GET /api/matches/[id] — uma partida pelo id estável.
  *
- * 404 quando não encontrada. A API-Football não tem endpoint por jogo nesta
- * camada (é um único endpoint de fixtures), então filtramos a lista mapeada.
+ * 404 quando não encontrada. Filtra a lista completa de matches mapeados.
  *
- * Cache (A5): mesma base de /api/matches — `REVALIDATE.jogoAoVivo` (60s). Ver spec §5.
+ * Cache (A5): 1h — alinhado com /api/matches.
  */
 
 import { NextResponse } from "next/server";
 
-import { apiFootballErrorResponse } from "../../_lib/apiFootballError";
-import { fetchAllMatches } from "../../_lib/apiFootballData";
+import { copaDataErrorResponse } from "../../_lib/copaDataError";
+import { fetchAllMatches } from "@/server/copaData";
 
-// Literal estático obrigatório pelo Next.js (MemberExpression não é suportado).
-// Valor: REVALIDATE.jogoAoVivo = 60s (1min).
-export const revalidate = 60;
+// Literal estático obrigatório pelo Next.js.
+export const revalidate = 3600;
 
 export async function GET(
   _request: Request,
@@ -34,6 +32,6 @@ export async function GET(
 
     return NextResponse.json(match);
   } catch (err) {
-    return apiFootballErrorResponse(err);
+    return copaDataErrorResponse(err);
   }
 }

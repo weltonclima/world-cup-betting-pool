@@ -207,14 +207,31 @@ describe("Firestore Security Rules — auto-cadastro (signup)", () => {
 });
 
 describe("Firestore Security Rules — predictions (ownership)", () => {
-  it("C11: cria o próprio palpite", async () => {
-    await assertSucceeds(
+  it("C11: write client-direto em predictions é negado (write só via Admin SDK)", async () => {
+    // TASK-05: matches fora do Firestore → lock não verificável em rule →
+    // write exclusivo do Route Handler /api/predictions (Admin SDK).
+    await assertFails(
       approvedDb().doc("predictions/p1").set({
         uid: "approvedUser",
         matchId: "m1",
         homeScore: 2,
         awayScore: 1,
       }),
+    );
+  });
+
+  it("C11b: update client-direto em predictions é negado (mesmo dono)", async () => {
+    // Semeia um doc via Admin SDK (como faria o Route Handler).
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("predictions/p_own").set({
+        uid: "approvedUser",
+        matchId: "m1",
+        homeScore: 1,
+        awayScore: 0,
+      });
+    });
+    await assertFails(
+      approvedDb().doc("predictions/p_own").update({ homeScore: 2 }),
     );
   });
 
@@ -229,8 +246,15 @@ describe("Firestore Security Rules — predictions (ownership)", () => {
     );
   });
 
-  it("C13: approved lê palpite alheio (D7)", async () => {
-    await assertSucceeds(approvedDb().doc("predictions/p_outro").get());
+  it("C13: approved NÃO lê palpite alheio (leitura privada — PRD-05 A5 reverteu D7)", async () => {
+    // A regra de `predictions` é privada (só dono/admin). Comparações sociais
+    // usam `rankings`/`statistics`, não palpites alheios. Teste atualizado para
+    // refletir a regra vigente (estava obsoleto, herdado do D7 antigo).
+    await assertFails(approvedDb().doc("predictions/p_outro").get());
+  });
+
+  it("C13b: não autenticado não lê predictions", async () => {
+    await assertFails(unauthDb().doc("predictions/p_outro").get());
   });
 
   it("C14: pending não cria palpite", async () => {
@@ -329,9 +353,21 @@ describe("Firestore Security Rules — delete de predictions (B1: isApproved obr
     await assertFails(approvedDb().doc("predictions/p_outro").delete());
   });
 
-  it("C21+: approved consegue deletar o próprio palpite (caminho feliz)", async () => {
-    // Confirma que a correção B1 não bloqueou o caso legítimo.
-    await assertSucceeds(approvedDb().doc("predictions/p_approved_own").delete());
+  it("C21+: delete client-direto em predictions é negado (write só via Admin SDK)", async () => {
+    // TASK-05: write bloqueado a todos os clientes, incluindo delete.
+    await assertFails(approvedDb().doc("predictions/p_approved_own").delete());
+  });
+
+  it("C26: admin client-direto não consegue criar palpite em predictions", async () => {
+    // Admin SDK bypassa Rules; o cliente autenticado como admin não.
+    await assertFails(
+      adminDb().doc("predictions/p_admin").set({
+        uid: "adminUser",
+        matchId: "m1",
+        homeScore: 0,
+        awayScore: 0,
+      }),
+    );
   });
 });
 
@@ -352,6 +388,224 @@ describe("Firestore Security Rules — update de users sem campos role/status (B
       bareDb
         .doc("users/bareUser")
         .update({ role: null, status: null }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PRD-06 (avatar/perfil) + PRD-07 (system_logs) + PRD-08 (notifications/prefs).
+// ---------------------------------------------------------------------------
+
+describe("Firestore Security Rules — perfil editável (PRD-06 D-A2: avatar/nickname)", () => {
+  it("C27: dono atualiza avatarUrl + nickname mantendo role/status", async () => {
+    await assertSucceeds(
+      approvedDb().doc("users/approvedUser").update({
+        avatarUrl: "data:image/jpeg;base64,AAAA",
+        nickname: "ana-nova",
+      }),
+    );
+  });
+
+  it("C28: dono não muda role junto com avatarUrl (escalada barrada)", async () => {
+    await assertFails(
+      approvedDb().doc("users/approvedUser").update({
+        avatarUrl: "data:image/jpeg;base64,AAAA",
+        role: "admin",
+      }),
+    );
+  });
+});
+
+describe("Firestore Security Rules — system_logs (PRD-07: admin-only, imutável)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("system_logs/log1").set({
+        id: "log1",
+        type: "user_approved",
+        actorUid: "adminUser",
+        targetUid: "pendingUser",
+        message: "Usuário aprovado",
+        level: "info",
+        createdAt: "2026-06-08T12:00:00+00:00",
+      });
+    });
+  });
+
+  it("C29: admin cria log", async () => {
+    await assertSucceeds(
+      adminDb().doc("system_logs/log2").set({
+        id: "log2",
+        type: "login_admin",
+        actorUid: "adminUser",
+        message: "Login admin",
+        level: "info",
+        createdAt: "2026-06-08T12:05:00+00:00",
+      }),
+    );
+  });
+
+  it("C30: admin lê logs", async () => {
+    await assertSucceeds(adminDb().doc("system_logs/log1").get());
+  });
+
+  it("C31: usuário comum não cria log", async () => {
+    await assertFails(
+      approvedDb().doc("system_logs/log3").set({
+        id: "log3",
+        type: "login_admin",
+        actorUid: "approvedUser",
+        message: "forjado",
+        level: "info",
+        createdAt: "2026-06-08T12:06:00+00:00",
+      }),
+    );
+  });
+
+  it("C32: usuário comum não lê logs", async () => {
+    await assertFails(approvedDb().doc("system_logs/log1").get());
+  });
+
+  it("C33: admin não atualiza nem deleta log (append-only)", async () => {
+    await assertFails(
+      adminDb().doc("system_logs/log1").update({ message: "alterado" }),
+    );
+    await assertFails(adminDb().doc("system_logs/log1").delete());
+  });
+});
+
+describe("Firestore Security Rules — notifications (PRD-08: dono lê; admin cria p/ terceiros)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.doc("notifications/n_appr").set({
+        id: "n_appr",
+        userId: "approvedUser",
+        type: "system",
+        title: "Cadastro aprovado",
+        message: "Bem-vindo",
+        isRead: false,
+        createdAt: "2026-06-08T12:00:00+00:00",
+      });
+      await db.doc("notifications/n_admin").set({
+        id: "n_admin",
+        userId: "adminUser",
+        type: "system",
+        title: "x",
+        message: "y",
+        isRead: false,
+        createdAt: "2026-06-08T12:00:00+00:00",
+      });
+    });
+  });
+
+  it("C34: dono lê a própria notificação", async () => {
+    await assertSucceeds(approvedDb().doc("notifications/n_appr").get());
+  });
+
+  it("C35: usuário não lê notificação de terceiro", async () => {
+    await assertFails(approvedDb().doc("notifications/n_admin").get());
+  });
+
+  it("C36: admin cria notificação no doc de terceiro (evento de Sistema)", async () => {
+    await assertSucceeds(
+      adminDb().doc("notifications/n_new").set({
+        id: "n_new",
+        userId: "approvedUser",
+        type: "system",
+        title: "Conta bloqueada",
+        message: "...",
+        isRead: false,
+        createdAt: "2026-06-08T12:10:00+00:00",
+      }),
+    );
+  });
+
+  it("C37: usuário comum não cria notificação para terceiro", async () => {
+    await assertFails(
+      approvedDb().doc("notifications/n_evil").set({
+        id: "n_evil",
+        userId: "adminUser",
+        type: "system",
+        title: "spam",
+        message: "...",
+        isRead: false,
+        createdAt: "2026-06-08T12:11:00+00:00",
+      }),
+    );
+  });
+
+  it("C38: dono marca a própria como lida (update isRead)", async () => {
+    await assertSucceeds(
+      approvedDb().doc("notifications/n_appr").update({ isRead: true }),
+    );
+  });
+
+  it("C39: dono não troca o destinatário (userId imutável)", async () => {
+    await assertFails(
+      approvedDb().doc("notifications/n_appr").update({ userId: "adminUser" }),
+    );
+  });
+
+  it("C40: ninguém deleta notificação (nem admin)", async () => {
+    await assertFails(adminDb().doc("notifications/n_admin").delete());
+  });
+});
+
+describe("Firestore Security Rules — notificationPreferences (PRD-08: só o dono)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("notificationPreferences/adminUser").set({
+        userId: "adminUser",
+        system: true,
+        games: true,
+        ranking: true,
+        pool: true,
+      });
+    });
+  });
+
+  it("C41: dono grava as próprias preferências (userId == uid)", async () => {
+    await assertSucceeds(
+      approvedDb().doc("notificationPreferences/approvedUser").set({
+        userId: "approvedUser",
+        system: false,
+        games: true,
+        ranking: true,
+        pool: false,
+      }),
+    );
+  });
+
+  it("C42: dono lê as próprias preferências", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("notificationPreferences/approvedUser").set({
+        userId: "approvedUser",
+        system: true,
+        games: true,
+        ranking: true,
+        pool: true,
+      });
+    });
+    await assertSucceeds(
+      approvedDb().doc("notificationPreferences/approvedUser").get(),
+    );
+  });
+
+  it("C43: usuário não lê preferências de terceiro", async () => {
+    await assertFails(
+      approvedDb().doc("notificationPreferences/adminUser").get(),
+    );
+  });
+
+  it("C44: gravar preferências com userId divergente do doc é negado", async () => {
+    await assertFails(
+      approvedDb().doc("notificationPreferences/approvedUser").set({
+        userId: "adminUser",
+        system: true,
+        games: true,
+        ranking: true,
+        pool: true,
+      }),
     );
   });
 });

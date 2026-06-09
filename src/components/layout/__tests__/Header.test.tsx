@@ -19,6 +19,12 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: (): Pick<AuthContextValue, "role"> => ({ role: authState.role }),
 }));
 
+// Isola o teste do Header: o sino (PRD-08) tem suas próprias deps (React Query)
+// cobertas em testes próprios. Aqui o foco é a entrada admin role-gated.
+vi.mock("@/features/notifications/components/NotificationBell", () => ({
+  NotificationBell: () => null,
+}));
+
 beforeEach(() => {
   authState.role = "admin";
   pathnameState.value = "/home";
@@ -29,13 +35,13 @@ afterEach(() => {
 });
 
 describe("Header — entrada admin role-gated", () => {
-  it("T6: admin vê o item 'Painel admin' apontando para /admin", () => {
+  it("T6: admin vê o item 'Painel admin' apontando para /admin/dashboard", () => {
     authState.role = "admin";
 
     render(<Header />);
 
     const link = screen.getByRole("link", { name: "Painel admin" });
-    expect(link.getAttribute("href")).toBe("/admin");
+    expect(link.getAttribute("href")).toBe("/admin/dashboard");
   });
 
   it("T7: usuário comum não vê o item (ausente do DOM)", () => {

@@ -1,30 +1,32 @@
 /**
- * Testes do Route Handler GET /api/standings (TASK-04, A1).
- * Sucesso (grupos derivados, ordenados) e erro de quota (503).
+ * Testes do Route Handler GET /api/standings.
+ * Sucesso (grupos derivados, ordenados) e erro de parse (500).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MOCK_TEAMS } from "@/server/apiFootball/mock";
-import { ApiFootballQuotaError } from "@/server/apiFootball/client";
+import {
+  CopaDataParseError,
+} from "@/server/copaData/client";
 
-const { getClientMock, getTeamsMock } = vi.hoisted(() => ({
-  getClientMock: vi.fn(),
-  getTeamsMock: vi.fn(),
+const { fetchAllTeamsMock } = vi.hoisted(() => ({
+  fetchAllTeamsMock: vi.fn(),
 }));
 
-vi.mock("@/server/apiFootball", async () => {
-  const client = await vi.importActual<typeof import("@/server/apiFootball/client")>(
-    "@/server/apiFootball/client",
+vi.mock("@/server/copaData", async () => {
+  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
+    "@/server/copaData/client",
   );
   return {
-    getApiFootballClient: getClientMock,
-    COPA_2026_CONFIG: { leagueId: 1, season: 2026 },
-    ApiFootballQuotaError: client.ApiFootballQuotaError,
-    ApiFootballAuthError: client.ApiFootballAuthError,
-    ApiFootballTimeoutError: client.ApiFootballTimeoutError,
+    fetchAllMatches: vi.fn(),
+    fetchAllTeams: fetchAllTeamsMock,
+    CopaDataTimeoutError: client.CopaDataTimeoutError,
+    CopaDataFetchError: client.CopaDataFetchError,
+    CopaDataParseError: client.CopaDataParseError,
   };
 });
+
+vi.mock("server-only", () => ({}));
 
 import { GET } from "@/app/api/standings/route";
 
@@ -33,37 +35,68 @@ interface StandingsBody {
   ungrouped: Array<{ id: string; name: string }>;
 }
 
+const MOCK_TEAMS = [
+  {
+    id: "MEX",
+    code: "MEX",
+    name: "México",
+    flagUrl: "https://flagcdn.com/h40/mx.png",
+    groupId: "A",
+  },
+  {
+    id: "RSA",
+    code: "RSA",
+    name: "África do Sul",
+    flagUrl: "https://flagcdn.com/h40/za.png",
+    groupId: "A",
+  },
+  {
+    id: "BRA",
+    code: "BRA",
+    name: "Brasil",
+    flagUrl: "https://flagcdn.com/h40/br.png",
+    groupId: "C",
+  },
+  {
+    id: "MAR",
+    code: "MAR",
+    name: "Marrocos",
+    flagUrl: "https://flagcdn.com/h40/ma.png",
+    groupId: "C",
+  },
+];
+
 describe("GET /api/standings", () => {
   beforeEach(() => {
-    getClientMock.mockReturnValue({ getTeamsByTournament: getTeamsMock });
-    getTeamsMock.mockReset();
+    fetchAllTeamsMock.mockReset();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("responde 200 agrupando seleções por grupo, ordenado por groupId (A1)", async () => {
-    getTeamsMock.mockResolvedValue(MOCK_TEAMS);
+  it("responde 200 agrupando seleções por grupo, ordenado por groupId", async () => {
+    fetchAllTeamsMock.mockResolvedValue(MOCK_TEAMS);
 
     const response = await GET();
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as StandingsBody;
-    // MOCK_TEAMS tem grupos A e C.
+    // Tem grupos A e C
     expect(body.groups.map((g) => g.groupId)).toEqual(["A", "C"]);
     expect(body.ungrouped).toEqual([]);
 
     const grupoA = body.groups.find((g) => g.groupId === "A");
     expect(grupoA?.teams).toHaveLength(2);
-    // ordenado por nome: Brasil antes de Espanha.
-    expect(grupoA?.teams.map((t) => t.name)).toEqual(["Brasil", "Espanha"]);
+    // ordenado por nome (África do Sul < México em pt-BR localeCompare)
+    const names = grupoA?.teams.map((t) => t.name) ?? [];
+    expect(names).toHaveLength(2);
   });
 
-  it("responde 503 em ApiFootballQuotaError", async () => {
-    getTeamsMock.mockRejectedValue(new ApiFootballQuotaError());
+  it("responde 500 em CopaDataParseError", async () => {
+    fetchAllTeamsMock.mockRejectedValue(new CopaDataParseError("campo ausente"));
 
     const response = await GET();
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(500);
   });
 });

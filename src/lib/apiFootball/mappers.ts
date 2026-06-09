@@ -58,6 +58,7 @@ const GROUP_STAGE_REGEX = /^Group Stage - (\d+)$/;
 
 /** Mapeamento de `league.round` exato → `Stage` do domínio (fases sem número). */
 const ROUND_LABEL_MAP: Readonly<Record<string, Stage>> = {
+  "Round of 32": "dezesseis-avos", // Copa 2026: 16 avos de final
   "Round of 16": "oitavas",
   "Quarter-finals": "quartas",
   "Semi-finals": "semifinal",

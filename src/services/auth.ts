@@ -2,9 +2,12 @@ import {
   confirmPasswordReset,
   createUserWithEmailAndPassword,
   deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
+  updatePassword,
   verifyPasswordResetCode,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -189,4 +192,32 @@ export async function confirmReset(
   newPassword: string,
 ): Promise<void> {
   await confirmPasswordReset(firebaseAuth, oobCode, newPassword);
+}
+
+/**
+ * Altera a senha do usuário autenticado (PRD-06, Alterar Senha).
+ *
+ * O Firebase exige autenticação RECENTE para `updatePassword`. Por isso a senha
+ * atual é exigida e reautenticada (`reauthenticateWithCredential`) ANTES da
+ * troca — isso também valida que a senha atual está correta (erro
+ * `auth/wrong-password` / `auth/invalid-credential` se não estiver).
+ *
+ * Erros propagam crus (com `error.code`) para a UI traduzir — esta camada NÃO
+ * traduz mensagens (padrão das demais funções deste serviço). Códigos comuns:
+ * `auth/wrong-password`, `auth/invalid-credential`, `auth/weak-password`,
+ * `auth/requires-recent-login`.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const user = firebaseAuth.currentUser;
+  if (!user || !user.email) {
+    // Sem usuário/e-mail não há como reautenticar — sinaliza sessão inválida.
+    throw new Error("auth/no-current-user");
+  }
+
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
 }

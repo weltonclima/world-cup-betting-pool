@@ -7,7 +7,15 @@ import {
 } from "@tanstack/react-query";
 
 import { updateUserStatus } from "@/services/users";
+import { createNotification } from "@/services/notifications";
+import { createLog } from "@/services/systemLogs";
 import { canTransition } from "@/schemas";
+import { firebaseAuth } from "@/firebase";
+import {
+  moderationLog,
+  moderationNotification,
+  type ModerationContext,
+} from "@/features/admin/lib/notificationFactory";
 import type { UserStatus } from "@/types";
 
 import { usersKeys } from "./usersKeys";
@@ -35,6 +43,28 @@ export class InvalidStatusTransitionError extends Error {
 }
 
 /**
+ * Efeitos colaterais da moderação (best-effort): grava log de auditoria e cria a
+ * notificação de Sistema para o usuário-alvo. Cada escrita é isolada em try/catch
+ * — uma falha (rede/permissão) não interrompe a outra nem propaga para a mutação.
+ */
+async function recordModerationSideEffects(ctx: ModerationContext): Promise<void> {
+  try {
+    await createLog(moderationLog(ctx));
+  } catch (error) {
+    console.error("Falha ao registrar log de moderação:", error);
+  }
+
+  const notification = moderationNotification(ctx);
+  if (notification) {
+    try {
+      await createNotification(notification);
+    } catch (error) {
+      console.error("Falha ao criar notificação de moderação:", error);
+    }
+  }
+}
+
+/**
  * Mutação de status de usuário (Aprovar/Rejeitar/Bloquear/Desbloquear).
  *
  * Valida a transição na borda (`canTransition`, TASK-02) ANTES de chamar o
@@ -55,6 +85,14 @@ export function useUpdateUserStatus(): UseMutationResult<
         throw new InvalidStatusTransitionError(from, to);
       }
       await updateUserStatus(uid, to);
+      // Auditoria (PRD-07) + notificação de Sistema (PRD-08, D-A5). Best-effort:
+      // a moderação já efetivou — falha aqui NÃO derruba a ação (só loga).
+      await recordModerationSideEffects({
+        uid,
+        from,
+        to,
+        actorUid: firebaseAuth.currentUser?.uid ?? "system",
+      });
     },
     onSuccess: (_data, { from, to }) => {
       void queryClient.invalidateQueries({

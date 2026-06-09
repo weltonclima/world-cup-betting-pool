@@ -41,6 +41,7 @@ import { useTeams } from "@/features/matches/hooks/useTeams";
 
 const STAGE_OPTIONS: { value: Stage; label: string }[] = [
   { value: "grupos", label: "Fase de Grupos" },
+  { value: "dezesseis-avos", label: "16 Avos" },
   { value: "oitavas", label: "Oitavas" },
   { value: "quartas", label: "Quartas" },
   { value: "semifinal", label: "Semifinal" },

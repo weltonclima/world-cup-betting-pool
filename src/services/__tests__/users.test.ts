@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe("listUsersByStatus", () => {
-  it("T5: monta a query (where status == + orderBy createdAt) e chama getDocs", async () => {
+  it("T5: monta a query SÓ com where status== (sem orderBy) e chama getDocs", async () => {
     getDocsMock.mockResolvedValueOnce(snapshotWith([makeUserDoc()]));
 
     await listUsersByStatus("pending");
@@ -72,9 +72,39 @@ describe("listUsersByStatus", () => {
       "users",
     );
     expect(whereMock).toHaveBeenCalledWith("status", "==", "pending");
-    expect(orderByMock).toHaveBeenCalledWith("createdAt");
+    // Regressão (bug "dashboard zerado"): orderBy("createdAt") exigia índice
+    // composto e descartava docs sem createdAt. A ordenação é em memória agora.
+    expect(orderByMock).not.toHaveBeenCalled();
     expect(queryMock).toHaveBeenCalled();
     expect(getDocsMock).toHaveBeenCalled();
+  });
+
+  it("T5b: ordena em memória por createdAt ascendente (mais antigo primeiro)", async () => {
+    getDocsMock.mockResolvedValueOnce(
+      snapshotWith([
+        makeUserDoc({ uid: "novo", createdAt: "2026-06-05T10:00:00.000Z" }),
+        makeUserDoc({ uid: "antigo", createdAt: "2026-06-01T10:00:00.000Z" }),
+        makeUserDoc({ uid: "meio", createdAt: "2026-06-03T10:00:00.000Z" }),
+      ]),
+    );
+
+    const result = await listUsersByStatus("pending");
+
+    expect(result.map((u) => u.uid)).toEqual(["antigo", "meio", "novo"]);
+  });
+
+  it("T5c: doc SEM createdAt não é descartado e vai para o fim", async () => {
+    getDocsMock.mockResolvedValueOnce(
+      snapshotWith([
+        makeUserDoc({ uid: "sem-data", createdAt: undefined }),
+        makeUserDoc({ uid: "com-data", createdAt: "2026-06-01T10:00:00.000Z" }),
+      ]),
+    );
+
+    const result = await listUsersByStatus("pending");
+
+    expect(result).toHaveLength(2); // nenhum descartado
+    expect(result.map((u) => u.uid)).toEqual(["com-data", "sem-data"]);
   });
 
   it("T6a: parseia cada doc com userSchema e retorna User[]", async () => {
