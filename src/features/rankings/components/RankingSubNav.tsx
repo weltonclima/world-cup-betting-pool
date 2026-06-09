@@ -23,7 +23,7 @@ export function RankingSubNav() {
   return (
     <nav
       aria-label="Navegação de ranking"
-      className="sticky top-14 z-40 -mx-4 overflow-x-auto border-b border-border bg-background/95 px-4 backdrop-blur-sm"
+      className="sticky top-20 z-40 -mx-4 overflow-x-auto border-b border-border bg-background/95 px-4 backdrop-blur-sm"
     >
       <ul className="flex min-w-max gap-1">
         {ITEMS.map((item) => {

@@ -29,7 +29,7 @@ export function AppShell({ children }: AppShellProps) {
       <Header />
 
       {/* Área abaixo do header: SideNav + conteúdo */}
-      <div className="flex flex-1 pt-14">
+      <div className="flex flex-1 pt-20">
         {/* Navegação lateral — apenas desktop */}
         <SideNav />
 

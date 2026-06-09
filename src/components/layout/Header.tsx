@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
@@ -19,13 +20,26 @@ export function Header() {
     <header
       role="banner"
       aria-label="Cabeçalho da aplicação"
-      className="fixed top-0 right-0 left-0 z-50 h-14 border-b border-border bg-background/95 backdrop-blur-sm"
+      className="fixed top-0 right-0 left-0 z-50 h-20 border-b border-border bg-background/95 backdrop-blur-sm"
     >
       <div className="flex h-full items-center justify-between px-4">
-        {/* Título da aplicação */}
-        <span className="text-lg font-bold text-foreground">
-          Bolão dos Parças
-        </span>
+        {/* Identidade da aplicação — logo clicável para a home.
+            Dimensões intrínsecas (560×373) evitam CLS; altura visual h-8.
+            priority: header sempre visível (evita flash/LCP penalty). */}
+        <Link
+          href="/home"
+          aria-label="Bolão dos Parças — página inicial"
+          className="inline-flex items-center rounded-md transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          <Image
+            src="/logo-login.png"
+            alt="Bolão dos Parças"
+            width={560}
+            height={373}
+            priority
+            className="h-16 w-auto object-contain"
+          />
+        </Link>
 
         {/* Ações do usuário — sino de notificações (PRD-08) + entrada admin
             role-gated (PRD-01.2, A3 camada 1) */}

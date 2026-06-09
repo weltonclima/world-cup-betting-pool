@@ -34,6 +34,31 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe("Header — logo de identidade", () => {
+  it("renderiza o logo como link para /home, acessível e sem distorção", () => {
+    render(<Header />);
+
+    const link = screen.getByRole("link", {
+      name: "Bolão dos Parças — página inicial",
+    });
+    expect(link.getAttribute("href")).toBe("/home");
+
+    const img = screen.getByAltText("Bolão dos Parças");
+    expect(img.getAttribute("src")).toContain("logo-login.png");
+    expect(img.className).toContain("object-contain");
+  });
+
+  it("exibe o logo independentemente do role (usuário comum também vê)", () => {
+    authState.role = "user";
+
+    render(<Header />);
+
+    expect(
+      screen.getByRole("link", { name: "Bolão dos Parças — página inicial" }),
+    ).toBeTruthy();
+  });
+});
+
 describe("Header — entrada admin role-gated", () => {
   it("T6: admin vê o item 'Painel admin' apontando para /admin/dashboard", () => {
     authState.role = "admin";

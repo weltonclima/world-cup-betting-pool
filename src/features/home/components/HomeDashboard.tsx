@@ -106,7 +106,7 @@ function HomeHeaderSkeleton() {
 /**
  * Composição da Home Dashboard.
  *
- * Renderiza dentro do AppShell (<main> com pt-14 px-4 py-4 pb-20 max-w-4xl).
+ * Renderiza dentro do AppShell (<main> com px-4 py-4 pb-20 max-w-4xl; offset do header fixo via pt-20 no wrapper).
  * Não cria wrapper próprio — usa flex-col gap-4 conforme o contrato visual §1.2.
  */
 export function HomeDashboard() {

@@ -19,7 +19,7 @@ export function SideNav() {
     <nav
       role="navigation"
       aria-label="Navegação lateral"
-      className="hidden md:flex w-16 flex-col border-r border-sidebar-border bg-sidebar sticky top-14 h-[calc(100vh-3.5rem)] py-4 px-2"
+      className="hidden md:flex w-16 flex-col border-r border-sidebar-border bg-sidebar sticky top-20 h-[calc(100vh-5rem)] py-4 px-2"
     >
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => {
