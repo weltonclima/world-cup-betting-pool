@@ -1,5 +1,11 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
-import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  connectAuthEmulator,
+  getAuth,
+  setPersistence,
+  type Auth,
+} from "firebase/auth";
 import {
   connectFirestoreEmulator,
   getFirestore,
@@ -39,4 +45,41 @@ if (useEmulators && !globalThis.__FIREBASE_EMULATORS_CONNECTED__) {
   globalThis.__FIREBASE_EMULATORS_CONNECTED__ = true;
 }
 
-export { firebaseApp, firebaseAuth, firestore };
+/**
+ * Persistência da sessão de Auth no client (login biométrico, TASK-01).
+ *
+ * Torna a persistência EXPLÍCITA como `browserLocalPersistence` (localStorage):
+ * a sessão sobrevive a reload e ao fechar a aba — comportamento de "manter
+ * logado". Antes disso o SDK usava o default implícito; agora é intencional.
+ *
+ * `setPersistence` é assíncrono e deve concluir antes da ESCRITA da sessão (o
+ * sign-in), senão a sessão pode ser gravada com persistência diferente da
+ * pretendida. A garantia é aplicada no boundary da camada de serviço:
+ * `signIn`/`signUp` aguardam `authPersistenceReady` antes de autenticar.
+ *
+ * `onAuthStateChanged` (em `AuthProvider`) NÃO aguarda essa promise de
+ * propósito: a restauração de sessão lê o `FirebaseUser`, que é idêntico
+ * independentemente da persistência local escolhida — só o caminho de escrita
+ * precisa ser gated. Se um dia a seleção de persistência virar condicional
+ * (ex.: toggle "manter conectado"), os consumidores de leitura passariam a
+ * precisar aguardar — hoje não é o caso (persistência `local` fixa).
+ *
+ * Achado de auditoria de persistência (Frente A): o estado de Auth no client já
+ * persistia indefinidamente (default local), MAS o session cookie `__session`
+ * (servidor/edge) expira fixo em 5 dias sem renovação — divergência client↔server
+ * que aparece como logout inesperado em rotas server-side. A correção dessa
+ * renovação deslizante é a TASK-02 (fora do escopo desta task).
+ *
+ * Client-only: `setPersistence` usa storage do browser; em SSR/edge (sem
+ * `window`) é pulado e a promise resolve de imediato. Best-effort: falha
+ * (ex.: modo privado restrito) é logada e NÃO derruba o app nem bloqueia o
+ * login — só significa que a sessão não sobrevive ao fechar a aba.
+ */
+const authPersistenceReady: Promise<void> =
+  typeof window === "undefined"
+    ? Promise.resolve()
+    : setPersistence(firebaseAuth, browserLocalPersistence).catch((error) => {
+        console.error("Falha ao definir a persistência do Auth:", error);
+      });
+
+export { firebaseApp, firebaseAuth, firestore, authPersistenceReady };

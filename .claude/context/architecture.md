@@ -33,6 +33,7 @@
 4. **Client guards** — `AdminGuard` hides panel in browser.
 - Session cookie name = `SESSION_COOKIE_NAME` from `@/server/auth/sessionCookie` (shared edge+route, no Node deps). `__session` is the only cookie App Hosting CDN forwards to backend.
 - User lifecycle: signup → `status: pending`, `role: user` (can't self-promote). Admin approves/blocks/promotes.
+- **Client persistence:** `getAuth(firebaseApp)` uses Firebase's default **`browserLocalPersistence`** (no explicit `setPersistence` call) — auth state survives reload/tab-close. Server `__session` cookie TTL = 5 days. No "remember me" toggle. Web stack → biometric/facial login = **WebAuthn/Passkeys** (platform authenticator), not a native API; Firebase has no native WebAuthn primary-login, so it requires a custom-token/Cloud-Function bridge.
 
 ## Conventions
 - Import alias `@/*` → `src/*`. No inline styles (Tailwind only). Comments/domain in pt-BR.

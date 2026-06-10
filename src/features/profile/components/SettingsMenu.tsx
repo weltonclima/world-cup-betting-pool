@@ -5,6 +5,7 @@ import {
   Bell,
   CircleHelp,
   Info,
+  ShieldCheck,
   Sun,
   UserPen,
 } from "lucide-react";
@@ -39,6 +40,15 @@ export function SettingsMenu(): JSX.Element {
           title="Editar Perfil"
           subtitle="Nome, foto e informações"
           href="/profile/editar"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Segurança">
+        <ProfileMenuItem
+          icon={ShieldCheck}
+          title="Login por Biometria"
+          subtitle="Face ID, Touch ID ou digital"
+          href="/profile/seguranca"
         />
       </SettingsSection>
 
