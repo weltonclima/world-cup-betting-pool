@@ -1,32 +1,45 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LoginForm } from "@/features/auth/LoginForm";
+// --- Hoisted mocks -----------------------------------------------------------
+const { signInMock, setIntentMock, toastError, toastMock, hasHintMock, supportMock } =
+  vi.hoisted(() => ({
+    signInMock: vi.fn(),
+    setIntentMock: vi.fn(),
+    toastError: vi.fn(),
+    toastMock: vi.fn(),
+    hasHintMock: vi.fn(),
+    supportMock: vi.fn(),
+  }));
 
-// --- Mocks ------------------------------------------------------------------
-// vi.hoisted: as fns são referenciadas dentro das factories de vi.mock,
-// que são içadas para o topo do módulo.
-const { signInMock, toastErrorMock, toastMock } = vi.hoisted(() => ({
-  signInMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastMock: vi.fn(),
-}));
-
-vi.mock("@/services/auth", () => ({
-  signIn: signInMock,
-}));
+vi.mock("@/services/auth", () => ({ signIn: signInMock }));
 
 vi.mock("sonner", () => {
-  const toast = Object.assign(toastMock, { error: toastErrorMock });
+  const toast = Object.assign(toastMock, { error: toastError });
   return { toast };
 });
 
-// next/navigation não é exercitado diretamente (não navegamos manualmente),
-// mas o Link/router pode tocá-lo — mock defensivo.
+vi.mock("@/features/passkeys/lib/loginBiometricIntent", () => ({
+  setBiometricIntent: setIntentMock,
+}));
+
+vi.mock("@/features/passkeys/lib/passkeyHint", () => ({
+  hasPasskeyHint: hasHintMock,
+}));
+
+vi.mock("@/features/passkeys/hooks", () => ({
+  usePasskeySupport: supportMock,
+}));
+
+// next/navigation — mock defensivo (Link/router pode tocá-lo)
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }));
+
+// -----------------------------------------------------------------------------
+import { LoginForm } from "../LoginForm";
 
 // Helpers de seleção dos campos por rótulo associado (FormLabel htmlFor).
 function getEmailInput(): HTMLInputElement {
@@ -41,16 +54,21 @@ function getSubmitButton(): HTMLButtonElement {
   return screen.getByRole("button", { name: /entrar/i }) as HTMLButtonElement;
 }
 
+// Default: passkey not supported → checkbox never shown in base tests.
 beforeEach(() => {
-  signInMock.mockReset();
-  toastErrorMock.mockReset();
-  toastMock.mockReset();
+  vi.clearAllMocks();
+  signInMock.mockResolvedValue(undefined);
+  hasHintMock.mockReturnValue(false);
+  supportMock.mockReturnValue({ supported: null, isWebView: false });
 });
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
+// =============================================================================
+// Original tests (PRD-01, TASK-07)
+// =============================================================================
 describe("LoginForm", () => {
   it("e-mail inválido bloqueia o submit e exibe mensagem de validação", async () => {
     render(<LoginForm />);
@@ -94,7 +112,7 @@ describe("LoginForm", () => {
       expect(signInMock).toHaveBeenCalledTimes(1);
     });
     expect(signInMock).toHaveBeenCalledWith("user@example.com", "secret123");
-    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   it("falha de signIn dispara toast.error com mensagem traduzida (R6)", async () => {
@@ -106,9 +124,9 @@ describe("LoginForm", () => {
     fireEvent.click(getSubmitButton());
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledTimes(1);
+      expect(toastError).toHaveBeenCalledTimes(1);
     });
-    expect(toastErrorMock).toHaveBeenCalledWith("E-mail ou senha inválidos.");
+    expect(toastError).toHaveBeenCalledWith("E-mail ou senha inválidos.");
   });
 
   it("erro sem código usa a mensagem genérica de fallback", async () => {
@@ -120,7 +138,7 @@ describe("LoginForm", () => {
     fireEvent.click(getSubmitButton());
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith(
+      expect(toastError).toHaveBeenCalledWith(
         "Ocorreu um erro inesperado. Tente novamente.",
       );
     });
@@ -141,5 +159,63 @@ describe("LoginForm", () => {
     expect(forgot.getAttribute("href")).toBe("/forgot-password");
     // Não é mais um placeholder com toast.
     expect(toastMock).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// New tests — biometric activation checkbox
+// =============================================================================
+async function fillAndSubmit() {
+  await userEvent.type(screen.getByLabelText("E-mail"), "a@b.com");
+  await userEvent.type(screen.getByLabelText("Senha"), "secret123");
+  await userEvent.click(screen.getByRole("button", { name: /entrar/i }));
+}
+
+describe("LoginForm — ativação de biometria", () => {
+  beforeEach(() => {
+    // Override default: passkey supported + no hint → show checkbox
+    supportMock.mockReturnValue({ supported: true, isWebView: false });
+    hasHintMock.mockReturnValue(false);
+  });
+
+  it("mostra o checkbox quando suportado e sem hint", () => {
+    render(<LoginForm />);
+    expect(screen.getByRole("checkbox", { name: /ativar biometria/i })).toBeTruthy();
+  });
+
+  it("não mostra o checkbox quando o device já tem passkey (hint)", () => {
+    hasHintMock.mockReturnValue(true);
+    render(<LoginForm />);
+    expect(screen.queryByRole("checkbox", { name: /ativar biometria/i })).toBeNull();
+  });
+
+  it("não mostra o checkbox quando não suportado", () => {
+    supportMock.mockReturnValue({ supported: false, isWebView: false });
+    render(<LoginForm />);
+    expect(screen.queryByRole("checkbox", { name: /ativar biometria/i })).toBeNull();
+  });
+
+  it("marcado + login OK → grava intenção", async () => {
+    render(<LoginForm />);
+    await userEvent.click(screen.getByRole("checkbox", { name: /ativar biometria/i }));
+    await fillAndSubmit();
+    await waitFor(() => expect(signInMock).toHaveBeenCalledTimes(1));
+    expect(setIntentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("desmarcado + login OK → NÃO grava intenção", async () => {
+    render(<LoginForm />);
+    await fillAndSubmit();
+    await waitFor(() => expect(signInMock).toHaveBeenCalledTimes(1));
+    expect(setIntentMock).not.toHaveBeenCalled();
+  });
+
+  it("marcado + login FALHA → NÃO grava intenção", async () => {
+    signInMock.mockRejectedValue({ code: "auth/invalid-credential" });
+    render(<LoginForm />);
+    await userEvent.click(screen.getByRole("checkbox", { name: /ativar biometria/i }));
+    await fillAndSubmit();
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(setIntentMock).not.toHaveBeenCalled();
   });
 });
