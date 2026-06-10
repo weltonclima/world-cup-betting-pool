@@ -1,6 +1,6 @@
 "use client";
 
-import type { JSX } from "react";
+import { useEffect, type JSX } from "react";
 
 import {
   usePasskeys,
@@ -8,6 +8,7 @@ import {
   useRegisterPasskey,
 } from "../hooks";
 import { deriveDeviceLabel } from "../lib/deviceLabel";
+import { clearPasskeyHint, markPasskeyRegistered } from "../lib/passkeyHint";
 import { AddPasskeyButton } from "./AddPasskeyButton";
 import { PasskeyList } from "./PasskeyList";
 import { PasskeyEmptyState } from "./PasskeyEmptyState";
@@ -45,6 +46,18 @@ export function PasskeyManager(): JSX.Element {
   // está `disabled` (uid ainda não resolvido) — evita piscar o EmptyState antes
   // da lista. Não acopla firebase no componente (testável via mock do hook).
   const isLoading = passkeys.isPending;
+
+  // Sincroniza o hint local com a verdade do servidor (única fonte que conhece a
+  // contagem real). Só age com lista CONFIRMADA (`isSuccess`) — nunca em
+  // loading/erro. Com itens → reafirma o hint (self-heal: recupera um hint perdido
+  // de um passkey real). Vazia → limpa o hint (teardown ao remover o último
+  // dispositivo) para a tela de login exibir a dica de re-cadastro.
+  const hasPasskeys = list.length > 0;
+  useEffect(() => {
+    if (!passkeys.isSuccess) return;
+    if (hasPasskeys) markPasskeyRegistered();
+    else clearPasskeyHint();
+  }, [passkeys.isSuccess, hasPasskeys]);
 
   return (
     <div className="flex flex-col gap-5">

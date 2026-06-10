@@ -111,7 +111,13 @@ export async function loginWithPasskey(): Promise<string> {
     authResponse = await startAuthentication({ optionsJSON });
   } catch (err) {
     if ((err as Error).name === "NotAllowedError") {
-      throw new PasskeyError("Login por biometria cancelado.", "cancelled");
+      // NotAllowedError cobre tanto cancelamento quanto AUSÊNCIA de passkey
+      // (login usernameless não distingue os dois). Mensagem orientadora cobre
+      // ambos sem alarmar; `cancelled` mantém o toast neutro (info, não erro).
+      throw new PasskeyError(
+        "Biometria não concluída. Se ainda não cadastrou neste aparelho, ative em Perfil → Segurança.",
+        "cancelled",
+      );
     }
     throw new PasskeyError("Não foi possível entrar com biometria.");
   }

@@ -12,6 +12,7 @@ const {
   signInBioMock,
   toastInfo,
   toastError,
+  markPasskeyMock,
   PasskeyErrorFake,
 } = vi.hoisted(() => {
   class PasskeyErrorFake extends Error {
@@ -27,9 +28,14 @@ const {
     signInBioMock: vi.fn(),
     toastInfo: vi.fn(),
     toastError: vi.fn(),
+    markPasskeyMock: vi.fn(),
     PasskeyErrorFake,
   };
 });
+
+vi.mock("@/features/passkeys/lib/passkeyHint", () => ({
+  markPasskeyRegistered: markPasskeyMock,
+}));
 
 vi.mock("@/services/webauthn", () => ({
   PasskeyError: PasskeyErrorFake,
@@ -67,6 +73,8 @@ describe("useBiometricLogin", () => {
     result.current.mutate();
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(signInBioMock).toHaveBeenCalledWith("TOKEN");
+    // Self-heal: marca o hint local para manter o atalho habilitado.
+    expect(markPasskeyMock).toHaveBeenCalledTimes(1);
     expect(toastError).not.toHaveBeenCalled();
     expect(toastInfo).not.toHaveBeenCalled();
   });
@@ -80,6 +88,8 @@ describe("useBiometricLogin", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(toastInfo).toHaveBeenCalledTimes(1);
     expect(toastError).not.toHaveBeenCalled();
+    // Falha → não marca hint (não há passkey utilizável comprovado).
+    expect(markPasskeyMock).not.toHaveBeenCalled();
   });
 
   it("erro real: toast.error pt-BR", async () => {

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { PasskeyError, loginWithPasskey } from "@/services/webauthn";
 import { signInWithBiometricToken } from "@/services/auth";
+import { markPasskeyRegistered } from "@/features/passkeys/lib/passkeyHint";
 
 /**
  * Login biométrico (TASK-08). Orquestra `loginWithPasskey` (cerimônia WebAuthn →
@@ -18,6 +19,12 @@ export function useBiometricLogin(): UseMutationResult<void, Error, void> {
     mutationFn: async () => {
       const customToken = await loginWithPasskey();
       await signInWithBiometricToken(customToken);
+    },
+    onSuccess: () => {
+      // Re-afirma o hint quando JÁ presente: login por biometria só roda com o
+      // botão habilitado (logo, com hint). Não recupera um hint perdido — apenas
+      // o mantém fresco para os próximos logins.
+      markPasskeyRegistered();
     },
     onError: (error) => {
       if (error instanceof PasskeyError && error.code === "cancelled") {

@@ -9,11 +9,15 @@ const {
   usePasskeySupportMock,
   useRegisterPasskeyMock,
   useRevokePasskeyMock,
+  markHintMock,
+  clearHintMock,
 } = vi.hoisted(() => ({
   usePasskeysMock: vi.fn(),
   usePasskeySupportMock: vi.fn(),
   useRegisterPasskeyMock: vi.fn(),
   useRevokePasskeyMock: vi.fn(),
+  markHintMock: vi.fn(),
+  clearHintMock: vi.fn(),
 }));
 
 vi.mock("@/features/passkeys/hooks", () => ({
@@ -21,6 +25,11 @@ vi.mock("@/features/passkeys/hooks", () => ({
   usePasskeySupport: usePasskeySupportMock,
   useRegisterPasskey: useRegisterPasskeyMock,
   useRevokePasskey: useRevokePasskeyMock,
+}));
+
+vi.mock("../../lib/passkeyHint", () => ({
+  markPasskeyRegistered: markHintMock,
+  clearPasskeyHint: clearHintMock,
 }));
 
 const CRED = {
@@ -105,5 +114,41 @@ describe("PasskeyManager", () => {
     const retry = screen.getByRole("button", { name: /Tentar novamente/i });
     retry.click();
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("lista confirmada COM passkeys: reafirma o hint local (self-heal)", () => {
+    usePasskeysMock.mockReturnValue({
+      data: [CRED],
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+    });
+    render(<PasskeyManager />);
+    expect(markHintMock).toHaveBeenCalled();
+    expect(clearHintMock).not.toHaveBeenCalled();
+  });
+
+  it("lista confirmada VAZIA (último removido): limpa o hint local (teardown)", () => {
+    usePasskeysMock.mockReturnValue({
+      data: [],
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+    });
+    render(<PasskeyManager />);
+    expect(clearHintMock).toHaveBeenCalled();
+    expect(markHintMock).not.toHaveBeenCalled();
+  });
+
+  it("lista NÃO confirmada (loading/erro): não toca no hint", () => {
+    usePasskeysMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false,
+      isSuccess: false,
+    });
+    render(<PasskeyManager />);
+    expect(markHintMock).not.toHaveBeenCalled();
+    expect(clearHintMock).not.toHaveBeenCalled();
   });
 });

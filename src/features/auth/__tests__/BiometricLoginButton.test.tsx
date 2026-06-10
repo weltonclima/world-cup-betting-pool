@@ -4,16 +4,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BiometricLoginButton } from "@/features/auth/BiometricLoginButton";
 
-const { usePasskeySupportMock, useBiometricLoginMock, mutateMock } = vi.hoisted(
-  () => ({
-    usePasskeySupportMock: vi.fn(),
-    useBiometricLoginMock: vi.fn(),
-    mutateMock: vi.fn(),
-  }),
-);
+const {
+  usePasskeySupportMock,
+  useBiometricLoginMock,
+  mutateMock,
+  hasPasskeyHintMock,
+} = vi.hoisted(() => ({
+  usePasskeySupportMock: vi.fn(),
+  useBiometricLoginMock: vi.fn(),
+  mutateMock: vi.fn(),
+  hasPasskeyHintMock: vi.fn(),
+}));
 
 vi.mock("@/features/passkeys/hooks", () => ({
   usePasskeySupport: usePasskeySupportMock,
+}));
+
+vi.mock("@/features/passkeys/lib/passkeyHint", () => ({
+  hasPasskeyHint: hasPasskeyHintMock,
 }));
 
 vi.mock("@/features/auth/hooks/useBiometricLogin", () => ({
@@ -24,6 +32,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   usePasskeySupportMock.mockReturnValue({ supported: true, isWebView: false });
   useBiometricLoginMock.mockReturnValue({ mutate: mutateMock, isPending: false });
+  // Default: device já tem passkey (hint presente) → botão ativo.
+  hasPasskeyHintMock.mockReturnValue(true);
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -35,9 +45,32 @@ function getButton(): HTMLButtonElement | null {
 }
 
 describe("BiometricLoginButton", () => {
-  it("suportado e não-WebView: renderiza o botão", () => {
+  it("suportado, não-WebView e COM hint: botão renderizado e habilitado", () => {
     render(<BiometricLoginButton />);
-    expect(getButton()).not.toBeNull();
+    const btn = getButton();
+    expect(btn).not.toBeNull();
+    expect(btn!.disabled).toBe(false);
+  });
+
+  it("suportado mas SEM hint: não renderiza nada (atalho só p/ quem já ativou)", () => {
+    hasPasskeyHintMock.mockReturnValue(false);
+    const { container } = render(<BiometricLoginButton />);
+    // Sem hint local → sem botão (novos usuários ativam pelo checkbox do LoginForm).
+    expect(getButton()).toBeNull();
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("regressão: sem hint, NÃO mostra a legenda 'Perfil → Segurança' (botão escondido)", () => {
+    hasPasskeyHintMock.mockReturnValue(false);
+    render(<BiometricLoginButton />);
+    expect(screen.queryByText(/Perfil → Segurança/i)).toBeNull();
+  });
+
+  it("regressão: sem hint, clique é impossível (botão ausente → mutação não dispara)", () => {
+    hasPasskeyHintMock.mockReturnValue(false);
+    render(<BiometricLoginButton />);
+    expect(getButton()).toBeNull();
+    expect(mutateMock).not.toHaveBeenCalled();
   });
 
   it("resolvendo (supported=null): não renderiza nada (M3 — fallback basta)", () => {
