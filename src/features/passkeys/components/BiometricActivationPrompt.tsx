@@ -38,7 +38,10 @@ export function BiometricActivationPrompt(): JSX.Element | null {
   const [intended, setIntended] = useState(false);
 
   useEffect(() => {
-    setIntended(consumeBiometricIntent());
+    // `consume` é destrutivo (lê e limpa). Em StrictMode (next dev) o effect roda
+    // 2x: a 1ª chamada limpa a flag e a 2ª retorna false. Só promovemos quando
+    // true → nunca sobrescrevemos um `true` já capturado com o false do 2º run.
+    if (consumeBiometricIntent()) setIntended(true);
   }, []);
 
   useEffect(() => {

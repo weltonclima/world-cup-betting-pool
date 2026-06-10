@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { StrictMode } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,6 +42,20 @@ describe("BiometricActivationPrompt", () => {
     consumeMock.mockReturnValue(true);
     render(<BiometricActivationPrompt />);
     expect(await screen.findByRole("button", { name: /ativar agora/i })).toBeTruthy();
+  });
+
+  it("regressão StrictMode: consume destrutivo no double-invoke não perde a intenção", async () => {
+    // 1ª chamada limpa a flag (true), 2ª (StrictMode) já vê false.
+    consumeMock.mockReturnValueOnce(true).mockReturnValue(false);
+    render(
+      <StrictMode>
+        <BiometricActivationPrompt />
+      </StrictMode>,
+    );
+    // Mesmo com o 2º consume retornando false, o prompt abre.
+    expect(
+      await screen.findByRole("button", { name: /ativar agora/i }),
+    ).toBeTruthy();
   });
 
   it("com intenção mas device já tem hint: não abre", () => {
