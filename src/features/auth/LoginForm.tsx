@@ -25,14 +25,29 @@ import { mapAuthError } from "@/features/auth/errors";
 import { signIn } from "@/services/auth";
 import { usePasskeySupport } from "@/features/passkeys/hooks";
 import { hasPasskeyHint } from "@/features/passkeys/lib/passkeyHint";
-import { setBiometricIntent } from "@/features/passkeys/lib/loginBiometricIntent";
+import {
+  clearBiometricIntent,
+  hasBiometricIntent,
+  setBiometricIntent,
+} from "@/features/passkeys/lib/loginBiometricIntent";
+import { useBiometricLogin } from "@/features/auth/hooks/useBiometricLogin";
 
 /**
- * Formulário de login (PRD-01, TASK-07).
+ * Formulário de login (PRD-01, TASK-07 + feature login-biometric-activation).
  *
  * React Hook Form + Zod (`loginFormSchema`) via Shadcn `Form`. Submete para a
  * camada de serviço (`signIn`) e, em caso de erro, exibe `toast.error` com a
  * mensagem traduzida (`mapAuthError`) — sem revelar existência de conta (R6).
+ *
+ * Checkbox "biometria" (sempre visível em device capaz) é o ÚNICO controle do
+ * login biométrico — decide o modo do botão "Entrar":
+ *  - device COM passkey (`hasHint`) + marcado → "Entrar" dispara a cerimônia
+ *    WebAuthn direto (usernameless, ignora e-mail/senha);
+ *  - device SEM passkey + marcado → login por senha normal + grava a intenção
+ *    (sessionStorage) → o prompt pós-login (`BiometricActivationPrompt`) cria o
+ *    passkey (1 toque — req. de gesto recente do iOS);
+ *  - desmarcado → login por senha puro.
+ * Fallback e-mail+senha NUNCA some (M3); os campos ficam sempre na tela.
  *
  * Não navega manualmente no sucesso: o `AuthLayout` redireciona aprovados →
  * /home assim que o estado de auth muda.
@@ -49,24 +64,40 @@ export function LoginForm() {
   const { isSubmitting } = form.formState;
 
   const { supported, isWebView } = usePasskeySupport();
+  const biometricLogin = useBiometricLogin();
   const [activate, setActivate] = useState(false);
-  // localStorage não é reativo: lê uma vez no mount (evita mismatch de hidratação).
+  // Storage não é reativo: lê uma vez no mount (evita mismatch de hidratação).
   const [hasHint, setHasHint] = useState(false);
   useEffect(() => {
-    setHasHint(hasPasskeyHint());
+    const hint = hasPasskeyHint();
+    setHasHint(hint);
+    // Estado inicial do checkbox: marcado se o device já tem passkey (biometria é
+    // o método salvo → default da tela) OU se há intenção persistida (sobrevive ao
+    // reload da aba). Peek, não consome — o consumo é só do prompt pós-login.
+    setActivate(hint || hasBiometricIntent());
   }, []);
 
-  // Checkbox só faz sentido se há onde ativar e ainda não foi ativado neste device.
-  const showActivate = supported === true && !isWebView && !hasHint;
+  // Marca/desmarca persistindo a intenção NA HORA (não no submit): o estado
+  // sobrevive ao reload e, quando o device ainda não tem passkey, a intenção já
+  // fica gravada antes do login — sem race com o prompt pós-login.
+  function handleActivateChange(checked: boolean): void {
+    setActivate(checked);
+    if (checked) setBiometricIntent();
+    else clearBiometricIntent();
+  }
+
+  // Checkbox de biometria: visível em todo device capaz (não-WebView). É o único
+  // controle do login biométrico.
+  const showBiometric = supported === true && !isWebView;
+  // Modo "entrar por biometria direto": só faz sentido com passkey já salvo.
+  const biometricDirect = showBiometric && activate && hasHint;
 
   async function onSubmit(values: LoginFormValues) {
     try {
       await signIn(values.email, values.password);
       // Sucesso: o AuthLayout cuida do redirecionamento (não navegar aqui).
-      // Intenção de ativar biometria → consumida pelo prompt pós-redirect.
-      if (showActivate && activate) {
-        setBiometricIntent();
-      }
+      // Se o checkbox está marcado e o device ainda NÃO tem passkey, a intenção
+      // já foi gravada ao marcar — o prompt pós-redirect a consome e cadastra.
     } catch (error) {
       // Narrowing seguro do código do FirebaseError (sem `any`).
       const code = (error as { code?: string }).code ?? "";
@@ -131,39 +162,70 @@ export function LoginForm() {
           )}
         />
 
-        {showActivate ? (
+        {showBiometric ? (
           <div className="flex items-center gap-2">
             <Checkbox
               id="activate-biometric"
-              aria-label="Ativar biometria neste aparelho"
+              aria-label={
+                hasHint
+                  ? "Entrar com biometria"
+                  : "Ativar biometria neste aparelho"
+              }
               checked={activate}
-              onCheckedChange={(value) => setActivate(value === true)}
+              onCheckedChange={(value) => handleActivateChange(value === true)}
             />
             <Label
               htmlFor="activate-biometric"
               className="text-sm font-normal text-muted-foreground"
             >
-              Ativar biometria neste aparelho
+              {hasHint
+                ? "Entrar com biometria"
+                : "Ativar biometria neste aparelho"}
             </Label>
           </div>
         ) : null}
 
-        <Button
-          type="submit"
-          variant="default"
-          className="h-11 w-full"
-          disabled={isSubmitting}
-          aria-busy={isSubmitting}
-        >
-          {isSubmitting ? (
-            <LoaderCircle
-              size={16}
-              aria-hidden="true"
-              className="animate-spin motion-reduce:animate-none"
-            />
-          ) : null}
-          {isSubmitting ? "Entrando..." : "Entrar"}
-        </Button>
+        {biometricDirect ? (
+          // Device COM passkey + checkbox marcado: o "Entrar" dispara a cerimônia
+          // WebAuthn direto (usernameless) — type="button" para NÃO validar/exigir
+          // e-mail+senha (que ficam na tela mas são ignorados neste modo).
+          <Button
+            type="button"
+            variant="default"
+            className="h-11 w-full"
+            onClick={() => biometricLogin.mutate()}
+            disabled={biometricLogin.isPending}
+            aria-busy={biometricLogin.isPending}
+          >
+            {biometricLogin.isPending ? (
+              <LoaderCircle
+                size={16}
+                aria-hidden="true"
+                className="animate-spin motion-reduce:animate-none"
+              />
+            ) : null}
+            {biometricLogin.isPending
+              ? "Entrando com biometria…"
+              : "Entrar com biometria"}
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            variant="default"
+            className="h-11 w-full"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+          >
+            {isSubmitting ? (
+              <LoaderCircle
+                size={16}
+                aria-hidden="true"
+                className="animate-spin motion-reduce:animate-none"
+              />
+            ) : null}
+            {isSubmitting ? "Entrando..." : "Entrar"}
+          </Button>
+        )}
       </form>
     </Form>
   );

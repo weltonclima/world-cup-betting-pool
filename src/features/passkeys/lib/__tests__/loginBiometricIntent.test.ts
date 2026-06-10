@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearBiometricIntent,
   consumeBiometricIntent,
+  hasBiometricIntent,
   setBiometricIntent,
 } from "../loginBiometricIntent";
 
@@ -44,6 +45,15 @@ describe("loginBiometricIntent", () => {
       throw new Error("QuotaExceeded");
     });
     expect(() => setBiometricIntent()).not.toThrow();
+  });
+
+  it("hasBiometricIntent: peek retorna true SEM limpar (consume ainda vê)", () => {
+    setBiometricIntent();
+    expect(hasBiometricIntent()).toBe(true);
+    // Peek não consome → o consume seguinte ainda enxerga e limpa.
+    expect(hasBiometricIntent()).toBe(true);
+    expect(consumeBiometricIntent()).toBe(true);
+    expect(hasBiometricIntent()).toBe(false);
   });
 
   it("storage que lança em getItem: consume retorna false sem propagar", () => {

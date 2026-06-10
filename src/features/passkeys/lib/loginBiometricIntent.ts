@@ -20,6 +20,20 @@ export function setBiometricIntent(): void {
   }
 }
 
+/**
+ * Lê a intenção SEM limpar (peek). Usado pela tela de login para restaurar o
+ * estado do checkbox após um reload (`sessionStorage` sobrevive ao refresh da
+ * aba), sem consumir a flag — o consumo é exclusivo do prompt pós-login.
+ */
+export function hasBiometricIntent(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(INTENT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** Lê e LIMPA a intenção (atômico — garante prompt único por login). */
 export function consumeBiometricIntent(): boolean {
   if (typeof window === "undefined") return false;

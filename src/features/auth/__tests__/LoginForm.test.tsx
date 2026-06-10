@@ -4,17 +4,33 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // --- Hoisted mocks -----------------------------------------------------------
-const { signInMock, setIntentMock, toastError, toastMock, hasHintMock, supportMock } =
-  vi.hoisted(() => ({
-    signInMock: vi.fn(),
-    setIntentMock: vi.fn(),
-    toastError: vi.fn(),
-    toastMock: vi.fn(),
-    hasHintMock: vi.fn(),
-    supportMock: vi.fn(),
-  }));
+const {
+  signInMock,
+  setIntentMock,
+  clearIntentMock,
+  hasIntentMock,
+  toastError,
+  toastMock,
+  hasHintMock,
+  supportMock,
+} = vi.hoisted(() => ({
+  signInMock: vi.fn(),
+  setIntentMock: vi.fn(),
+  clearIntentMock: vi.fn(),
+  hasIntentMock: vi.fn(),
+  toastError: vi.fn(),
+  toastMock: vi.fn(),
+  hasHintMock: vi.fn(),
+  supportMock: vi.fn(),
+}));
+
+const { bioMutateMock } = vi.hoisted(() => ({ bioMutateMock: vi.fn() }));
 
 vi.mock("@/services/auth", () => ({ signIn: signInMock }));
+
+vi.mock("@/features/auth/hooks/useBiometricLogin", () => ({
+  useBiometricLogin: () => ({ mutate: bioMutateMock, isPending: false }),
+}));
 
 vi.mock("sonner", () => {
   const toast = Object.assign(toastMock, { error: toastError });
@@ -23,6 +39,8 @@ vi.mock("sonner", () => {
 
 vi.mock("@/features/passkeys/lib/loginBiometricIntent", () => ({
   setBiometricIntent: setIntentMock,
+  clearBiometricIntent: clearIntentMock,
+  hasBiometricIntent: hasIntentMock,
 }));
 
 vi.mock("@/features/passkeys/lib/passkeyHint", () => ({
@@ -59,6 +77,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   signInMock.mockResolvedValue(undefined);
   hasHintMock.mockReturnValue(false);
+  hasIntentMock.mockReturnValue(false);
   supportMock.mockReturnValue({ supported: null, isWebView: false });
 });
 
@@ -178,44 +197,125 @@ describe("LoginForm — ativação de biometria", () => {
     hasHintMock.mockReturnValue(false);
   });
 
-  it("mostra o checkbox quando suportado e sem hint", () => {
+  it("mostra o checkbox quando suportado (sem hint → rótulo 'Ativar')", () => {
     render(<LoginForm />);
     expect(screen.getByRole("checkbox", { name: /ativar biometria/i })).toBeTruthy();
   });
 
-  it("não mostra o checkbox quando o device já tem passkey (hint)", () => {
+  it("mostra o checkbox MESMO com passkey salvo (hint → rótulo 'Entrar com biometria')", () => {
     hasHintMock.mockReturnValue(true);
     render(<LoginForm />);
-    expect(screen.queryByRole("checkbox", { name: /ativar biometria/i })).toBeNull();
+    expect(
+      screen.getByRole("checkbox", { name: /entrar com biometria/i }),
+    ).toBeTruthy();
   });
 
   it("não mostra o checkbox quando não suportado", () => {
     supportMock.mockReturnValue({ supported: false, isWebView: false });
     render(<LoginForm />);
-    expect(screen.queryByRole("checkbox", { name: /ativar biometria/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /biometria/i })).toBeNull();
   });
 
-  it("marcado + login OK → grava intenção", async () => {
+  it("não mostra o checkbox em WebView", () => {
+    supportMock.mockReturnValue({ supported: true, isWebView: true });
+    render(<LoginForm />);
+    expect(screen.queryByRole("checkbox", { name: /biometria/i })).toBeNull();
+  });
+
+  it("marcar grava a intenção NA HORA (antes do login → sem race)", async () => {
     render(<LoginForm />);
     await userEvent.click(screen.getByRole("checkbox", { name: /ativar biometria/i }));
-    await fillAndSubmit();
-    await waitFor(() => expect(signInMock).toHaveBeenCalledTimes(1));
+    // Intenção persistida no clique, não no submit.
     expect(setIntentMock).toHaveBeenCalledTimes(1);
+    expect(clearIntentMock).not.toHaveBeenCalled();
   });
 
-  it("desmarcado + login OK → NÃO grava intenção", async () => {
+  it("desmarcar limpa a intenção", async () => {
+    render(<LoginForm />);
+    const cb = screen.getByRole("checkbox", { name: /ativar biometria/i });
+    await userEvent.click(cb); // marca
+    await userEvent.click(cb); // desmarca
+    expect(clearIntentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("estado sobrevive ao reload: checkbox restaurado da intenção persistida", () => {
+    hasIntentMock.mockReturnValue(true);
+    render(<LoginForm />);
+    const cb = screen.getByRole("checkbox", { name: /ativar biometria/i });
+    expect(cb.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("desmarcado: intenção não é gravada (nada a consumir pós-login)", async () => {
     render(<LoginForm />);
     await fillAndSubmit();
     await waitFor(() => expect(signInMock).toHaveBeenCalledTimes(1));
     expect(setIntentMock).not.toHaveBeenCalled();
   });
 
-  it("marcado + login FALHA → NÃO grava intenção", async () => {
-    signInMock.mockRejectedValue({ code: "auth/invalid-credential" });
+  it("submit NÃO regrava a intenção (já persistida ao marcar)", async () => {
     render(<LoginForm />);
     await userEvent.click(screen.getByRole("checkbox", { name: /ativar biometria/i }));
+    setIntentMock.mockClear();
     await fillAndSubmit();
-    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await waitFor(() => expect(signInMock).toHaveBeenCalledTimes(1));
+    // O submit não chama setBiometricIntent de novo — a gravação é no clique.
     expect(setIntentMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("LoginForm — login biométrico direto (device com passkey)", () => {
+  beforeEach(() => {
+    supportMock.mockReturnValue({ supported: true, isWebView: false });
+    hasHintMock.mockReturnValue(true); // device já tem passkey
+    hasIntentMock.mockReturnValue(true); // checkbox marcado (persistido)
+  });
+
+  it("com passkey + checkbox marcado: botão vira 'Entrar com biometria'", () => {
+    render(<LoginForm />);
+    expect(
+      screen.getByRole("button", { name: /^entrar com biometria/i }),
+    ).toBeTruthy();
+  });
+
+  it("clicar 'Entrar com biometria' dispara a cerimônia WebAuthn (não signIn)", async () => {
+    render(<LoginForm />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /^entrar com biometria/i }),
+    );
+    expect(bioMutateMock).toHaveBeenCalledTimes(1);
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it("modo biométrico IGNORA e-mail/senha (sem validação, login mesmo com campos vazios)", async () => {
+    render(<LoginForm />);
+    // Campos vazios — em login por senha bloquearia; no modo biométrico não.
+    await userEvent.click(
+      screen.getByRole("button", { name: /^entrar com biometria/i }),
+    );
+    expect(bioMutateMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/E-mail inválido/i)).toBeNull();
+  });
+
+  it("com passkey: checkbox vem MARCADO por padrão (biometria é o método salvo)", () => {
+    render(<LoginForm />);
+    const cb = screen.getByRole("checkbox", { name: /entrar com biometria/i });
+    expect(cb.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("desmarcar em device com passkey: volta ao login por senha ('Entrar')", async () => {
+    render(<LoginForm />);
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /entrar com biometria/i }),
+    ); // desmarca
+    expect(
+      screen.queryByRole("button", { name: /^entrar com biometria/i }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: /^entrar$/i })).toBeTruthy();
+  });
+
+  it("campos e-mail e senha continuam na tela no modo biométrico", () => {
+    render(<LoginForm />);
+    expect(screen.getByLabelText("E-mail")).toBeTruthy();
+    expect(screen.getByLabelText("Senha")).toBeTruthy();
   });
 });
