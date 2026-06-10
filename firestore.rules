@@ -127,6 +127,25 @@ service cloud.firestore {
       allow delete:         if false;
     }
 
+    // ---- webauthn_credentials (login biométrico, TASK-03) ----
+    // Credencial de passkey. Leitura só do dono approved (lista/gestão em
+    // TASK-06) ou admin; ESCRITA negada a todo cliente (incl. admin). A prova
+    // criptográfica WebAuthn (attestation/assertion) não é verificável por
+    // Rules → registro/login gravam via Admin SDK no Route Handler (TASK-05/07),
+    // que bypassa as Rules por design. Espelha a política de `predictions`.
+    match /webauthn_credentials/{credentialId} {
+      allow read:  if isApproved() && (isOwner(resource.data.uid) || isAdmin());
+      allow write: if false; // create/update/delete exclusivos do Admin SDK
+    }
+
+    // ---- webauthn_challenge_jti (login biométrico, TASK-07) ----
+    // Store de `jti` consumidos do challenge (single-use, HR-01). Acesso
+    // EXCLUSIVO do Admin SDK no Route Handler de verificação (registro/login):
+    // o cliente nunca lê nem escreve — é metadado de segurança server-side.
+    match /webauthn_challenge_jti/{jti} {
+      allow read, write: if false;
+    }
+
     // ---- Deny-by-default: qualquer outro path ----
     // Redundante (não casar já nega), mantido como afirmação explícita.
     match /{document=**} {

@@ -609,3 +609,152 @@ describe("Firestore Security Rules — notificationPreferences (PRD-08: só o do
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Login biométrico (TASK-03): webauthn_credentials — leitura própria,
+// escrita exclusiva do Admin SDK (write client negado, como predictions).
+// ---------------------------------------------------------------------------
+
+describe("Firestore Security Rules — webauthn_credentials (TASK-03)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.doc("webauthn_credentials/cred_approved").set({
+        credentialId: "cred_approved",
+        uid: "approvedUser",
+        publicKey: "pk-approved",
+        counter: 0,
+        createdAt: "2026-06-09T12:00:00.000Z",
+      });
+      await db.doc("webauthn_credentials/cred_admin").set({
+        credentialId: "cred_admin",
+        uid: "adminUser",
+        publicKey: "pk-admin",
+        counter: 0,
+        createdAt: "2026-06-09T12:00:00.000Z",
+      });
+      await db.doc("webauthn_credentials/cred_pending").set({
+        credentialId: "cred_pending",
+        uid: "pendingUser",
+        publicKey: "pk-pending",
+        counter: 0,
+        createdAt: "2026-06-09T12:00:00.000Z",
+      });
+      await db.doc("webauthn_credentials/cred_blocked").set({
+        credentialId: "cred_blocked",
+        uid: "blockedUser",
+        publicKey: "pk-blocked",
+        counter: 0,
+        createdAt: "2026-06-09T12:00:00.000Z",
+      });
+    });
+  });
+
+  it("C45: approved lê a própria credencial", async () => {
+    await assertSucceeds(
+      approvedDb().doc("webauthn_credentials/cred_approved").get(),
+    );
+  });
+
+  it("C46: approved NÃO lê credencial de terceiro", async () => {
+    await assertFails(
+      approvedDb().doc("webauthn_credentials/cred_admin").get(),
+    );
+  });
+
+  it("C47: pending não lê a própria credencial (não-approved)", async () => {
+    await assertFails(
+      pendingDb().doc("webauthn_credentials/cred_pending").get(),
+    );
+  });
+
+  it("C47b: blocked não lê a própria credencial (não-approved)", async () => {
+    await assertFails(
+      blockedDb().doc("webauthn_credentials/cred_blocked").get(),
+    );
+  });
+
+  it("C48: não autenticado não lê credencial", async () => {
+    await assertFails(
+      unauthDb().doc("webauthn_credentials/cred_approved").get(),
+    );
+  });
+
+  it("C49: admin lê credencial de terceiro", async () => {
+    await assertSucceeds(
+      adminDb().doc("webauthn_credentials/cred_approved").get(),
+    );
+  });
+
+  it("C50: write client-direto (create) é negado — só Admin SDK", async () => {
+    await assertFails(
+      approvedDb().doc("webauthn_credentials/cred_new").set({
+        credentialId: "cred_new",
+        uid: "approvedUser",
+        publicKey: "pk-new",
+        counter: 0,
+        createdAt: "2026-06-09T12:00:00.000Z",
+      }),
+    );
+  });
+
+  it("C51: update client-direto (counter) é negado, mesmo do dono", async () => {
+    await assertFails(
+      approvedDb()
+        .doc("webauthn_credentials/cred_approved")
+        .update({ counter: 99 }),
+    );
+  });
+
+  it("C52: delete client-direto é negado (revogação só via Admin SDK)", async () => {
+    await assertFails(
+      approvedDb().doc("webauthn_credentials/cred_approved").delete(),
+    );
+  });
+
+  it("C53: admin client-direto também não escreve (write exclusivo do Admin SDK)", async () => {
+    await assertFails(
+      adminDb().doc("webauthn_credentials/cred_admin").update({ counter: 5 }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Login biométrico (TASK-07): webauthn_challenge_jti — store de jti consumidos
+// (HR-01). Acesso EXCLUSIVO do Admin SDK: read e write client negados a todos.
+// ---------------------------------------------------------------------------
+
+describe("Firestore Security Rules — webauthn_challenge_jti (TASK-07)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .doc("webauthn_challenge_jti/jti-1")
+        .set({ expiresAt: "2026-06-09T12:05:00.000Z" });
+    });
+  });
+
+  it("C54: read client é negado (approved)", async () => {
+    await assertFails(approvedDb().doc("webauthn_challenge_jti/jti-1").get());
+  });
+
+  it("C55: read client é negado (admin)", async () => {
+    await assertFails(adminDb().doc("webauthn_challenge_jti/jti-1").get());
+  });
+
+  it("C56: read não autenticado é negado", async () => {
+    await assertFails(unauthDb().doc("webauthn_challenge_jti/jti-1").get());
+  });
+
+  it("C57: create client é negado (só Admin SDK)", async () => {
+    await assertFails(
+      approvedDb()
+        .doc("webauthn_challenge_jti/jti-novo")
+        .set({ expiresAt: "2026-06-09T12:05:00.000Z" }),
+    );
+  });
+
+  it("C58: delete client é negado", async () => {
+    await assertFails(approvedDb().doc("webauthn_challenge_jti/jti-1").delete());
+  });
+});

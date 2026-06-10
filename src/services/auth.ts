@@ -5,6 +5,7 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updatePassword,
@@ -12,8 +13,9 @@ import {
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 
-import { firebaseAuth, firestore } from "@/firebase";
+import { authPersistenceReady, firebaseAuth, firestore } from "@/firebase";
 import type { SignupFormValues } from "@/features/auth/schemas";
+import { PasskeyError } from "@/services/webauthn";
 
 /**
  * Camada de serviço de autenticação (PRD-01, TASK-06).
@@ -41,16 +43,71 @@ export type SignUpInput = Pick<
 const SESSION_ENDPOINT = "/api/auth/session";
 
 /**
- * Cria/renova o session cookie a partir do usuário recém-autenticado.
+ * Renovação deslizante do session cookie (TASK-02).
+ *
+ * O cookie `__session` expira fixo em 5 dias (servidor). Para evitar que rotas
+ * server-side derrubem o usuário antes do client (que persiste indefinidamente,
+ * TASK-01), o cookie é re-emitido periodicamente. `LAST_MINT_STORAGE_KEY` guarda
+ * (em `localStorage`, NÃO sensível) o epoch ms da última emissão bem-sucedida;
+ * `SESSION_RENEWAL_THROTTLE_MS` é a folga mínima entre re-emissões. Com TTL de
+ * 5 dias e janela de 1 dia, qualquer visita dentro de 5 dias mantém a sessão
+ * server viva, sem flood de POSTs.
+ */
+export const SESSION_RENEWAL_THROTTLE_MS = 24 * 60 * 60 * 1000;
+export const LAST_MINT_STORAGE_KEY = "bdp.lastSessionMintAt";
+
+// Acesso ao localStorage é best-effort: além do guard de SSR (`window`), o
+// próprio acesso pode lançar (iframe sandboxed, storage desabilitado, modo
+// privado, quota). Qualquer falha aqui não pode quebrar login/logout/renovação,
+// então cada helper engole o erro e degrada para o estado neutro.
+
+/** Lê o timestamp da última emissão. Client-only e tolerante a valor inválido. */
+function readLastMintAt(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_MINT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Grava o timestamp da última emissão (epoch ms). Client-only. */
+function writeLastMintAt(timestamp: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LAST_MINT_STORAGE_KEY, String(timestamp));
+  } catch {
+    // Sem persistir o timestamp, a próxima renovação simplesmente re-emite.
+  }
+}
+
+/** Limpa o timestamp (logout). Client-only. */
+function clearLastMintAt(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(LAST_MINT_STORAGE_KEY);
+  } catch {
+    // Ignorado: não pode impedir o sign-out.
+  }
+}
+
+/**
+ * Emite (ou re-emite) o session cookie a partir do usuário autenticado.
  *
  * `getIdToken(true)` força o refresh do token para carregar o custom claim
  * `role` fresco (TASK-08) — o token em cache pode ter o claim antigo por até ~1h.
+ *
+ * Só avança `LAST_MINT_STORAGE_KEY` em emissão BEM-SUCEDIDA (`response.ok`):
+ * falha não consome a janela de throttle, permitindo nova tentativa.
  *
  * Best-effort: falha aqui (rede/servidor) NÃO derruba o login no client (o
  * Firebase Auth já autenticou). A ausência do cookie só bloqueia rotas
  * protegidas por servidor; é logada para diagnóstico.
  */
-async function createSessionCookie(): Promise<void> {
+async function mintSessionCookie(): Promise<void> {
   const user = firebaseAuth.currentUser;
   if (!user) return;
 
@@ -62,14 +119,49 @@ async function createSessionCookie(): Promise<void> {
       body: JSON.stringify({ idToken }),
     });
     if (!response.ok) {
-      console.error(
-        "Falha ao criar session cookie:",
-        response.status,
-      );
+      console.error("Falha ao criar session cookie:", response.status);
+      return;
     }
+    writeLastMintAt(Date.now());
   } catch (error) {
     console.error("Erro ao criar session cookie:", error);
   }
+}
+
+// Guard de concorrência: uma renovação por vez (evita POSTs paralelos).
+let renewalInFlight: Promise<void> | null = null;
+
+/**
+ * Renovação deslizante do cookie (TASK-02), disparada pelo client (hook
+ * `useSessionRenewal`). Guardas, em ordem:
+ *  1. sem `currentUser` → no-op (deslogado);
+ *  2. sem `window`/`localStorage` → no-op (SSR/edge);
+ *  3. dentro da janela de throttle → no-op;
+ *  4. renovação já em andamento → reusa a mesma promise.
+ *
+ * Anti-imortal: a re-emissão usa `getIdToken(true)` (token fresco) e o endpoint
+ * revalida (`verifyIdToken`). Se a sessão Firebase foi revogada/expirada, o
+ * token falha → nada é emitido → o cookie expira naturalmente em 5 dias. Nunca
+ * estende o cookie sem revalidar.
+ */
+export async function refreshSessionCookie(): Promise<void> {
+  if (!firebaseAuth.currentUser) return;
+  if (typeof window === "undefined") return;
+
+  const lastMintAt = readLastMintAt();
+  if (
+    lastMintAt !== null &&
+    Date.now() - lastMintAt < SESSION_RENEWAL_THROTTLE_MS
+  ) {
+    return;
+  }
+
+  if (renewalInFlight) return renewalInFlight;
+
+  renewalInFlight = mintSessionCookie().finally(() => {
+    renewalInFlight = null;
+  });
+  return renewalInFlight;
 }
 
 /**
@@ -90,10 +182,42 @@ async function clearSessionCookie(): Promise<void> {
  *
  * Após o sign-in, cria o session cookie httpOnly (TASK-09) para que o servidor/
  * edge possa verificar a sessão. A criação do cookie é best-effort.
+ *
+ * Aguarda `authPersistenceReady` (TASK-01) ANTES de autenticar para garantir que
+ * a sessão seja gravada com a persistência local pretendida (manter logado), e
+ * não com uma persistência default ainda não aplicada.
  */
 export async function signIn(email: string, password: string): Promise<void> {
+  await authPersistenceReady;
   await signInWithEmailAndPassword(firebaseAuth, email, password);
-  await createSessionCookie();
+  await mintSessionCookie();
+}
+
+/**
+ * Conclui o login biométrico (TASK-08): troca o custom token emitido pela TASK-07
+ * por uma sessão Firebase e emite o session cookie httpOnly.
+ *
+ * Aguarda `authPersistenceReady` (TASK-01) ANTES de autenticar — mantém o usuário
+ * logado com a persistência local pretendida. `signInWithCustomToken` autentica; o
+ * `mintSessionCookie` reusado faz `getIdToken(true)`, carregando o claim `role`
+ * fresco (M1) para que o middleware edge reconheça admins.
+ *
+ * NÃO navega: o `AuthLayout` redireciona ao mudar o estado de auth (mesmo contrato
+ * de `signIn`). O custom token é de uso único e curtíssima vida — não persistir.
+ */
+export async function signInWithBiometricToken(
+  customToken: string,
+): Promise<void> {
+  await authPersistenceReady;
+  try {
+    await signInWithCustomToken(firebaseAuth, customToken);
+  } catch {
+    // Normaliza falhas do Firebase (token expirado/já consumido, rede, clock skew)
+    // em PasskeyError genérico (MD-01) — a UI mostra a mensagem pt-BR explícita em
+    // vez de cair por acaso no branch genérico do hook.
+    throw new PasskeyError("Não foi possível entrar com biometria.");
+  }
+  await mintSessionCookie();
 }
 
 /**
@@ -113,6 +237,9 @@ export async function signUp({
   email,
   password,
 }: SignUpInput): Promise<void> {
+  // Persistência local aplicada antes de criar a conta (TASK-01): o usuário
+  // recém-cadastrado já fica autenticado e deve permanecer logado.
+  await authPersistenceReady;
   const { user } = await createUserWithEmailAndPassword(
     firebaseAuth,
     email,
@@ -152,6 +279,8 @@ export async function signUp({
  */
 export async function signOut(): Promise<void> {
   await clearSessionCookie();
+  // Limpa o throttle de renovação (TASK-02): nova sessão recomeça a janela.
+  clearLastMintAt();
   await firebaseSignOut(firebaseAuth);
 }
 

@@ -34,6 +34,7 @@ vi.mock("@/firebase", () => ({
     },
   },
   firestore: { __tag: "firestore" },
+  authPersistenceReady: Promise.resolve(),
 }));
 
 // Endpoint do session cookie não é tocado por changePassword; fetch stub por segurança.

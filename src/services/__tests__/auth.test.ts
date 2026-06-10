@@ -39,11 +39,14 @@ vi.mock("firebase/firestore", () => ({
 
 // currentUser.getIdToken usado por signIn para criar o session cookie (TASK-09).
 // Hoisted: referenciado pela fábrica de vi.mock("@/firebase") (içada ao topo).
-const { getIdTokenMock, currentUserRef } = vi.hoisted(() => ({
+const { getIdTokenMock, currentUserRef, persistenceRef } = vi.hoisted(() => ({
   getIdTokenMock: vi.fn<(forceRefresh?: boolean) => Promise<string>>(),
   currentUserRef: { value: null } as {
     value: { getIdToken: ReturnType<typeof vi.fn> } | null;
   },
+  // Persistência (TASK-01): promise controlável; signIn/signUp a aguardam antes
+  // de autenticar. Reatribuível por teste para exercitar a ordem de espera.
+  persistenceRef: { value: Promise.resolve() as Promise<void> },
 }));
 
 vi.mock("@/firebase", () => ({
@@ -54,6 +57,9 @@ vi.mock("@/firebase", () => ({
     },
   },
   firestore: { __tag: "firestore" },
+  get authPersistenceReady() {
+    return persistenceRef.value;
+  },
 }));
 
 const signInMock = vi.mocked(signInWithEmailAndPassword);
@@ -100,6 +106,8 @@ beforeEach(() => {
   getIdTokenMock.mockReset();
   getIdTokenMock.mockResolvedValue("fresh-id-token");
   currentUserRef.value = null;
+  // Por padrão, persistência já pronta (não bloqueia).
+  persistenceRef.value = Promise.resolve();
 });
 
 afterEach(() => {
@@ -144,6 +152,36 @@ describe("signIn", () => {
     signInMock.mockRejectedValue(error);
 
     await expect(signIn("a@b.com", "wrongpass")).rejects.toBe(error);
+  });
+
+  it("aguarda authPersistenceReady ANTES de autenticar (TASK-01)", async () => {
+    // Prova de ordem independente de contagem de microtasks: registra a sequência
+    // real entre a resolução da persistência e a chamada de sign-in.
+    const order: string[] = [];
+
+    let resolvePersistence!: () => void;
+    persistenceRef.value = new Promise<void>((resolve) => {
+      resolvePersistence = () => {
+        order.push("persistence");
+        resolve();
+      };
+    });
+    signInMock.mockImplementation(async () => {
+      order.push("signIn");
+      return fakeCredential;
+    });
+
+    const promise = signIn("fulano@example.com", "secret123");
+
+    // Persistência ainda pendente: sign-in não pode ter ocorrido.
+    await Promise.resolve();
+    expect(signInMock).not.toHaveBeenCalled();
+
+    // Liberada a persistência → o sign-in prossegue, sempre DEPOIS dela.
+    resolvePersistence();
+    await promise;
+    expect(signInMock).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["persistence", "signIn"]);
   });
 });
 
