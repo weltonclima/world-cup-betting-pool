@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthGuard } from "@/components/layout/AuthGuard";
+import { BiometricActivationPrompt } from "@/features/passkeys";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <AuthGuard>
+      <BiometricActivationPrompt />
       <AppShell>{children}</AppShell>
     </AuthGuard>
   );

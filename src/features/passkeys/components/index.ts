@@ -4,3 +4,4 @@ export { PasskeyList } from "./PasskeyList";
 export { RemovePasskeyDialog } from "./RemovePasskeyDialog";
 export { PasskeyEmptyState } from "./PasskeyEmptyState";
 export { PasskeyUnsupportedNotice } from "./PasskeyUnsupportedNotice";
+export { BiometricActivationPrompt } from "./BiometricActivationPrompt";

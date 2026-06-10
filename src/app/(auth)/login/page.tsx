@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { AuthLogo } from "@/components/auth/AuthLogo";
 import { LoginForm } from "@/features/auth/LoginForm";
-import { BiometricLoginButton } from "@/features/auth/BiometricLoginButton";
 
 /**
  * Página de Login (PRD-01, TASK-07).
@@ -33,9 +32,6 @@ export default function LoginPage() {
       <section className="auth-card flex-1 rounded-t-3xl bg-card px-6 pb-10 pt-8 shadow-lg">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
           <LoginForm />
-
-          {/* CTA biométrico aditivo — NUNCA substitui o form acima (M3). */}
-          <BiometricLoginButton />
 
           <footer className="text-center text-sm text-muted-foreground">
             Não tem conta?{" "}

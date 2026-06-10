@@ -717,6 +717,49 @@ describe("Firestore Security Rules — webauthn_credentials (TASK-03)", () => {
       adminDb().doc("webauthn_credentials/cred_admin").update({ counter: 5 }),
     );
   });
+
+  // --- Caminho LIST/query (o que a Tela 06 realmente executa: listMyPasskeys
+  // faz `where("uid","==",uid).get()`, não get() de doc único). Gap que deixou
+  // passar o bug "erro ao consultar os dados" — C45–C53 só cobriam get().
+  it("C59: approved faz query das PRÓPRIAS credenciais (where uid == self)", async () => {
+    await assertSucceeds(
+      approvedDb()
+        .collection("webauthn_credentials")
+        .where("uid", "==", "approvedUser")
+        .get(),
+    );
+  });
+
+  it("C60: query da coleção inteira (sem where) é negada — rules não são filtro", async () => {
+    await assertFails(approvedDb().collection("webauthn_credentials").get());
+  });
+
+  it("C61: query filtrando uid de terceiro é negada (ownership)", async () => {
+    await assertFails(
+      approvedDb()
+        .collection("webauthn_credentials")
+        .where("uid", "==", "adminUser")
+        .get(),
+    );
+  });
+
+  it("C62: pending não faz query nem das próprias (não-approved)", async () => {
+    await assertFails(
+      pendingDb()
+        .collection("webauthn_credentials")
+        .where("uid", "==", "pendingUser")
+        .get(),
+    );
+  });
+
+  it("C63: admin faz query das credenciais de terceiro (lê todas)", async () => {
+    await assertSucceeds(
+      adminDb()
+        .collection("webauthn_credentials")
+        .where("uid", "==", "approvedUser")
+        .get(),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
