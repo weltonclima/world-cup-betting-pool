@@ -54,7 +54,14 @@ describe("BiometricActivationPrompt", () => {
     consumeMock.mockReturnValue(true);
     render(<BiometricActivationPrompt />);
     await userEvent.click(await screen.findByRole("button", { name: /ativar agora/i }));
-    expect(mutateMock).toHaveBeenCalledWith("iPhone");
+    expect(mutateMock).toHaveBeenCalledWith("iPhone", expect.any(Object));
+  });
+
+  it("com intenção mas em WebView: não abre", () => {
+    consumeMock.mockReturnValue(true);
+    supportMock.mockReturnValue({ supported: true, isWebView: true });
+    render(<BiometricActivationPrompt />);
+    expect(screen.queryByRole("button", { name: /ativar agora/i })).toBeNull();
   });
 
   it("'Agora não' não dispara registro", async () => {

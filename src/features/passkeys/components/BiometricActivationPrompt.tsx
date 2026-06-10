@@ -30,7 +30,7 @@ import { deriveDeviceLabel } from "../lib/deviceLabel";
  * nunca é afetado.
  */
 export function BiometricActivationPrompt(): JSX.Element | null {
-  const { supported } = usePasskeySupport();
+  const { supported, isWebView } = usePasskeySupport();
   const register = useRegisterPasskey();
   const [open, setOpen] = useState(false);
   // A intenção é consumida UMA vez no mount (atômico). A decisão de abrir espera
@@ -42,10 +42,10 @@ export function BiometricActivationPrompt(): JSX.Element | null {
   }, []);
 
   useEffect(() => {
-    if (intended && supported === true && !hasPasskeyHint()) {
+    if (intended && supported === true && !isWebView && !hasPasskeyHint()) {
       setOpen(true);
     }
-  }, [intended, supported]);
+  }, [intended, supported, isWebView]);
 
   if (!open) return null;
 
@@ -71,8 +71,9 @@ export function BiometricActivationPrompt(): JSX.Element | null {
           <Button
             type="button"
             onClick={() => {
-              register.mutate(deriveDeviceLabel());
-              setOpen(false);
+              register.mutate(deriveDeviceLabel(), {
+                onSettled: () => setOpen(false),
+              });
             }}
             disabled={register.isPending}
             aria-busy={register.isPending}
