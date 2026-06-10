@@ -7,6 +7,10 @@ import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import { signOut } from "@/services/auth";
+import {
+  hasPasskeyHint,
+  markPasskeyRegistered,
+} from "@/features/passkeys/lib/passkeyHint";
 import { Button } from "@/components/ui/button";
 
 /** Tela 06 — Encerrar Sessão (confirmação) (PRD06-06). */
@@ -22,7 +26,13 @@ export function LogoutConfirm(): JSX.Element {
       // Limpa cache de dados e preferências locais (PRD-06: "limpar cache local").
       queryClient.clear();
       try {
+        // O passkey-hint é sinal de confiança do DISPOSITIVO (não da sessão):
+        // precisa sobreviver ao logout para o atalho de login por biometria
+        // reaparecer no próximo login. `localStorage.clear()` o apagaria junto
+        // com o cache → snapshot antes, restaura depois.
+        const keepPasskeyHint = hasPasskeyHint();
         window.localStorage.clear();
+        if (keepPasskeyHint) markPasskeyRegistered();
       } catch {
         // localStorage indisponível (modo privado) — ignorável.
       }
