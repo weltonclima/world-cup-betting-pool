@@ -3,7 +3,34 @@ import { z } from "zod";
 // Enums e primitivos reutilizáveis pelas coleções Firestore (fonte única de verdade).
 // Valores em slug inglês minúsculo para chave de armazenamento estável (rótulos pt-BR ficam na UI).
 
-export const roleSchema = z.enum(["user", "admin"]);
+export const roleSchema = z.enum([
+  // canônicos (PRD-09)
+  "participant",
+  "group_admin",
+  "super_admin",
+  // legados (dupla-compat — aceitos na transição, removidos na TASK-12)
+  "user",
+  "admin",
+]);
+
+// Tipo local para assinatura dos helpers (Role público vive em @/types/shared,
+// que deriva deste schema — evita import circular schema↔types).
+type RoleValue = z.infer<typeof roleSchema>;
+
+// Helpers de classificação de papel (fonte única de verdade para checagem de role).
+// Puros e totais: recebem Role válido, retornam boolean, nunca lançam.
+// Valor cru é preservado no doc; a equivalência legado↔novo vive aqui (remap físico é TASK-12).
+export function isSuperAdminRole(role: RoleValue): boolean {
+  return role === "admin" || role === "super_admin"; // privilégio global
+}
+
+export function isGroupAdminRole(role: RoleValue): boolean {
+  return role === "group_admin"; // novo — sem equivalente legado
+}
+
+export function isParticipantRole(role: RoleValue): boolean {
+  return role === "user" || role === "participant"; // usuário comum
+}
 
 export const userStatusSchema = z.enum(["pending", "approved", "blocked"]);
 

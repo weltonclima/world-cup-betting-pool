@@ -13,6 +13,7 @@
 | `profile` | Edit profile, password, settings, history, personal stats. |
 | `notifications` | List/detail + preferences. System notifications only (approval/blocking). |
 | `admin` | Dashboard, users (pending/approved/blocked), api-status, logs. |
+| `passkeys` | WebAuthn/passkey biometric login (register/login flows, credential mgmt). API under `api/auth/webauthn/*`. |
 | `statistics` | Pool-wide stats (small). |
 
 ## Services (`src/services/*`) — data access
@@ -26,7 +27,6 @@
 - `firebaseAdmin.ts` — Admin SDK singleton. Creds resolved: emulator → `FIREBASE_SERVICE_ACCOUNT_KEY` JSON → `applicationDefault()` (App Hosting). Exposes `getAdminApp/Auth/Firestore`.
 - `auth/` — `sessionCookie` (cookie name, shared edge+node), `verifySession` (jose edge verify), `googleCerts`.
 - `copaData/` — openfootball client/mock/mapper/config/teamRegistry (Copa data). See architecture.md.
-- `apiFootball/` — legacy api-football.com client (superseded).
 - `cache/tiers.ts` — `REVALIDATE` (s) / `STALE_TIME` (ms) cache tiers.
 - `mappers/` — `matchMapper`, `teamMapper` (API → domain).
 

@@ -23,7 +23,17 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isAdmin()    { return isSignedIn() && getUserData().role == "admin"; }
+    // Role do requisitante. Dupla-compat na transição PRD-09: o valor legado
+    // "admin" equivale ao canônico "super_admin" (corte do legado é TASK-12).
+    // Centralizar a checagem aqui — não comparar string crua espalhada nas rules.
+    function isSuperAdmin() {
+      return isSignedIn() &&
+        (getUserData().role == "admin" || getUserData().role == "super_admin");
+    }
+    function isGroupAdmin() { return isSignedIn() && getUserData().role == "group_admin"; }
+    // isAdmin() preservado como alias de super_admin (todos os matches do torneio,
+    // users, logs etc. continuam válidos sem reescrita — escopo TASK-06).
+    function isAdmin()    { return isSuperAdmin(); }
     function isApproved() { return isSignedIn() && getUserData().status == "approved"; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
@@ -34,12 +44,15 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
 
-      // Auto-cadastro força status="pending" + role="user" (impossível
-      // nascer admin/approved). Admin cria livre (via Admin SDK/console).
+      // Auto-cadastro força status="pending" + role de participante (impossível
+      // nascer approved ou com papel administrativo). Aceita o role canônico novo
+      // "participant" (PRD-09) e o legado "user" durante a transição (corte TASK-12).
+      // Admin cria livre (via Admin SDK/console).
       allow create: if isAdmin() || (
         isOwner(uid) &&
         request.resource.data.status == "pending" &&
-        request.resource.data.role == "user"
+        (request.resource.data.role == "user" ||
+         request.resource.data.role == "participant")
       );
 
       // Dono atualiza o próprio doc SEM mudar role/status; só admin muda
@@ -85,6 +98,22 @@ service cloud.firestore {
     // via cliente admin.
     match /teams/{teamId}        { allow read: if isApproved(); allow write: if isAdmin(); }
     match /groups/{groupId}      { allow read: if isApproved(); allow write: if isAdmin(); }
+
+    // ---- pools (PRD-09): grupos de bolão multi-tenant ----
+    // `pools` (bolão) ≠ `groups` (grupos do torneio Copa, acima) — coleções distintas.
+    // LEITURA: só usuário approved e SOMENTE pools com status=="active" — pools
+    //   pending/blocked não vazam para a busca/cliente (visíveis só via Admin SDK).
+    //   Rules não são filtro: uma query precisa restringir a status=="active" (a
+    //   leitura de doc pending/blocked ou a query por não-ativos é negada).
+    // ESCRITA negada a TODO cliente (incl. admin autenticado): criação (nasce
+    //   pending), aprovação (pending→active) e bloqueio são exclusivos do Admin SDK
+    //   nos Route Handlers (TASK-04/05), que bypassa as Rules por design. Espelha
+    //   a política de `predictions`/`webauthn_credentials`. Isolamento de ranking
+    //   por pool é TASK-11 (não aqui).
+    match /pools/{poolId} {
+      allow read:  if isApproved() && resource.data.status == "active";
+      allow write: if false; // create/update/delete exclusivos do Admin SDK
+    }
     match /matches/{matchId}     { allow read: if isApproved(); allow write: if isAdmin(); }
     match /system_settings/{id}  { allow read: if isApproved(); allow write: if isAdmin(); }
 

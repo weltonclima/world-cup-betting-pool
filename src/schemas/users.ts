@@ -16,6 +16,8 @@ export const userSchema = z
     email: z.email(),
     role: roleSchema,
     status: userStatusSchema,
+    // Pool do usuário (PRD-09). Opcional na transição; obrigatório só na TASK-12 (pós-backfill).
+    groupId: nonEmptyString.optional(),
     // Avatar do usuário (PRD-06, D-A2): data URL JPEG base64 comprimido no client
     // (sem Firebase Storage). Opcional — usuário sem foto cai no fallback de iniciais.
     avatarUrl: z.string().optional(),

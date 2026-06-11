@@ -801,3 +801,203 @@ describe("Firestore Security Rules — webauthn_challenge_jti (TASK-07)", () => 
     await assertFails(approvedDb().doc("webauthn_challenge_jti/jti-1").delete());
   });
 });
+
+// ---------------------------------------------------------------------------
+// PRD-09 (TASK-03): pools — leitura só de ativos por approved; escrita exclusiva
+// do Admin SDK (write client negado, como predictions). + auto-cadastro com role
+// canônico "participant" e dupla-compat de role nos helpers.
+// ---------------------------------------------------------------------------
+
+describe("Firestore Security Rules — pools (PRD-09: read active/approved, write Admin SDK)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.doc("pools/pool_active").set({
+        id: "pool_active",
+        name: "Bolão dos Parças",
+        slug: "bolao-dos-parcas",
+        status: "active",
+        adminId: "adminUser",
+        createdAt: "2026-06-09T12:00:00+00:00",
+      });
+      await db.doc("pools/pool_pending").set({
+        id: "pool_pending",
+        name: "Bolão Novo",
+        slug: "bolao-novo",
+        status: "pending",
+        adminId: "approvedUser",
+        createdAt: "2026-06-09T12:00:00+00:00",
+      });
+      await db.doc("pools/pool_blocked").set({
+        id: "pool_blocked",
+        name: "Bolão Bloqueado",
+        slug: "bolao-bloqueado",
+        status: "blocked",
+        adminId: "adminUser",
+        createdAt: "2026-06-09T12:00:00+00:00",
+      });
+    });
+  });
+
+  it("C64: approved lê pool ativo", async () => {
+    await assertSucceeds(approvedDb().doc("pools/pool_active").get());
+  });
+
+  it("C65: approved é negado em pool pending (não vaza para a busca)", async () => {
+    await assertFails(approvedDb().doc("pools/pool_pending").get());
+  });
+
+  it("C66: approved é negado em pool blocked", async () => {
+    await assertFails(approvedDb().doc("pools/pool_blocked").get());
+  });
+
+  it("C67: pending não lê pool ativo (não-approved)", async () => {
+    await assertFails(pendingDb().doc("pools/pool_active").get());
+  });
+
+  it("C67b: blocked não lê pool ativo (não-approved)", async () => {
+    await assertFails(blockedDb().doc("pools/pool_active").get());
+  });
+
+  it("C68: não autenticado não lê pool ativo", async () => {
+    await assertFails(unauthDb().doc("pools/pool_active").get());
+  });
+
+  it("C74b: query irrestrita da coleção pools é negada (rules não são filtro — dump de não-ativos)", async () => {
+    await assertFails(approvedDb().collection("pools").get());
+  });
+
+  it("C69: approved (client) não cria pool — write só via Admin SDK", async () => {
+    await assertFails(
+      approvedDb().doc("pools/pool_new").set({
+        id: "pool_new",
+        name: "X",
+        slug: "x",
+        status: "pending",
+        adminId: "approvedUser",
+        createdAt: "2026-06-09T12:00:00+00:00",
+      }),
+    );
+  });
+
+  it("C70: admin (client) não aprova pool (update status) — write só via Admin SDK", async () => {
+    await assertFails(
+      adminDb().doc("pools/pool_pending").update({ status: "active" }),
+    );
+  });
+
+  it("C71: admin (client) não cria pool — write exclusivo do Admin SDK", async () => {
+    await assertFails(
+      adminDb().doc("pools/pool_new2").set({
+        id: "pool_new2",
+        name: "Y",
+        slug: "y",
+        status: "active",
+        adminId: "adminUser",
+        createdAt: "2026-06-09T12:00:00+00:00",
+      }),
+    );
+  });
+
+  it("C72: ninguém deleta pool pelo cliente (nem admin)", async () => {
+    await assertFails(adminDb().doc("pools/pool_active").delete());
+  });
+
+  // Query de ativos (o que GET /api/groups/search exercita no padrão de listagem).
+  it("C73: approved faz query de pools ativos (where status == active)", async () => {
+    await assertSucceeds(
+      approvedDb()
+        .collection("pools")
+        .where("status", "==", "active")
+        .get(),
+    );
+  });
+
+  it("C74: query de pools pending é negada (rules não são filtro — vaza não-ativo)", async () => {
+    await assertFails(
+      approvedDb()
+        .collection("pools")
+        .where("status", "==", "pending")
+        .get(),
+    );
+  });
+});
+
+describe("Firestore Security Rules — users auto-cadastro participant + dupla-compat (PRD-09)", () => {
+  it("C75: signup com role canônico participant + status pending (próprio uid)", async () => {
+    const novo = testEnv.authenticatedContext("novoPart").firestore();
+    await assertSucceeds(
+      novo.doc("users/novoPart").set({
+        uid: "novoPart",
+        name: "Fê",
+        nickname: "fe",
+        email: "fe@x.com",
+        role: "participant",
+        status: "pending",
+        groupId: "pool_active",
+      }),
+    );
+  });
+
+  it("C76: signup participant tentando nascer approved é negado", async () => {
+    const novo = testEnv.authenticatedContext("novoPart").firestore();
+    await assertFails(
+      novo.doc("users/novoPart").set({
+        uid: "novoPart",
+        name: "Fê",
+        nickname: "fe",
+        email: "fe@x.com",
+        role: "participant",
+        status: "approved",
+        groupId: "pool_active",
+      }),
+    );
+  });
+
+  it("C77: signup tentando role group_admin é negado (sem auto-promoção)", async () => {
+    const novo = testEnv.authenticatedContext("novoPart").firestore();
+    await assertFails(
+      novo.doc("users/novoPart").set({
+        uid: "novoPart",
+        name: "Fê",
+        nickname: "fe",
+        email: "fe@x.com",
+        role: "group_admin",
+        status: "pending",
+        groupId: "pool_active",
+      }),
+    );
+  });
+
+  it("C78: signup tentando role super_admin é negado (sem auto-promoção)", async () => {
+    const novo = testEnv.authenticatedContext("novoPart").firestore();
+    await assertFails(
+      novo.doc("users/novoPart").set({
+        uid: "novoPart",
+        name: "Fê",
+        nickname: "fe",
+        email: "fe@x.com",
+        role: "super_admin",
+        status: "pending",
+      }),
+    );
+  });
+
+  it("C79: dono com groupId atualiza nickname mantendo role/status (groupId não quebra rule)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("users/partUser").set({
+        uid: "partUser",
+        name: "Gui",
+        nickname: "gui",
+        email: "gui@x.com",
+        role: "participant",
+        status: "approved",
+        groupId: "pool_active",
+      });
+    });
+    const partDb = testEnv.authenticatedContext("partUser").firestore();
+    await assertSucceeds(
+      partDb.doc("users/partUser").update({ nickname: "gui2" }),
+    );
+  });
+});
