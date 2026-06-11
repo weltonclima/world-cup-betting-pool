@@ -181,12 +181,6 @@ export function ProfileHub(): JSX.Element {
       {/* Menu de navegação */}
       <nav aria-label="Menu do perfil" className="flex flex-col gap-2">
         <ProfileMenuItem
-          icon={Users}
-          title="Grupos"
-          subtitle="Buscar ou criar um grupo"
-          href="/groups"
-        />
-        <ProfileMenuItem
           icon={BarChart3}
           title="Estatísticas Pessoais"
           subtitle="Acompanhe seu desempenho"
@@ -212,7 +206,10 @@ export function ProfileHub(): JSX.Element {
         />
       </nav>
 
-      {/* Administração do Grupo — group_admin (PRD-10, role-gated) */}
+      {/* Administração do Grupo — exclusivo group_admin (PRD-10, role-gated).
+          group_admin gere apenas o PRÓPRIO grupo (editar + convites + membros).
+          super_admin NÃO usa este menu: gere todos os grupos pela seção global
+          "Super Admin" (/admin/*), com visão e CRUD de todos os grupos. */}
       {isGroupAdminRole(profile.role) ? (
         <section
           aria-labelledby="group-admin-section"

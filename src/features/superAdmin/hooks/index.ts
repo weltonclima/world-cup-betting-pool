@@ -7,8 +7,11 @@ export {
   useDeleteGroup,
   useChangeGroupAdmin,
   useRemoveGroupAdmin,
+  useCreateAdminGroup,
+  useUpdateAdminGroup,
   type UpdateGroupStatusVars,
   type ChangeGroupAdminVars,
+  type UpdateAdminGroupVars,
 } from "./useAdminGroups";
 export { useAdminAdmins } from "./useAdminAdmins";
 export { usePoolMembers } from "./usePoolMembers";

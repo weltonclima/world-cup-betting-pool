@@ -12,11 +12,15 @@ import { toast } from "sonner";
 
 import {
   changeGroupAdmin,
+  createAdminGroup,
   deleteGroup,
   listGroupsByStatus,
   removeGroupAdmin,
+  updateAdminGroup,
   updateGroupStatus,
   type AdminPoolRow,
+  type CreateAdminGroupInput,
+  type EditAdminGroupInput,
 } from "@/services/superAdmin";
 import { superAdminKeys } from "./superAdminKeys";
 
@@ -91,6 +95,37 @@ export function useChangeGroupAdmin(): UseMutationResult<
     mutationFn: ({ id, adminId }) => changeGroupAdmin(id, adminId),
     onSuccess: invalidate,
     onError: () => toast.error("Não foi possível alterar o administrador."),
+  });
+}
+
+/** Criar grupo já ativo (super_admin, PRD-11). */
+export function useCreateAdminGroup(): UseMutationResult<
+  AdminPoolRow,
+  Error,
+  CreateAdminGroupInput
+> {
+  const invalidate = useInvalidateGroups();
+  return useMutation<AdminPoolRow, Error, CreateAdminGroupInput>({
+    mutationFn: (input) => createAdminGroup(input),
+    onSuccess: invalidate,
+  });
+}
+
+export interface UpdateAdminGroupVars {
+  id: string;
+  patch: EditAdminGroupInput;
+}
+
+/** Editar campos do grupo (super_admin, PRD-11). */
+export function useUpdateAdminGroup(): UseMutationResult<
+  void,
+  Error,
+  UpdateAdminGroupVars
+> {
+  const invalidate = useInvalidateGroups();
+  return useMutation<void, Error, UpdateAdminGroupVars>({
+    mutationFn: ({ id, patch }) => updateAdminGroup(id, patch),
+    onSuccess: invalidate,
   });
 }
 

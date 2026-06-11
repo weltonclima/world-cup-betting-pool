@@ -147,6 +147,53 @@ export async function removeGroupAdmin(id: string): Promise<void> {
   if (!response.ok) throw await toServiceError(response);
 }
 
+// ─── Criar / Editar grupo (super_admin) ───────────────────────────────────────
+
+export interface CreateAdminGroupInput {
+  name: string;
+  slug: string;
+  description?: string;
+  photoBase64?: string;
+}
+
+/** Cria um grupo já `active` (super_admin, PRD-11). adminId = sessão (server). */
+export async function createAdminGroup(
+  input: CreateAdminGroupInput,
+): Promise<AdminPoolRow> {
+  const response = await fetch("/api/admin/groups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw await toServiceError(response);
+  const body = (await response.json()) as { pool: unknown };
+  // O POST devolve o doc Pool (sem participantCount) — anexa 0 p/ casar o schema de linha.
+  return adminPoolRowSchema.parse({ ...(body.pool as object), participantCount: 0 });
+}
+
+export interface EditAdminGroupInput {
+  name?: string;
+  description?: string;
+  photoBase64?: string;
+  maxParticipants?: number | null; // null = remove o limite
+  allowInvites?: boolean;
+}
+
+/** Edita campos do grupo (super_admin, PRD-11). PATCH parcial. */
+export async function updateAdminGroup(
+  id: string,
+  patch: EditAdminGroupInput,
+): Promise<void> {
+  const response = await fetch(`/api/admin/groups/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) throw await toServiceError(response);
+}
+
 // ─── Membros de um pool (seletor de novo admin) ───────────────────────────────
 
 export const poolMemberSchema = z.object({

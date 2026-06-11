@@ -66,6 +66,16 @@ const LOG_META: Record<SystemLogType, LogMeta> = {
     title: "Administrador alterado",
     className: "bg-warning-bg text-warning",
   },
+  group_created: {
+    icon: CheckCircle2,
+    title: "Grupo criado",
+    className: "bg-success-bg text-success",
+  },
+  group_updated: {
+    icon: Pencil,
+    title: "Grupo editado",
+    className: "bg-info-bg text-info",
+  },
   // PRD-07 (legados — exibidos no mesmo feed/lista)
   login_admin: { icon: ShieldCheck, title: "Login de admin", className: "bg-muted text-muted-foreground" },
   user_approved: { icon: CheckCircle2, title: "Usuário aprovado", className: "bg-success-bg text-success" },

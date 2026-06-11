@@ -2,9 +2,10 @@
 
 import { useMemo, useState, type JSX } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Eye, UserCog } from "lucide-react";
+import { Ban, Eye, Pencil, Plus, UserCog } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { KebabMenu } from "@/features/groupAdmin/components/KebabMenu";
 import { ConfirmActionDialog } from "@/features/admin/components/ConfirmActionDialog";
 import {
@@ -21,6 +22,7 @@ import {
   GroupAvatar,
 } from "./shared";
 import { ChangeAdminDialog } from "./ChangeAdminDialog";
+import { AdminGroupFormDialog } from "./AdminGroupFormDialog";
 
 /**
  * Grupos Ativos (PRD11-03). Lista com avatar/nome/slug/contagem de participantes
@@ -31,6 +33,7 @@ import { ChangeAdminDialog } from "./ChangeAdminDialog";
 export function GroupsActive(): JSX.Element {
   const { data, isLoading, isError, refetch } = useAdminGroups("active");
   const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => {
     if (!data) return undefined;
@@ -45,11 +48,23 @@ export function GroupsActive(): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <SuperAdminSubHeader title="Grupos Ativos" />
-      <SearchInput
-        value={search}
-        onChange={setSearch}
-        placeholder="Buscar por nome ou slug"
-      />
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por nome ou slug"
+          />
+        </div>
+        <Button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="h-11 shrink-0"
+        >
+          <Plus size={16} aria-hidden="true" />
+          Criar grupo
+        </Button>
+      </div>
       <ListState
         isLoading={isLoading}
         isError={isError}
@@ -65,6 +80,8 @@ export function GroupsActive(): JSX.Element {
           </ul>
         )}
       </ListState>
+
+      <AdminGroupFormDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }
@@ -75,6 +92,7 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
   const changeAdmin = useChangeGroupAdmin();
   const [blockOpen, setBlockOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const busy = update.isPending || changeAdmin.isPending;
 
   return (
@@ -101,6 +119,12 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
             label: "Visualizar",
             icon: <Eye size={16} aria-hidden="true" />,
             onSelect: () => router.push(`/groups/${pool.id}`),
+          },
+          {
+            label: "Editar",
+            disabled: busy,
+            icon: <Pencil size={16} aria-hidden="true" />,
+            onSelect: () => setEditOpen(true),
           },
           {
             label: "Alterar Admin",
@@ -147,6 +171,8 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
           )
         }
       />
+
+      <AdminGroupFormDialog open={editOpen} onOpenChange={setEditOpen} pool={pool} />
     </li>
   );
 }

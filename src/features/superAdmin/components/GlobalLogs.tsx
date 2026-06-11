@@ -33,6 +33,8 @@ const LOG_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "group_blocked", label: "Grupo bloqueado" },
   { value: "group_reactivated", label: "Grupo reativado" },
   { value: "pool_admin_changed", label: "Administrador alterado" },
+  { value: "group_created", label: "Grupo criado" },
+  { value: "group_updated", label: "Grupo editado" },
 ];
 
 /**

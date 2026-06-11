@@ -52,3 +52,20 @@ export const poolInputSchema = z.object({
 // no servidor). Usado pela camada de serviço p/ revalidar Zod antes do POST
 // (review WR-01 — falha cedo, sem round-trip inútil).
 export const poolCreateClientSchema = poolInputSchema.omit({ adminId: true });
+
+// PATCH parcial de um pool pelo super_admin (PRD-11 — editar grupo). Todos os
+// campos opcionais (envia só o que mudou); `maxParticipants: null` limpa o limite
+// (apaga o campo no servidor). Exige ao menos um campo. `slug`/`status`/`adminId`
+// NÃO são editáveis aqui (slug = doc-id imutável; status e admin têm rotas próprias).
+export const poolEditSchema = z
+  .object({
+    name: nonEmptyString,
+    description: z.string().max(160),
+    photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH),
+    maxParticipants: z.int().min(1).nullable(),
+    allowInvites: z.boolean(),
+  })
+  .partial()
+  .refine((obj) => Object.keys(obj).length > 0, {
+    message: "Informe ao menos um campo para atualizar.",
+  });

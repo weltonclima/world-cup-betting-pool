@@ -2,6 +2,7 @@
 export { SuperAdminDashboard } from "./SuperAdminDashboard";
 export { GroupsPending } from "./GroupsPending";
 export { GroupsActive } from "./GroupsActive";
+export { AdminGroupFormDialog } from "./AdminGroupFormDialog";
 export { GroupsBlocked } from "./GroupsBlocked";
 export { AdminsList } from "./AdminsList";
 export { WorldCupMatches } from "./WorldCupMatches";

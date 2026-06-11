@@ -52,6 +52,8 @@ const SOURCE_LABEL: Record<SystemLogType, string> = {
   group_blocked: "Super Admin",
   group_reactivated: "Super Admin",
   pool_admin_changed: "Super Admin",
+  group_created: "Super Admin",
+  group_updated: "Super Admin",
 };
 
 /** Tela — Logs do Sistema (PRD07-06). */
