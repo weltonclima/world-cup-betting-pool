@@ -30,20 +30,22 @@ export interface GroupSelectorProps {
 // Classes de chip
 // ---------------------------------------------------------------------------
 
+// Espelha o FilterChip de MatchListHeader (chips compactos dos filtros rápidos):
+// rounded-full, h-8, px-3, text-xs; ativo = preenchido (primary), inativo = outline.
+
 /** Classes base comuns a todos os chips. */
 const CHIP_BASE =
-  "flex-none rounded-full h-11 sm:h-9 px-3 " +
-  "inline-flex items-center justify-center text-xs sm:text-sm whitespace-nowrap " +
+  "inline-flex shrink-0 items-center justify-center rounded-full h-8 px-3 " +
+  "border text-xs font-medium whitespace-nowrap " +
   "transition-colors duration-150 " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
-/** Classes adicionais para o chip ativo. */
-const CHIP_ACTIVE = "bg-primary text-primary-foreground font-medium shadow-sm";
+/** Classes adicionais para o chip ativo (variante default/preenchida). */
+const CHIP_ACTIVE = "bg-primary text-primary-foreground border-transparent hover:bg-primary/80";
 
-/** Classes adicionais para chips inativos. */
+/** Classes adicionais para chips inativos (variante outline). */
 const CHIP_INACTIVE =
-  "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground " +
-  "active:scale-[0.98] motion-reduce:transform-none";
+  "border-border bg-background text-foreground hover:bg-muted hover:text-foreground";
 
 // ---------------------------------------------------------------------------
 // Componente
