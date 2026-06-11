@@ -37,7 +37,7 @@ Separate package (own `package.json`, `tsconfig`, `vitest`). Triggers:
 
 ## Environment variables
 - Client: `NEXT_PUBLIC_FIREBASE_*` (apiKey, projectId, …), `NEXT_PUBLIC_FIREBASE_USE_EMULATORS`.
-- Server: `FIREBASE_SERVICE_ACCOUNT_KEY` (one-line JSON; else `applicationDefault()` on App Hosting), `COPA_DATA_USE_MOCK`, `API_FOOTBALL_KEY` (legacy/pending).
+- Server: `FIREBASE_SERVICE_ACCOUNT_KEY` (one-line JSON; else `applicationDefault()` on App Hosting), `COPA_DATA_USE_MOCK`.
 - `.env.local` (+ `.example`), `.env.production.example`. Never log env vars.
 
 ## Testing
