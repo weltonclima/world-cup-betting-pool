@@ -47,3 +47,4 @@ export {
   updatePreferences,
 } from "./notifications";
 export { createLog, listLogs } from "./systemLogs";
+export { getGroups, getBracket, WorldcupServiceError } from "./worldcup";

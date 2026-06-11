@@ -41,6 +41,34 @@ export function parseWithId<T>(
 }
 
 /**
+ * Extrai o detalhe do corpo de erro `{ error: string }` de uma resposta HTTP.
+ * Tolera corpo não-JSON / vazio / sem `error` → retorna string vazia, sem lançar.
+ *
+ * Fonte única usada por `buildHttpError` (aqui) e por erros tipados de outras
+ * camadas de serviço (ex.: `WorldcupServiceError`), p/ não duplicar o guard de
+ * parsing do corpo (dedup — review WR-02).
+ *
+ * @param res - Resposta HTTP (tipicamente status != 2xx).
+ * @returns Texto de `body.error` quando presente e string; senão `""`.
+ */
+export async function extractErrorDetail(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "error" in body &&
+      typeof (body as { error: unknown }).error === "string"
+    ) {
+      return (body as { error: string }).error;
+    }
+  } catch {
+    // corpo não-JSON / vazio — ignora, usa só o status.
+  }
+  return "";
+}
+
+/**
  * Lê o corpo `{ error }` (se houver) e monta uma mensagem útil para o `Error`.
  * Tolera corpo ausente/inválido sem mascarar o status HTTP.
  *
@@ -52,20 +80,7 @@ export async function buildHttpError(
   res: Response,
   fallback: string,
 ): Promise<Error> {
-  let detail = "";
-  try {
-    const body: unknown = await res.json();
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "error" in body &&
-      typeof (body as { error: unknown }).error === "string"
-    ) {
-      detail = (body as { error: string }).error;
-    }
-  } catch {
-    // corpo não-JSON / vazio — ignora, usa só o status.
-  }
+  const detail = await extractErrorDetail(res);
   const suffix = detail ? ` — ${detail}` : "";
   return new Error(`${fallback} (HTTP ${res.status})${suffix}`);
 }
