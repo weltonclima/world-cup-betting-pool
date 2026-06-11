@@ -30,6 +30,18 @@
     --color-win-bg: var(--color-win-bg);
     --color-loss: var(--color-loss);
     --color-loss-bg: var(--color-loss-bg);
+    /*
+     * Tokens semânticos de estado (success/info/warning) — PRD-11 UI-review #7.
+     * Substituem hex hardcoded (emerald/sky/amber) em badges de status e nos
+     * ícones de log, garantindo contraste AA em light e dark (valores em
+     * :root/.dark abaixo). Mesma mecânica de @theme inline dos tokens win/loss.
+     */
+    --color-success: var(--color-success);
+    --color-success-bg: var(--color-success-bg);
+    --color-info: var(--color-info);
+    --color-info-bg: var(--color-info-bg);
+    --color-warning: var(--color-warning);
+    --color-warning-bg: var(--color-warning-bg);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -76,6 +88,13 @@
     --color-win-bg: oklch(0.95 0.05 145);    /* verde muito claro — fundo de badge acerto */
     --color-loss: oklch(0.577 0.245 27.325); /* vermelho — erro (reusa --destructive) */
     --color-loss-bg: oklch(0.97 0.04 27);    /* vermelho muito claro — fundo de badge erro */
+    /* Estado semântico (light) — UI-review #7 */
+    --color-success: oklch(0.52 0.16 145);   /* verde escuro — AA sobre fundo claro */
+    --color-success-bg: oklch(0.95 0.05 145);
+    --color-info: oklch(0.50 0.15 245);      /* azul — AA sobre fundo claro */
+    --color-info-bg: oklch(0.95 0.04 245);
+    --color-warning: oklch(0.50 0.12 75);    /* âmbar escuro — AA sobre fundo claro */
+    --color-warning-bg: oklch(0.96 0.06 85);
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -116,6 +135,13 @@
     --color-win-bg: oklch(0.25 0.06 145);   /* verde muito escuro no dark */
     --color-loss: oklch(0.704 0.191 22.216); /* reusa --destructive do dark */
     --color-loss-bg: oklch(0.25 0.07 27);   /* vermelho muito escuro no dark */
+    /* Estado semântico (dark) — UI-review #7 */
+    --color-success: oklch(0.72 0.18 145);
+    --color-success-bg: oklch(0.25 0.06 145);
+    --color-info: oklch(0.70 0.15 245);
+    --color-info-bg: oklch(0.25 0.06 245);
+    --color-warning: oklch(0.78 0.14 85);
+    --color-warning-bg: oklch(0.28 0.07 75);
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
@@ -276,6 +302,19 @@
 }
 
 /*
+ * Tema da seção Grupos (PRD-09). Mesmo verde validado AA das demais seções;
+ * escopo local na rota /grupos (CTA "Criar Grupo", badge de status "Ativo",
+ * realce de seleção e links das telas PRD09-01..05).
+ */
+.grupos-theme {
+    --primary: oklch(0.46 0.16 150);
+    --primary-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.46 0.16 150);
+    --sidebar-primary: oklch(0.46 0.16 150);
+    --chart-1: oklch(0.46 0.16 150);
+}
+
+/*
  * Dark mode dos temas verdes (TASK-14, carry-forward WR-01 de TASK-07 / WR-02 de
  * TASK-08/10/13). No dark, o verde 0.46 com texto branco e o verde-sobre-fundo-escuro
  * caem abaixo de AA. Eleva --primary p/ ~0.72 (verde mais claro) com --primary-foreground
@@ -285,6 +324,7 @@
 .dark .ranking-theme,
 .dark .profile-theme,
 .dark .notifications-theme,
+.dark .grupos-theme,
 .dark .admin-theme {
     --primary: oklch(0.72 0.16 150);
     --primary-foreground: oklch(0.205 0.02 150);

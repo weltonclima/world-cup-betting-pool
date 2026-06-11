@@ -23,5 +23,10 @@ export const userSchema = z
     avatarUrl: z.string().optional(),
     createdAt: isoDateTime.optional(), // (assumido) auditoria
     updatedAt: isoDateTime.optional(), // (assumido) auditoria
+    // NET-NEW PRD-10 (TASK-01) — aditivos/opcionais: usuários da PRD-09 continuam
+    // fazendo parse. `blockReason` capturado no bloqueio (PRD10-03/04);
+    // `removedFromGroupAt` marca o soft-delete (D4) sem apagar o doc.
+    blockReason: z.string().max(280).optional(), // motivo do bloqueio (PRD10-04)
+    removedFromGroupAt: isoDateTime.optional(), // soft-delete do grupo (D4)
   })
   .strict();

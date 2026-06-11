@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
+import { writeAuditLog } from "@/server/admin/auditLog";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import {
   isGroupAdminRole,
@@ -114,7 +115,11 @@ export async function PATCH(
       const shouldPromote =
         !newRole.success || isParticipantRole(newRole.data);
       if (shouldPromote) {
-        tx.update(newRef, { role: "group_admin", updatedAt });
+        // Vincula `groupId` ao pool junto com a promoção (review WR-02): sem isso,
+        // um usuário sem `groupId` viraria group_admin meio-provisionado — papel de
+        // admin de pool, mas sem pertencer a pool nenhum (não conseguiria atuar nas
+        // rotas /api/group/*, que derivam groupId da sessão).
+        tx.update(newRef, { role: "group_admin", groupId: id, updatedAt });
       }
       if (demoteOld) {
         tx.update(db.collection("users").doc(oldAdminId), {
@@ -126,6 +131,17 @@ export async function PATCH(
       return { ...pool, adminId: newAdminId, updatedAt };
     });
 
+    // Auditoria best-effort (PRD-11 TASK-05): troca de admin do pool.
+    if (auth.actorUid) {
+      void writeAuditLog({
+        type: "pool_admin_changed",
+        actorUid: auth.actorUid,
+        targetUid: newAdminId,
+        message: `Grupo: ${updatedPool.name}`,
+        level: "info",
+      });
+    }
+
     return NextResponse.json({ pool: updatedPool }, { status: 200 });
   } catch (err) {
     if (err instanceof SwapError) {
@@ -134,6 +150,68 @@ export async function PATCH(
     console.error("[admin/groups/admin] erro inesperado na troca:", err);
     return NextResponse.json(
       { error: "Erro ao trocar o admin do grupo." },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * DELETE /api/admin/groups/[id]/admin — "Remover" admin (B3, PRD11-05, TASK-05).
+ *
+ * Rebaixa o atual `pool.adminId` a `participant` (NÃO exclui o usuário). O pool
+ * fica sem admin efetivo até nova atribuição via PATCH. `pool.adminId` é mantido
+ * (campo obrigatório no schema strict) mas o usuário deixa de ter o papel
+ * `group_admin` — a reatribuição é feita por Substituir/Transferir. Só
+ * super_admin/secret.
+ */
+export async function DELETE(
+  request: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const auth = await authorizeGroupAdmin(request);
+  if ("errorResponse" in auth) return auth.errorResponse;
+
+  const { id } = await ctx.params;
+  const db = getAdminFirestore();
+  const poolRef = db.collection("pools").doc(id);
+  const updatedAt = new Date().toISOString();
+
+  try {
+    const pool = await db.runTransaction(async (tx) => {
+      const poolSnap = await tx.get(poolRef);
+      if (!poolSnap.exists) throw new SwapError(404, "Grupo não encontrado.");
+      const parsedPool = poolSchema.parse(poolSnap.data());
+
+      const adminRef = db.collection("users").doc(parsedPool.adminId);
+      const adminSnap = await tx.get(adminRef);
+      const adminRole = roleSchema.safeParse(
+        adminSnap.exists ? adminSnap.data()?.["role"] : undefined,
+      );
+      // Só rebaixa quem ainda é group_admin (não toca super_admin/legado).
+      if (adminRole.success && isGroupAdminRole(adminRole.data)) {
+        tx.update(adminRef, { role: "participant", updatedAt });
+      }
+      return parsedPool;
+    });
+
+    if (auth.actorUid) {
+      void writeAuditLog({
+        type: "pool_admin_changed",
+        actorUid: auth.actorUid,
+        targetUid: pool.adminId,
+        message: `Admin removido do grupo: ${pool.name}`,
+        level: "warning",
+      });
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err) {
+    if (err instanceof SwapError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    console.error("[admin/groups/admin] erro ao remover admin:", err);
+    return NextResponse.json(
+      { error: "Erro ao remover o admin do grupo." },
       { status: 500 },
     );
   }

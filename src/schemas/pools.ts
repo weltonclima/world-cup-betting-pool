@@ -30,6 +30,11 @@ export const poolSchema = z
     // Auditoria de mutações server-side (status/troca de admin, TASK-05). Opcional:
     // pools criados na TASK-04 nascem sem ele. Aditivo — não quebra parse de docs antigos.
     updatedAt: isoDateTime.optional(),
+    // NET-NEW PRD-10 (TASK-01) — aditivos: pools criados na PRD-09 continuam fazendo
+    // parse. Defaults aplicados NA LEITURA (não no schema): `maxParticipants` ausente
+    // = sem limite; `allowInvites` ausente = `true`.
+    maxParticipants: z.int().min(1).optional(), // limite de participantes (PRD10-05)
+    allowInvites: z.boolean().optional(), // flag "permitir convites" (PRD10-05)
   })
   .strict();
 

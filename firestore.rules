@@ -114,7 +114,12 @@ service cloud.firestore {
       allow read:  if isApproved() && resource.data.status == "active";
       allow write: if false; // create/update/delete exclusivos do Admin SDK
     }
-    match /matches/{matchId}     { allow read: if isApproved(); allow write: if isAdmin(); }
+    // matches (PRD-11 TASK-03): persistência net-new da coleção de partidas.
+    // LEITURA: qualquer approved. ESCRITA negada a TODO cliente (incl. admin) —
+    // sync OpenFootball (`POST /api/admin/worldcup/sync`) e edição manual
+    // (`PUT /api/admin/matches/[id]`) gravam exclusivamente via Admin SDK nos
+    // Route Handlers, que bypassam as Rules por design. Espelha `pools`/`predictions`.
+    match /matches/{matchId}     { allow read: if isApproved(); allow write: if false; }
     match /system_settings/{id}  { allow read: if isApproved(); allow write: if isAdmin(); }
 
     // ---- Derivados do recálculo (PRD-05): approved lê, NINGUÉM escreve pelo cliente ----
@@ -135,6 +140,15 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow create: if isAdmin();
       allow update, delete: if false;
+    }
+
+    // ---- sync_logs (PRD-11 TASK-03): resumo das sincronizações da Copa ----
+    // Leitura EXCLUSIVA de super_admin (painel "Última Sincronização" / "Detalhes
+    // do Log"). Escrita negada a TODO cliente: o resumo é gravado pelo Admin SDK
+    // no Route Handler de sync. Append-only por design (sem update/delete).
+    match /sync_logs/{logId} {
+      allow read:  if isSuperAdmin();
+      allow write: if false; // create exclusivo do Admin SDK no Route Handler
     }
 
     // ---- notifications (PRD-08): cada um lê as suas; admin cria p/ terceiros ----
@@ -173,6 +187,21 @@ service cloud.firestore {
     // o cliente nunca lê nem escreve — é metadado de segurança server-side.
     match /webauthn_challenge_jti/{jti} {
       allow read, write: if false;
+    }
+
+    // ---- invites (PRD-10, TASK-03): convites de entrada por pool ----
+    // Isolamento por `groupId`: o approved só lê convites ATIVOS do PRÓPRIO pool
+    // (`resource.data.groupId == request.auth.token.groupId`, claim populada na
+    // PRD-09 TASK-06). ESCRITA negada a TODO cliente (incl. admin autenticado):
+    // criação/revogação e o incremento de `usedCount` na redenção são exclusivos
+    // do Admin SDK nos Route Handlers /api/group/invites (TASK-08), que bypassa as
+    // Rules por design. Espelha a política de `pools`/`predictions`. NÃO assume um
+    // claim `groupId` em quem não o tem — o `&&` curto-circuita em isApproved().
+    match /invites/{inviteId} {
+      allow read:  if isApproved() &&
+                      resource.data.isActive == true &&
+                      resource.data.groupId == request.auth.token.groupId;
+      allow write: if false; // create/update/delete exclusivos do Admin SDK
     }
 
     // ---- worldcup_cache (TASK-04) ----

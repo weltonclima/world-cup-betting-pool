@@ -33,7 +33,7 @@ import { PasskeyError } from "@/services/webauthn";
  */
 export type SignUpInput = Pick<
   SignupFormValues,
-  "name" | "nickname" | "email" | "password"
+  "name" | "nickname" | "email" | "password" | "groupId"
 >;
 
 /**
@@ -223,8 +223,11 @@ export async function signInWithBiometricToken(
 /**
  * Cria a conta no Firebase Auth e grava o perfil em `users/{uid}`.
  *
- * O cliente sempre grava `role: "user"` / `status: "pending"` (as Security
- * Rules exigem). A promoção a admin é feita por Cloud Function (TASK-05).
+ * O cliente grava `role: "participant"` (canônico PRD-09; as Security Rules
+ * aceitam tanto `participant` quanto o legado `user`) / `status: "pending"`. A
+ * promoção a admin é feita por Cloud Function (TASK-05). O `groupId` (PRD-09,
+ * TASK-07) referencia o pool ativo selecionado no cadastro — todo usuário novo
+ * nasce associado a um grupo.
  *
  * Atomicidade (R2): se a gravação do doc falhar, a conta de Auth recém-criada
  * é removida via `deleteUser` (rollback) para não deixar conta órfã. Se o
@@ -236,6 +239,7 @@ export async function signUp({
   nickname,
   email,
   password,
+  groupId,
 }: SignUpInput): Promise<void> {
   // Persistência local aplicada antes de criar a conta (TASK-01): o usuário
   // recém-cadastrado já fica autenticado e deve permanecer logado.
@@ -252,8 +256,9 @@ export async function signUp({
       name,
       nickname,
       email,
-      role: "user",
+      role: "participant",
       status: "pending",
+      groupId,
       createdAt: new Date().toISOString(),
     });
   } catch (error) {

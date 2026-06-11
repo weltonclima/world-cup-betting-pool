@@ -4,13 +4,38 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
+import { writeAuditLog } from "@/server/admin/auditLog";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
-import { canTransitionPool, poolSchema, poolStatusSchema } from "@/schemas";
+import {
+  canTransitionPool,
+  poolSchema,
+  poolStatusSchema,
+  type SystemLogType,
+} from "@/schemas";
+import type { PoolStatus } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({ status: poolStatusSchema });
+
+/**
+ * Mapeia a transição de status do pool para o tipo de log de auditoria (PRD-11
+ * TASK-05). Rejeitar (pending→blocked) e bloquear (active→blocked) compartilham
+ * o destino `blocked`; desambiguamos pela origem.
+ */
+function logTypeForTransition(
+  from: PoolStatus,
+  to: PoolStatus,
+): SystemLogType | null {
+  if (to === "active") {
+    return from === "pending" ? "group_approved" : "group_reactivated";
+  }
+  if (to === "blocked") {
+    return from === "pending" ? "group_rejected" : "group_blocked";
+  }
+  return null;
+}
 
 /** Erro de domínio da transição, carregando o status HTTP a devolver. */
 class StatusError extends Error {
@@ -56,7 +81,7 @@ export async function PATCH(
   // Transação: read+validate+write atômico evita TOCTOU entre duas transições
   // concorrentes (ex.: active→blocked e blocked→active pulando o estado blocked).
   try {
-    const updated = await db.runTransaction(async (tx) => {
+    const { updated, previousStatus } = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new StatusError(404, "Grupo não encontrado.");
 
@@ -72,8 +97,22 @@ export async function PATCH(
 
       tx.update(ref, { status: parsed.data.status, updatedAt });
       // current.data já é um Pool válido (strict) — sem re-parse.
-      return { ...current.data, status: parsed.data.status, updatedAt };
+      return {
+        updated: { ...current.data, status: parsed.data.status, updatedAt },
+        previousStatus: current.data.status,
+      };
     });
+
+    // Auditoria best-effort (PRD-11 TASK-05): não derruba a transição.
+    const logType = logTypeForTransition(previousStatus, parsed.data.status);
+    if (logType && auth.actorUid) {
+      void writeAuditLog({
+        type: logType,
+        actorUid: auth.actorUid,
+        message: `Grupo: ${updated.name}`,
+        level: logType === "group_blocked" || logType === "group_rejected" ? "warning" : "info",
+      });
+    }
 
     return NextResponse.json({ pool: updated }, { status: 200 });
   } catch (err) {

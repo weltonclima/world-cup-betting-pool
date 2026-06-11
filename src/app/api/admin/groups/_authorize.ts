@@ -16,7 +16,7 @@ import { isSuperAdminRole, roleSchema } from "@/schemas";
  * Retorna `{ authorized: true }` ou `{ errorResponse }` pronto (401/403).
  */
 export type AdminAuthResult =
-  | { authorized: true }
+  | { authorized: true; actorUid: string | null }
   | { errorResponse: NextResponse };
 
 export async function authorizeGroupAdmin(
@@ -24,7 +24,8 @@ export async function authorizeGroupAdmin(
 ): Promise<AdminAuthResult> {
   const secret = process.env["GROUPS_ADMIN_SECRET"];
   if (safeSecretEqual(secret, request.headers.get("x-admin-secret"))) {
-    return { authorized: true };
+    // Caminho cron/seed/script: sem sessão, logo sem actor humano para auditar.
+    return { authorized: true, actorUid: null };
   }
 
   const auth = await requireApprovedUser();
@@ -42,5 +43,7 @@ export async function authorizeGroupAdmin(
     };
   }
 
-  return { authorized: true };
+  // actorUid (uid do super_admin da sessão) usado para auditoria em `system_logs`
+  // (PRD-11 TASK-05). No caminho secret é null (sem ator humano).
+  return { authorized: true, actorUid: auth.user.uid };
 }

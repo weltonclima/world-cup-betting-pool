@@ -45,11 +45,18 @@ const INVALID: VerifySessionResult = { valid: false };
 
 /**
  * Normaliza o claim `role` do payload para o shape estável usado pelo middleware.
- * Só `"admin"`/`"user"` são reconhecidos; qualquer outra coisa vira `null`
- * (ausência de privilégio), nunca lança.
+ * Reconhece o bucket privilegiado (`admin`/`super_admin` → `"admin"`) e o comum
+ * (`user`/`participant` → `"user"`); qualquer outra coisa vira `null` (ausência
+ * de privilégio), nunca lança.
+ *
+ * Dupla-compat (R4): `super_admin` (canônico PRD-09) e `admin` (legado) compartilham
+ * o privilégio global, então ambos caem no bucket `"admin"` aqui — o portão de edge
+ * de `/admin/*` libera os dois sem precisar diferenciar.
  */
 function normalizeRole(raw: unknown): "admin" | "user" | null {
-  return raw === "admin" || raw === "user" ? raw : null;
+  if (raw === "admin" || raw === "super_admin") return "admin";
+  if (raw === "user" || raw === "participant") return "user";
+  return null;
 }
 
 /**

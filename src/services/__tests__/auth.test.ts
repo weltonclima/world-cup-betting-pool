@@ -81,6 +81,7 @@ const validInput: SignUpInput = {
   nickname: "Fulano",
   email: "fulano@example.com",
   password: "secret123",
+  groupId: "pool-123",
 };
 
 // fetch global mockado: signIn/signOut chamam /api/auth/session (TASK-09).
@@ -212,8 +213,9 @@ describe("signUp", () => {
       name: "Fulano de Tal",
       nickname: "Fulano",
       email: "fulano@example.com",
-      role: "user",
+      role: "participant",
       status: "pending",
+      groupId: "pool-123",
     });
     // createdAt é uma ISO string válida.
     expect(typeof writtenDoc.createdAt).toBe("string");

@@ -32,6 +32,14 @@ export const matchSchema = z
     status: matchStatusSchema,                       // situação
     homeScore: scoreSchema.nullable(),               // (assumido) null enquanto não finalizado
     awayScore: scoreSchema.nullable(),               // (assumido) null enquanto não finalizado
+    // NET-NEW PRD-11 (TASK-01) — campos de edição manual + persistência.
+    // Todos OPCIONAIS: `mapOpenFootballMatch` não os emite, então o parse de um
+    // match vindo do openfootball (sem estes campos) continua válido. Eles só
+    // aparecem em docs persistidos na coleção `matches` (sync/edição manual).
+    editedBy: nonEmptyString.nullable().optional(),  // uid do super_admin que editou; null até a 1ª edição
+    editedAt: isoDateTime.nullable().optional(),     // carimbo da última edição manual; null até a 1ª edição
+    isManualOverride: z.boolean().optional(),        // true = blindado do sync (default false na leitura)
+    syncedAt: isoDateTime.optional(),                // último carimbo de sincronização (auditoria)
   })
   .strict()
   .refine(
@@ -58,3 +66,15 @@ export const matchSchema = z
       path: ["homeScore"],
     },
   );
+
+/**
+ * Helper de proteção de override (PRD-11 TASK-01). Um match é "protegido" do sync
+ * quando tem `isManualOverride === true` — o sync OpenFootball NUNCA deve
+ * sobrescrever placar/status/venue/kickoff de um match protegido. Total e puro:
+ * `isManualOverride` ausente/false → não protegido (default seguro: o sync escreve).
+ */
+export function isMatchProtected(match: {
+  isManualOverride?: boolean | undefined;
+}): boolean {
+  return match.isManualOverride === true;
+}

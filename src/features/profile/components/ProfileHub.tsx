@@ -8,13 +8,20 @@ import {
   Activity,
   BarChart3,
   Camera,
+  FolderCheck,
+  FolderClock,
+  FolderX,
+  Globe,
   KeyRound,
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Mail,
   ScrollText,
   Settings,
+  Trophy,
   UserCheck,
+  UserCog,
   Users,
   UserX,
 } from "lucide-react";
@@ -25,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { isGroupAdminRole, isSuperAdminRole } from "@/schemas/shared";
 
 import { useProfile, useUpdateProfile } from "../hooks";
 import { AvatarImageError, validateImageInput } from "../lib/imageToDataUrl";
@@ -198,14 +206,122 @@ export function ProfileHub(): JSX.Element {
         />
       </nav>
 
-      {/* Administração — só para admin (PRD-07.1, role-gated) */}
-      {profile.role === "admin" ? (
+      {/* Administração do Grupo — group_admin (PRD-10, role-gated) */}
+      {isGroupAdminRole(profile.role) ? (
+        <section
+          aria-labelledby="group-admin-section"
+          className="flex flex-col gap-2"
+        >
+          <h2
+            id="group-admin-section"
+            className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            Administração do Grupo
+          </h2>
+          <ProfileMenuItem
+            icon={LayoutDashboard}
+            title="Dashboard do Grupo"
+            subtitle="Visão geral do grupo"
+            href="/grupo/dashboard"
+          />
+          <ProfileMenuItem
+            icon={UserCheck}
+            title="Usuários Pendentes"
+            subtitle="Aprovar ou rejeitar entradas"
+            href="/grupo/usuarios/pendentes"
+          />
+          <ProfileMenuItem
+            icon={Users}
+            title="Usuários Aprovados"
+            subtitle="Participantes ativos"
+            href="/grupo/usuarios/aprovados"
+          />
+          <ProfileMenuItem
+            icon={UserX}
+            title="Usuários Bloqueados"
+            subtitle="Gerenciar bloqueios"
+            href="/grupo/usuarios/bloqueados"
+          />
+          <ProfileMenuItem
+            icon={Mail}
+            title="Convites"
+            subtitle="Gerar links e códigos"
+            href="/grupo/convites"
+          />
+          <ProfileMenuItem
+            icon={Settings}
+            title="Configurações do Grupo"
+            subtitle="Editar informações do grupo"
+            href="/grupo/configuracoes"
+          />
+        </section>
+      ) : null}
+
+      {/* Super Admin — área global (PRD-11, role-gated): todas as telas */}
+      {isSuperAdminRole(profile.role) ? (
+        <section
+          aria-labelledby="super-admin-section"
+          className="flex flex-col gap-2"
+        >
+          <h2
+            id="super-admin-section"
+            className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            Super Admin
+          </h2>
+          <ProfileMenuItem
+            icon={Globe}
+            title="Dashboard Global"
+            subtitle="Visão geral da plataforma"
+            href="/admin/dashboard-global"
+          />
+          <ProfileMenuItem
+            icon={FolderClock}
+            title="Grupos Pendentes"
+            subtitle="Aprovar novos grupos"
+            href="/admin/grupos-pendentes"
+          />
+          <ProfileMenuItem
+            icon={FolderCheck}
+            title="Grupos Ativos"
+            subtitle="Gerenciar grupos existentes"
+            href="/admin/grupos-ativos"
+          />
+          <ProfileMenuItem
+            icon={FolderX}
+            title="Grupos Bloqueados"
+            subtitle="Reativar ou excluir grupos"
+            href="/admin/grupos-bloqueados"
+          />
+          <ProfileMenuItem
+            icon={UserCog}
+            title="Administradores"
+            subtitle="Gerenciar Group Admins"
+            href="/admin/administradores"
+          />
+          <ProfileMenuItem
+            icon={Trophy}
+            title="Resultados da Copa"
+            subtitle="Partidas e resultados"
+            href="/admin/jogos-da-copa"
+          />
+          <ProfileMenuItem
+            icon={ScrollText}
+            title="Logs Globais"
+            subtitle="Auditoria do sistema"
+            href="/admin/logs-globais"
+          />
+        </section>
+      ) : null}
+
+      {/* Administração (sistema) — PRD-07 legado, super admin */}
+      {isSuperAdminRole(profile.role) ? (
         <section aria-labelledby="admin-section" className="flex flex-col gap-2">
           <h2
             id="admin-section"
             className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
-            Administração
+            Administração (Sistema)
           </h2>
           <ProfileMenuItem
             icon={LayoutDashboard}

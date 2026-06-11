@@ -48,3 +48,10 @@ export {
 } from "./notifications";
 export { createLog, listLogs } from "./systemLogs";
 export { getGroups, getBracket, WorldcupServiceError } from "./worldcup";
+export {
+  createPool,
+  searchPools,
+  getPool,
+  PoolServiceError,
+  type CreatePoolInput,
+} from "./pools";

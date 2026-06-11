@@ -20,6 +20,7 @@ const validSignup = {
   name: "João da Silva",
   nickname: "Joãozinho",
   email: "joao@example.com",
+  groupId: "pool-123",
   password: "senha123",
   confirmPassword: "senha123",
 } as const;
@@ -255,6 +256,7 @@ describe("auth › inferência de tipos", () => {
       name: string;
       nickname: string;
       email: string;
+      groupId: string;
       password: string;
       confirmPassword: string;
     }>();

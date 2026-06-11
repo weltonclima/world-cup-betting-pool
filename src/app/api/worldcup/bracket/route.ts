@@ -14,7 +14,8 @@
 import { after, NextResponse } from "next/server";
 
 import { copaDataErrorResponse } from "@/app/api/_lib/copaDataError";
-import { fetchAllMatches, fetchAllTeams } from "@/server/copaData";
+import { fetchAllTeams } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { isFresh, readSnapshot, writeSnapshot } from "@/server/worldcup/cache";
 import { deriveBracket } from "@/server/worldcup/bracket";
 import { bracketResponseSchema } from "@/schemas/worldcup";
@@ -58,7 +59,7 @@ export async function GET(): Promise<NextResponse> {
 
   // 2/3/4. Cache stale, ausente ou corrompido → recomputa.
   try {
-    const [matches, teams] = await Promise.all([fetchAllMatches(), fetchAllTeams()]);
+    const [matches, teams] = await Promise.all([getEffectiveMatches(), fetchAllTeams()]);
 
     const hasLive = matches.some(
       (m) => m.stage === "grupos" && m.status === "live",
