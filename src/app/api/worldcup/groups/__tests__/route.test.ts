@@ -3,7 +3,9 @@
  *
  * Mocks: @/server/copaData (fetch), @/server/worldcup/cache (snapshot).
  * Cobre: cache fresco, stale, ausente, fetch falha + snap, fetch falha + sem snap,
- *        headers Cache-Control, writeSnapshot lança → 200 (best-effort).
+ *        headers Cache-Control, writeSnapshot lança → 200 (best-effort),
+ *        snapshot corrompido → fallthrough para recomputo (Fix 1),
+ *        after() desacopla escrita do response (Fix 3).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,6 +44,13 @@ vi.mock("@/server/worldcup/cache", () => ({
   writeSnapshot: writeSnapshotMock,
   isFresh: isFreshMock,
 }));
+
+// Fix 3: mock after() para executar o callback sincronamente no ambiente de testes.
+// Preserva NextResponse e demais exports do módulo intactos.
+vi.mock("next/server", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("next/server")>();
+  return { ...mod, after: (fn: () => unknown) => { void fn(); } };
+});
 
 // server-only é importado pelos módulos de servidor
 vi.mock("server-only", () => ({}));
@@ -143,15 +152,41 @@ describe("GET /api/worldcup/groups", () => {
     );
   });
 
-  it("inclui header Cache-Control com ttl=60 quando snapshot fresco e hasLive=true", async () => {
+  it("inclui header Cache-Control com ttl=60 e swr=0 quando snapshot fresco e hasLive=true", async () => {
     const liveSnap = { ...MOCK_SNAPSHOT, hasLiveGroupMatch: true };
     readSnapshotMock.mockResolvedValue(liveSnap);
     isFreshMock.mockReturnValue(true);
 
     const response = await GET();
+    // Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo
     expect(response.headers.get("Cache-Control")).toBe(
-      "s-maxage=60, stale-while-revalidate=60",
+      "s-maxage=60, stale-while-revalidate=0",
     );
+  });
+
+  // ── Snapshot corrompido (Fix 1) ─────────────────────────────────────────────
+
+  it("ignora snapshot fresco corrompido, faz fallthrough para fetch+computa e retorna payload computado", async () => {
+    // Snapshot "fresco" mas com payload que não passa no groupsResponseSchema
+    const corruptSnap = {
+      payload: { groups: "not-an-array" },
+      computedAt: Date.now() - 100,
+      hasLiveGroupMatch: false,
+    };
+    readSnapshotMock.mockResolvedValue(corruptSnap);
+    isFreshMock.mockReturnValue(true);
+    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
+    fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
+
+    const response = await GET();
+
+    // Deve ter caído no caminho de recomputo, não usado o cache corrompido
+    expect(fetchAllMatchesMock).toHaveBeenCalledOnce();
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as GroupsResponse;
+    expect(Array.isArray(body.groups)).toBe(true);
+    expect(body).toHaveProperty("hasLiveGroupMatch");
   });
 
   // ── Cache stale ─────────────────────────────────────────────────────────────
@@ -201,7 +236,7 @@ describe("GET /api/worldcup/groups", () => {
     );
   });
 
-  it("inclui header Cache-Control ttl=60 após recomputação com partida ao vivo", async () => {
+  it("inclui header Cache-Control ttl=60 e swr=0 após recomputação com partida ao vivo", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
     const liveMatch = { ...MOCK_MATCH, status: "live" as const };
@@ -209,8 +244,9 @@ describe("GET /api/worldcup/groups", () => {
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
     const response = await GET();
+    // Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo
     expect(response.headers.get("Cache-Control")).toBe(
-      "s-maxage=60, stale-while-revalidate=60",
+      "s-maxage=60, stale-while-revalidate=0",
     );
   });
 
