@@ -150,7 +150,8 @@ export function PredictionsHub({
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-foreground">Meus Palpites</h1>
+      {/* Título oculto: removido do visual, mantido p/ leitores de tela (a11y). */}
+      <h1 className="sr-only">Meus Palpites</h1>
 
       {isError ? (
         <HubError onRetry={onRetry} />
