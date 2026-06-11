@@ -5,7 +5,7 @@
 ## Stack
 - **Next.js 15** (App Router) + **React 19**, **TypeScript strict** (no `any`).
 - **SSR runtime** — NOT static export. Route Handlers (`src/app/api/*`) and `middleware.ts` need a server. (`firebase.json` `hosting.public: "out"` is stale legacy; ignore it.)
-- **Deploy:** Firebase App Hosting (Cloud Run). `apphosting.yaml` + `API_FOOTBALL_KEY` secret historically pending — verify before relying.
+- **Deploy:** Firebase App Hosting (Cloud Run). `apphosting.yaml`.
 - UI: Tailwind v4, shadcn + `@base-ui/react`, lucide, recharts, motion, sonner. Forms: react-hook-form + Zod resolver. Data: `@tanstack/react-query` + `react-table`.
 
 ## Layering (top → bottom)
@@ -24,7 +24,7 @@
 ## Copa tournament data (NOT in Firestore)
 - Source: **openfootball** fetched in `src/server/copaData` (HTTP client + mock via `COPA_DATA_USE_MOCK`). Public API: `fetchAllMatches()`, `fetchAllTeams()`. Teams derived from group matches via `teamRegistry`.
 - **Cache tiers** (`src/server/cache/tiers.ts`) — single source shared server↔client: `REVALIDATE` (seconds, for Next `fetch` `revalidate`) mirrored to `STALE_TIME` (ms, for React Query). Tiers: grupos/seleções 24h, jogoFuturo 6h, jogoDia 30m, jogoAoVivo 1m, jogoEncerrado 5m.
-- Legacy `src/server/apiFootball` (api-football.com client) superseded by copaData but still present.
+- Legacy `src/server/apiFootball` removed (commit 5fdcf39) — copaData/openfootball is the only tournament-data source.
 
 ## Auth & authorization (defense-in-depth, 4 layers)
 1. **Edge middleware** (`middleware.ts`) — guards `/admin/*`. Reads `__session` httpOnly cookie, verifies signature+claims with **jose** (firebase-admin can't run on edge). `role` claim may be ~1h stale, so not sole authority.

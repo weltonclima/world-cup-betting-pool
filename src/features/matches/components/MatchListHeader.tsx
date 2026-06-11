@@ -111,8 +111,8 @@ export function MatchListHeader({
 }: MatchListHeaderProps) {
   return (
     <div className="flex flex-col gap-3">
-      {/* 1. Título */}
-      <h1 className="text-2xl font-semibold text-foreground">Jogos</h1>
+      {/* Título oculto: removido do visual, mantido p/ leitores de tela (a11y). */}
+      <h1 className="sr-only">Jogos</h1>
 
       {/* 2. Busca + botão filtros avançados */}
       <div className="flex items-center gap-2">

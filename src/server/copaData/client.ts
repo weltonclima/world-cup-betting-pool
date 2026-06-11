@@ -34,7 +34,7 @@ export class CopaDataParseError extends Error {
 
 /**
  * Abstração de acesso aos dados da Copa 2026.
- * Implementações: HttpCopaDataClient (produção) e MockCopaDataClient (testes).
+ * Implementação: HttpCopaDataClient (openfootball/worldcup.json).
  */
 export interface CopaDataClient {
   getData(): Promise<OpenFootballData>;

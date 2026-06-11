@@ -9,8 +9,8 @@ import { API_BASE, buildHttpError, parseWithId } from "./_apiClient";
  * Camada de serviço de partidas (integracao-api-football, TASK-05).
  *
  * Consome os Route Handlers `/api/matches` (substitui a leitura direta do
- * Firestore). Os dados da Copa vêm da API-Football via servidor Next
- * (proxy + cache + validação) — o browser NUNCA fala com a API-Football.
+ * Firestore). Os dados da Copa vêm do openfootball/worldcup.json via servidor
+ * Next (proxy + cache + validação) — o browser NUNCA fala com a fonte externa.
  *
  * Cada resposta é REVALIDADA com Zod no client (`matchWithIdSchema`) — defesa
  * em profundidade: o servidor já valida, mas não confiamos cegamente na rede.

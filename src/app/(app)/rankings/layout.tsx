@@ -10,7 +10,8 @@ import { RankingSubNav } from "@/features/rankings/components";
 export default function RankingsLayout({ children }: { children: ReactNode }) {
   return (
     <div className="ranking-theme flex flex-col gap-4 pb-20 md:pb-4">
-      <h1 className="text-2xl font-semibold text-foreground">Ranking</h1>
+      {/* Título oculto: removido do visual, mantido p/ leitores de tela (a11y). */}
+      <h1 className="sr-only">Ranking</h1>
       <RankingSubNav />
       {children}
     </div>
