@@ -181,6 +181,12 @@ export function ProfileHub(): JSX.Element {
       {/* Menu de navegação */}
       <nav aria-label="Menu do perfil" className="flex flex-col gap-2">
         <ProfileMenuItem
+          icon={Users}
+          title="Grupos"
+          subtitle="Buscar ou criar um grupo"
+          href="/groups"
+        />
+        <ProfileMenuItem
           icon={BarChart3}
           title="Estatísticas Pessoais"
           subtitle="Acompanhe seu desempenho"
