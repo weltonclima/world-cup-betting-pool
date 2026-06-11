@@ -14,3 +14,8 @@ export { StandingsLegend } from "./StandingsLegend";
 export { WorldcupSkeleton } from "./WorldcupSkeleton";
 export { WorldcupEmptyState } from "./WorldcupEmptyState";
 export { WorldcupErrorState } from "./WorldcupErrorState";
+
+// TASK-08: tela Eliminatórias (chaveamento)
+export { BracketView } from "./BracketView";
+export { PhaseSection } from "./PhaseSection";
+export { KnockoutMatchCard } from "./KnockoutMatchCard";
