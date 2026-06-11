@@ -4,7 +4,7 @@ import { isoDateTime, nonEmptyString } from "@/schemas/shared";
 
 // Coleção `sync_logs` (`sync_logs/{id}`) — PRD-11 (TASK-02).
 // Resumo numérico de cada sincronização OpenFootball → Firestore. Separado de
-// `system_logs` por carregar contadores específicos (jogos/seleções/grupos
+// `system_logs` por carregar contadores específicos (jogos/seleções/groups
 // atualizados + jogos preservados por override) lidos no painel "Última
 // Sincronização" (PRD11-01) e em "Detalhes do Log" (PRD11-10).
 

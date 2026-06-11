@@ -271,7 +271,7 @@ function RankingRow({
   return (
     <li>
       <Link
-        href={`/rankings/perfil/${entry.uid}`}
+        href={`/rankings/profile/${entry.uid}`}
         className={cn(
           "flex min-h-11 items-center gap-3 rounded-lg border border-border p-3 transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

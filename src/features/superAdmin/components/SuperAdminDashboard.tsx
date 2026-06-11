@@ -112,7 +112,7 @@ function LastSyncPanel({ stats }: { stats: DashboardStats | null }): JSX.Element
       <Button
         type="button"
         variant="outline"
-        onClick={() => router.push("/admin/jogos-da-copa")}
+        onClick={() => router.push("/admin/world-cup")}
         className="min-h-[44px] w-full"
       >
         <RefreshCw size={16} aria-hidden="true" />

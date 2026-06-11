@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Página de Fase Eliminatória (/predictions/chave/[stage]) — TASK-14 (PRD03-07..11).
+ * Página de Fase Eliminatória (/predictions/knockout/[stage]) — TASK-14 (PRD03-07..11).
  *
  * Renderiza a chave interativa (Bracket via KnockoutPhaseScreen) de uma fase:
  * `stage ∈ {dezesseis-avos, oitavas, quartas, semifinal, final}`. A fase "final"
@@ -289,13 +289,13 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
 
   const prev = config.prevSlug
     ? {
-        href: `/predictions/chave/${config.prevSlug}`,
+        href: `/predictions/knockout/${config.prevSlug}`,
         label: STAGE_LABEL[config.prevSlug],
       }
     : undefined;
   const next = config.nextSlug
     ? {
-        href: `/predictions/chave/${config.nextSlug}`,
+        href: `/predictions/knockout/${config.nextSlug}`,
         label: STAGE_LABEL[config.nextSlug],
       }
     : undefined;

@@ -121,7 +121,7 @@ describe("getGeneralRanking", () => {
 });
 
 describe("getGroupRanking", () => {
-  it("lê rankings/grupo-{groupId}", async () => {
+  it("lê rankings/group-{groupId}", async () => {
     getDocMock.mockResolvedValueOnce(snap(groupDoc()));
     const result = await getGroupRanking("A");
     expect(docMock).toHaveBeenCalledWith(expect.anything(), "rankings", "grupo-A");

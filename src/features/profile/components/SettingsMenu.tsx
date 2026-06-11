@@ -39,7 +39,7 @@ export function SettingsMenu(): JSX.Element {
           icon={UserPen}
           title="Editar Perfil"
           subtitle="Nome, foto e informações"
-          href="/profile/editar"
+          href="/profile/edit"
         />
       </SettingsSection>
 
@@ -48,7 +48,7 @@ export function SettingsMenu(): JSX.Element {
           icon={ShieldCheck}
           title="Login por Biometria"
           subtitle="Face ID, Touch ID ou digital"
-          href="/profile/seguranca"
+          href="/profile/security"
         />
       </SettingsSection>
 
@@ -57,7 +57,7 @@ export function SettingsMenu(): JSX.Element {
           icon={Bell}
           title="Gerenciar Notificações"
           subtitle="Configure suas preferências"
-          href="/notificacoes/preferencias"
+          href="/notifications/preferences"
         />
       </SettingsSection>
 

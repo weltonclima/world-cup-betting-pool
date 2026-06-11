@@ -130,7 +130,7 @@ function PopulatedMyRanking({
             Desempenho Geral
           </h2>
           <Link
-            href="/rankings/evolucao"
+            href="/rankings/evolution"
             className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Ver evolução

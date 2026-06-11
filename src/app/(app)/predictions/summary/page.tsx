@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Página Resumo Final (/predictions/resumo) — TASK-15 (PRD03-12 / PRD03-15).
+ * Página Resumo Final (/predictions/summary) — TASK-15 (PRD03-12 / PRD03-15).
  *
  * Última etapa do wizard de palpites em massa. Faz o data-fetching (useMatches +
  * useTeams + usePredictions + draft local), deriva os finalistas (campeão/vice/3º/4º)

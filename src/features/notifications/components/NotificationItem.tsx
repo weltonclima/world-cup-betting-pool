@@ -21,7 +21,7 @@ export function NotificationItem({
 
   return (
     <Link
-      href={`/notificacoes/${notification.id}`}
+      href={`/notifications/${notification.id}`}
       onClick={() => {
         if (!notification.isRead) markAsRead.mutate(notification.id);
       }}

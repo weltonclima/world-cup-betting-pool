@@ -71,8 +71,8 @@ describe("KnockoutPhaseScreen — render", () => {
 
   it("renderiza navegação entre fases (prev/next)", () => {
     renderScreen({
-      prev: { href: "/predictions/grupos", label: "Grupos" },
-      next: { href: "/predictions/chave/oitavas", label: "Oitavas" },
+      prev: { href: "/predictions/groups", label: "Grupos" },
+      next: { href: "/predictions/knockout/oitavas", label: "Oitavas" },
     });
     const nav = screen.getByRole("navigation", { name: "Navegação entre fases" });
     expect(nav).toBeTruthy();
@@ -84,7 +84,7 @@ describe("KnockoutPhaseScreen — bloqueio A6", () => {
   it("isBlocked → estado bloqueado, sem inputs nem CTA salvar", () => {
     renderScreen({
       isBlocked: true,
-      prev: { href: "/predictions/chave/dezesseis-avos", label: "16 avos" },
+      prev: { href: "/predictions/knockout/dezesseis-avos", label: "16 avos" },
     });
     expect(screen.getByText("Fase bloqueada")).toBeTruthy();
     expect(screen.getByText(/Conclua 16 avos primeiro/)).toBeTruthy();

@@ -42,7 +42,7 @@ export async function readPersistedMatches(): Promise<Map<string, MatchWithId>> 
 /**
  * Partidas efetivas = openfootball (base) com overrides manuais aplicados.
  * Resiliente: falha lendo o Firestore → cai para a base ao vivo (não quebra
- * ranking/grupos/bracket). Coleção vazia → retorna a base inalterada.
+ * ranking/groups/bracket). Coleção vazia → retorna a base inalterada.
  */
 export async function getEffectiveMatches(): Promise<MatchWithId[]> {
   const base = await fetchAllMatches();

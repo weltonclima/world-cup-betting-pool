@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Página Resumo dos 12 Grupos (/predictions/resumo-grupos) — TASK-11 (PRD03-05).
+ * Página Resumo dos 12 Grupos (/predictions/groups-summary) — TASK-11 (PRD03-05).
  *
  * Etapa do fluxo de palpites em massa, anterior aos melhores terceiros. Faz o
  * data-fetching (useMatches + usePredictions + useTeams), deriva o resumo dos
@@ -21,7 +21,7 @@ import { GroupsSummary } from "@/features/predictions/components/GroupsSummary";
 import { buildGroupsSummary } from "@/features/predictions/components/groupsSummaryData";
 
 /** Destino do CTA: etapa de melhores terceiros (TASK-12). */
-const BEST_THIRDS_HREF = "/predictions/melhores-terceiros";
+const BEST_THIRDS_HREF = "/predictions/best-thirds";
 
 export default function ResumoGruposPage() {
   const { firebaseUser } = useAuth();

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 /**
  * Layout da seção Grupos (PRD-09). Aplica o tema verde escopo `.grupos-theme`
- * (MASTER §2.4 — mesmo verde validado AA) às telas de /grupos (criar, buscar,
+ * (MASTER §2.4 — mesmo verde validado AA) às telas de /groups (criar, buscar,
  * detalhe). AppShell/AuthGuard são herdados de `(app)/layout.tsx`.
  */
 export default function GruposLayout({ children }: { children: ReactNode }) {

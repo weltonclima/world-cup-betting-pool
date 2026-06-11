@@ -92,7 +92,7 @@ export function GroupSearch(): JSX.Element {
               Não encontrei meu grupo
             </Button>
             <Link
-              href="/grupos/criar"
+              href="/groups/create"
               className={cn(
                 buttonVariants({ variant: "link" }),
                 "h-11 w-full text-primary",
@@ -113,7 +113,7 @@ export function GroupSearch(): JSX.Element {
 function GroupResultRow({ group }: { group: Pool }): JSX.Element {
   return (
     <Link
-      href={`/grupos/${encodeURIComponent(group.id)}`}
+      href={`/groups/${encodeURIComponent(group.id)}`}
       className="flex min-h-[44px] items-center gap-3 rounded-xl border border-border p-3 transition-colors hover:bg-muted"
     >
       <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">

@@ -24,7 +24,7 @@ import { ChangeAdminDialog } from "./ChangeAdminDialog";
 
 /**
  * Grupos Ativos (PRD11-03). Lista com avatar/nome/slug/contagem de participantes
- * e badge "Ativo". KebabMenu por linha: Visualizar (→ /grupos/[id], read-only),
+ * e badge "Ativo". KebabMenu por linha: Visualizar (→ /groups/[id], read-only),
  * Bloquear (status→blocked, dialog de confirmação) e Alterar Admin (seletor de
  * membro → changeGroupAdmin).
  */
@@ -100,7 +100,7 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
           {
             label: "Visualizar",
             icon: <Eye size={16} aria-hidden="true" />,
-            onSelect: () => router.push(`/grupos/${pool.id}`),
+            onSelect: () => router.push(`/groups/${pool.id}`),
           },
           {
             label: "Alterar Admin",

@@ -83,7 +83,7 @@ export function buildGroupSummaries(
       totalCount: counts.total,
       filledCount: counts.filled,
       status,
-      href: `/predictions/grupos/${groupId}`,
+      href: `/predictions/groups/${groupId}`,
     });
   }
 

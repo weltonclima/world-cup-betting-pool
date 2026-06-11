@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Página Ranking dos Melhores Terceiros (/predictions/melhores-terceiros) —
+ * Página Ranking dos Melhores Terceiros (/predictions/best-thirds) —
  * TASK-12 (PRD03-06).
  *
  * Exibe os 8 melhores terceiros colocados (critério FIFA via rankBestThirds —
@@ -31,7 +31,7 @@ import {
   buildThirdsRanking,
 } from "@/features/predictions/components/BestThirdsRanking";
 
-const BRACKET_HREF = "/predictions/chave/dezesseis-avos";
+const BRACKET_HREF = "/predictions/knockout/dezesseis-avos";
 
 export default function BestThirdsPage() {
   const { firebaseUser } = useAuth();

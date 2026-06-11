@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 /** Itens fixos da navegação da seção Ranking (PRD-05, TASK-07). */
 const ITEMS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/rankings", label: "Geral" },
-  { href: "/rankings/fase", label: "Fases" },
-  { href: "/rankings/eu", label: "Meu Ranking" },
-  { href: "/rankings/estatisticas", label: "Estatísticas" },
+  { href: "/rankings/phase", label: "Fases" },
+  { href: "/rankings/me", label: "Meu Ranking" },
+  { href: "/rankings/statistics", label: "Estatísticas" },
 ];
 
 /**

@@ -76,7 +76,7 @@ export function GroupRequestSent(): JSX.Element {
       </div>
 
       <Link
-        href="/grupos"
+        href="/groups"
         className={cn(buttonVariants({ variant: "default" }), "h-12 w-full")}
       >
         Ir para meus grupos

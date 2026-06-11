@@ -118,7 +118,7 @@ export function ProfileHub(): JSX.Element {
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-foreground">Meu Perfil</h1>
         <Link
-          href="/profile/configuracoes"
+          href="/profile/settings"
           aria-label="Configurações"
           className={cn(buttonVariants({ variant: "ghost" }), "size-11")}
         >
@@ -184,25 +184,25 @@ export function ProfileHub(): JSX.Element {
           icon={BarChart3}
           title="Estatísticas Pessoais"
           subtitle="Acompanhe seu desempenho"
-          href="/profile/estatisticas"
+          href="/profile/statistics"
         />
         <ProfileMenuItem
           icon={ListChecks}
           title="Histórico de Palpites"
           subtitle="Veja todos os seus palpites"
-          href="/profile/historico"
+          href="/profile/history"
         />
         <ProfileMenuItem
           icon={KeyRound}
           title="Alterar Senha"
           subtitle="Atualize sua senha de acesso"
-          href="/profile/senha"
+          href="/profile/password"
         />
         <ProfileMenuItem
           icon={Settings}
           title="Configurações"
           subtitle="Preferências do aplicativo"
-          href="/profile/configuracoes"
+          href="/profile/settings"
         />
       </nav>
 
@@ -222,37 +222,37 @@ export function ProfileHub(): JSX.Element {
             icon={LayoutDashboard}
             title="Dashboard do Grupo"
             subtitle="Visão geral do grupo"
-            href="/grupo/dashboard"
+            href="/group/dashboard"
           />
           <ProfileMenuItem
             icon={UserCheck}
             title="Usuários Pendentes"
             subtitle="Aprovar ou rejeitar entradas"
-            href="/grupo/usuarios/pendentes"
+            href="/group/users/pending"
           />
           <ProfileMenuItem
             icon={Users}
             title="Usuários Aprovados"
             subtitle="Participantes ativos"
-            href="/grupo/usuarios/aprovados"
+            href="/group/users/approved"
           />
           <ProfileMenuItem
             icon={UserX}
             title="Usuários Bloqueados"
             subtitle="Gerenciar bloqueios"
-            href="/grupo/usuarios/bloqueados"
+            href="/group/users/blocked"
           />
           <ProfileMenuItem
             icon={Mail}
             title="Convites"
             subtitle="Gerar links e códigos"
-            href="/grupo/convites"
+            href="/group/invites"
           />
           <ProfileMenuItem
             icon={Settings}
             title="Configurações do Grupo"
             subtitle="Editar informações do grupo"
-            href="/grupo/configuracoes"
+            href="/group/settings"
           />
         </section>
       ) : null}
@@ -273,43 +273,43 @@ export function ProfileHub(): JSX.Element {
             icon={Globe}
             title="Dashboard Global"
             subtitle="Visão geral da plataforma"
-            href="/admin/dashboard-global"
+            href="/admin/global-dashboard"
           />
           <ProfileMenuItem
             icon={FolderClock}
             title="Grupos Pendentes"
             subtitle="Aprovar novos grupos"
-            href="/admin/grupos-pendentes"
+            href="/admin/groups-pending"
           />
           <ProfileMenuItem
             icon={FolderCheck}
             title="Grupos Ativos"
             subtitle="Gerenciar grupos existentes"
-            href="/admin/grupos-ativos"
+            href="/admin/groups-active"
           />
           <ProfileMenuItem
             icon={FolderX}
             title="Grupos Bloqueados"
             subtitle="Reativar ou excluir grupos"
-            href="/admin/grupos-bloqueados"
+            href="/admin/groups-blocked"
           />
           <ProfileMenuItem
             icon={UserCog}
             title="Administradores"
             subtitle="Gerenciar Group Admins"
-            href="/admin/administradores"
+            href="/admin/administrators"
           />
           <ProfileMenuItem
             icon={Trophy}
             title="Resultados da Copa"
             subtitle="Partidas e resultados"
-            href="/admin/jogos-da-copa"
+            href="/admin/world-cup"
           />
           <ProfileMenuItem
             icon={ScrollText}
             title="Logs Globais"
             subtitle="Auditoria do sistema"
-            href="/admin/logs-globais"
+            href="/admin/global-logs"
           />
         </section>
       ) : null}
@@ -333,19 +333,19 @@ export function ProfileHub(): JSX.Element {
             icon={UserCheck}
             title="Gerenciar Aprovações"
             subtitle="Usuários pendentes"
-            href="/admin/usuarios/pendentes"
+            href="/admin/users/pending"
           />
           <ProfileMenuItem
             icon={Users}
             title="Usuários Ativos"
             subtitle="Aprovados"
-            href="/admin/usuarios/aprovados"
+            href="/admin/users/approved"
           />
           <ProfileMenuItem
             icon={UserX}
             title="Usuários Bloqueados"
             subtitle="Bloqueados"
-            href="/admin/usuarios/bloqueados"
+            href="/admin/users/blocked"
           />
           <ProfileMenuItem
             icon={Activity}

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Página de Palpite em Massa do Grupo (/predictions/grupos/[groupId]) —
+ * Página de Palpite em Massa do Grupo (/predictions/groups/[groupId]) —
  * TASK-09 (PRD03-03) + Classificação Prevista TASK-10 (PRD03-04).
  *
  * Preenche os 6 jogos do grupo numa tela: data-fetching via useGroupPredictions,
@@ -193,7 +193,7 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
           standings={standings}
           resolveTeamName={resolveTeamName}
           isPartial={isPartial}
-          onConfirm={() => router.push("/predictions/grupos")}
+          onConfirm={() => router.push("/predictions/groups")}
           onEdit={() => setShowStandings(false)}
         />
       ) : null}

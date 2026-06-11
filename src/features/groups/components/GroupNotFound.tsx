@@ -74,7 +74,7 @@ export function GroupNotFound({ onRetry }: { onRetry: () => void }): JSX.Element
           Tentar novamente
         </Button>
         <Link
-          href="/grupos/criar"
+          href="/groups/create"
           className={cn(
             buttonVariants({ variant: "link" }),
             "h-11 w-full text-primary",

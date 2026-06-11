@@ -23,7 +23,7 @@ export function RecentActivity(): JSX.Element {
           Atividade Recente
         </h2>
         <Link
-          href="/admin/logs-globais"
+          href="/admin/global-logs"
           className="text-sm font-medium text-primary underline-offset-4 hover:underline"
         >
           Ver todos

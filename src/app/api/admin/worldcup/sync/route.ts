@@ -21,7 +21,7 @@ import type { MatchWithId } from "@/types/matches";
  * Só super_admin (ou secret de cron) — via `authorizeGroupAdmin`. Após o sync,
  * invalida o cache `worldcup_cache` para que grupos/bracket recomputem.
  *
- * Seleções/grupos do torneio NÃO são persistidos: seguem derivados ao vivo do
+ * Seleções/groups do torneio NÃO são persistidos: seguem derivados ao vivo do
  * openfootball pelas rotas `/api/worldcup/*` (por isso os contadores ficam 0).
  */
 

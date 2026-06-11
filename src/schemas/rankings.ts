@@ -33,7 +33,7 @@ export const rankingSchema = z
   })
   .strict();
 
-// Ranking por grupo individual (A–L). Doc `rankings/grupo-{groupId}`.
+// Ranking por grupo individual (A–L). Doc `rankings/group-{groupId}`.
 // Reaproveita `rankingEntrySchema`; identificado por `groupId` (alinhado a match.groupId).
 export const groupRankingSchema = z
   .object({

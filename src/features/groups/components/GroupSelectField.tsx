@@ -112,7 +112,7 @@ export function GroupSelectField({
             <p className="px-1 py-2 text-sm text-muted-foreground">
               Nenhum grupo encontrado.{" "}
               <Link
-                href="/grupos/criar"
+                href="/groups/create"
                 className="font-medium text-primary hover:underline"
               >
                 Criar novo grupo

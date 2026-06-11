@@ -43,7 +43,7 @@ export function NotificationList(): JSX.Element {
         </Button>
         <h1 className="text-lg font-semibold text-foreground">Notificações</h1>
         <Link
-          href="/notificacoes/preferencias"
+          href="/notifications/preferences"
           aria-label="Preferências de notificação"
           className={cn(
             buttonVariants({ variant: "ghost" }),

@@ -104,7 +104,7 @@ function DashboardContent({ data }: { data: GroupDashboardData }): JSX.Element {
             Últimos Cadastros
           </h3>
           <Link
-            href="/grupo/usuarios/pendentes"
+            href="/group/users/pending"
             className="text-sm font-medium text-primary hover:underline"
           >
             Ver todos
@@ -161,17 +161,17 @@ function DashboardContent({ data }: { data: GroupDashboardData }): JSX.Element {
         </h3>
         <div className="grid grid-cols-3 gap-3">
           <QuickAction
-            href="/grupo/usuarios/pendentes"
+            href="/group/users/pending"
             icon={<Clock size={20} aria-hidden="true" />}
             label="Pendentes"
           />
           <QuickAction
-            href="/grupo/convites"
+            href="/group/invites"
             icon={<Link2 size={20} aria-hidden="true" />}
             label="Convites"
           />
           <QuickAction
-            href="/grupo/configuracoes"
+            href="/group/settings"
             icon={<Settings size={20} aria-hidden="true" />}
             label="Configurações"
           />

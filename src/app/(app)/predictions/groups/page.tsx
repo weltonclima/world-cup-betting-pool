@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Página de Seleção de Grupo (/predictions/grupos) — TASK-08 (PRD03-02).
+ * Página de Seleção de Grupo (/predictions/groups) — TASK-08 (PRD03-02).
  *
  * Lista os 12 grupos (A–L) em grid responsivo (3 col mobile → 4 desktop), cada
  * card com progresso/status derivado das partidas de grupo × palpites do
- * usuário. Cada card navega para /predictions/grupos/[groupId] (TASK-09).
+ * usuário. Cada card navega para /predictions/groups/[groupId] (TASK-09).
  *
  * Data-fetching via useMatches + usePredictions; agregação por grupo via
  * buildGroupSummaries (pura). Container com tema `.palpites-theme` (shell verde).

@@ -246,7 +246,7 @@ describe("GroupQuickFill — estados", () => {
     renderFill({ items: [] });
     expect(screen.getByText(/ainda não estão disponíveis/)).toBeTruthy();
     const link = screen.getByRole("link", { name: "Voltar para os grupos" });
-    expect(link.getAttribute("href")).toBe("/predictions/grupos");
+    expect(link.getAttribute("href")).toBe("/predictions/groups");
   });
 });
 

@@ -4,7 +4,7 @@
  * Mocks: firebaseAdmin (auth + firestore), next/headers (cookies), copaData (fetchAllMatches),
  * server-only. scorePrediction usa implementação REAL (binário) via importActual.
  *
- * Cobre: auth dupla, exclusão de blocked/pending, pontuação binária por escopo/grupo,
+ * Cobre: auth dupla, exclusão de blocked/pending, pontuação binária por escopo/group,
  * aproveitamento, positionHistory append, pool stats, idempotência, doc malformado.
  */
 
