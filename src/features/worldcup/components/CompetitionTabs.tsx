@@ -47,21 +47,23 @@ function isActive(tabHref: string, pathname: string): boolean {
 // ---------------------------------------------------------------------------
 // Classes reutilizáveis de cada TabLink
 // ---------------------------------------------------------------------------
+// Espelha o FilterChip de MatchListHeader (chips compactos "Todas as fases /
+// Fase de Grupos"): rounded-full, h-8, px-3, text-xs; ativo = preenchido
+// (primary), inativo = outline. Sem trilho muted nem largura total.
 
 /** Classes comuns a todos os links (ativo e inativo). */
 const TAB_BASE =
-  "flex-1 sm:flex-none text-center rounded-full h-11 sm:h-9 px-3 " +
-  "inline-flex items-center justify-center text-xs sm:text-sm whitespace-nowrap " +
+  "inline-flex shrink-0 items-center justify-center rounded-full h-8 px-3 " +
+  "border text-xs font-medium whitespace-nowrap " +
   "transition-colors duration-150 " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
-/** Classes adicionais para a aba ativa. */
-const TAB_ACTIVE = "bg-primary text-primary-foreground shadow-sm font-medium";
+/** Classes adicionais para a aba ativa (variante default/preenchida). */
+const TAB_ACTIVE = "bg-primary text-primary-foreground border-transparent hover:bg-primary/80";
 
-/** Classes adicionais para abas inativas. */
+/** Classes adicionais para abas inativas (variante outline). */
 const TAB_INACTIVE =
-  "text-muted-foreground hover:bg-muted/60 hover:text-foreground " +
-  "active:scale-[0.98] motion-reduce:transform-none";
+  "border-border bg-background text-foreground hover:bg-muted hover:text-foreground";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -88,8 +90,8 @@ export function CompetitionTabs({ className }: CompetitionTabsProps) {
 
   return (
     <nav aria-label="Seções de Jogos" className={cn(className)}>
-      {/* Trilho do segmented control */}
-      <div className="bg-muted/50 rounded-full p-1 flex w-full sm:w-auto sm:inline-flex gap-1">
+      {/* Linha de chips compactos roláveis (espelha os filtros rápidos de Jogos) */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {TABS.map((tab) => {
           const active = isActive(tab.href, pathname);
           return (
