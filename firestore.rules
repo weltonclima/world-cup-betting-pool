@@ -146,6 +146,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---- worldcup_cache (TASK-04) ----
+    // Cache server-side dos payloads derivados da fase de grupos e mata-mata
+    // (docs "groups" e "bracket"), alimentado exclusivamente pelo Admin SDK
+    // nos Route Handlers /api/worldcup/* a partir dos dados do openfootball.
+    // O cliente nunca acessa esta coleção diretamente — dois docs no máximo.
+    match /worldcup_cache/{doc} {
+      allow read, write: if false; // cache server-side (Admin SDK); cliente nunca acessa
+    }
+
     // ---- Deny-by-default: qualquer outro path ----
     // Redundante (não casar já nega), mantido como afirmação explícita.
     match /{document=**} {
