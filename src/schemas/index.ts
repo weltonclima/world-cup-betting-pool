@@ -14,3 +14,4 @@ export * from "./notifications";
 export * from "./notificationPreferences";
 export * from "./systemLogs";
 export * from "./webauthnCredentials";
+export * from "./worldcup";

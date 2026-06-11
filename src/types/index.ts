@@ -9,3 +9,4 @@ export * from "./rankings";
 export * from "./statistics";
 export * from "./bonusPredictions";
 export * from "./systemSettings";
+export * from "./worldcup";
