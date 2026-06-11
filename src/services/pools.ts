@@ -1,7 +1,9 @@
 import { z } from "zod";
 
-import { poolSchema } from "@/schemas";
+import { poolCreateClientSchema, poolSchema } from "@/schemas";
 import type { Pool } from "@/types/pools";
+
+import { extractErrorDetail } from "./_apiClient";
 
 /**
  * Camada de serviço de pools (grupos de bolão — PRD-09, TASK-04).
@@ -35,11 +37,16 @@ const HTTP_ERROR_MESSAGES: Record<number, string> = {
 
 const FALLBACK_HTTP_MESSAGE = "Ocorreu um erro inesperado. Tente novamente.";
 
-function toServiceError(status: number): PoolServiceError {
-  return new PoolServiceError(
-    status,
-    HTTP_ERROR_MESSAGES[status] ?? FALLBACK_HTTP_MESSAGE,
-  );
+/**
+ * Monta `PoolServiceError` a partir de uma resposta de erro, anexando o detalhe
+ * `{ error }` do corpo quando presente (review WR-02 — sem isso, as `issues` de
+ * 422 / mensagens server-side nunca chegam ao form). Reusa `extractErrorDetail`.
+ */
+async function toServiceError(response: Response): Promise<PoolServiceError> {
+  const base = HTTP_ERROR_MESSAGES[response.status] ?? FALLBACK_HTTP_MESSAGE;
+  const detail = await extractErrorDetail(response);
+  const message = detail ? `${base} ${detail}` : base;
+  return new PoolServiceError(response.status, message);
 }
 
 export interface CreatePoolInput {
@@ -56,14 +63,18 @@ export interface CreatePoolInput {
  * @throws PoolServiceError em erro HTTP (401/403/409/422/500).
  */
 export async function createPool(input: CreatePoolInput): Promise<Pool> {
+  // Revalida o input no client antes do POST (review WR-01): falha cedo em
+  // slug/tamanho inválidos sem round-trip. `adminId` é da sessão (server-side).
+  const payload = poolCreateClientSchema.parse(input);
+
   const response = await fetch("/api/groups", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify(input),
+    body: JSON.stringify(payload),
   });
 
-  if (!response.ok) throw toServiceError(response.status);
+  if (!response.ok) throw await toServiceError(response);
 
   const body = (await response.json()) as { pool: unknown };
   return poolSchema.parse(body.pool);
@@ -81,7 +92,7 @@ export async function searchPools(q?: string): Promise<Pool[]> {
     credentials: "same-origin",
   });
 
-  if (!response.ok) throw toServiceError(response.status);
+  if (!response.ok) throw await toServiceError(response);
 
   const body = (await response.json()) as { pools: unknown[] };
   return body.pools.map((p) => poolSchema.parse(p));
@@ -100,7 +111,7 @@ export async function getPool(
     credentials: "same-origin",
   });
 
-  if (!response.ok) throw toServiceError(response.status);
+  if (!response.ok) throw await toServiceError(response);
 
   const body = (await response.json()) as { pool: unknown; memberCount: unknown };
   // memberCount validado em runtime (gsd H-03) — não confiar no cast.

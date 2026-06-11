@@ -206,6 +206,30 @@ describe("PATCH /api/admin/groups/[id]/admin", () => {
     expect(res.status).toBe(404);
   });
 
+  it("200 novo admin super_admin NÃO é rebaixado a group_admin (review WR-01)", async () => {
+    const { updates } = mockDb({
+      "pools/p1": pool("antigo"),
+      "users/novo": { role: "super_admin", status: "approved" },
+      "users/antigo": { role: "group_admin", status: "approved" },
+    });
+    const res = await PATCH(
+      makeReq({ secret: SECRET, body: { adminId: "novo" } }),
+      ctx("p1"),
+    );
+    expect(res.status).toBe(200);
+    // adminId trocado…
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        path: "pools/p1",
+        data: expect.objectContaining({ adminId: "novo" }),
+      }),
+    );
+    // …mas o role do super_admin é preservado (nenhuma escrita em users/novo.role).
+    expect(updates).not.toContainEqual(
+      expect.objectContaining({ path: "users/novo" }),
+    );
+  });
+
   it("200 idempotente novo == antigo mantém group_admin", async () => {
     const { updates } = mockDb({
       "pools/p1": pool("mesmo"),

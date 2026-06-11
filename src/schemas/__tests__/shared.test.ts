@@ -117,14 +117,10 @@ describe("shared › helpers de role (dupla-compat)", () => {
     expect(isParticipantRole("group_admin")).toBe(false);
   });
 
-  it("os 5 valores caem em exatamente um helper (partição total)", () => {
-    const roles = [
-      "participant",
-      "group_admin",
-      "super_admin",
-      "user",
-      "admin",
-    ] as const;
+  it("TODO valor do roleSchema cai em exatamente um helper (partição total)", () => {
+    // Itera as opções do schema (não lista hard-coded): adicionar um role novo
+    // sem atualizar os helpers quebra este teste (review WR-02).
+    const roles = roleSchema.options;
     for (const r of roles) {
       const hits = [
         isSuperAdminRole(r),

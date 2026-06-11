@@ -42,3 +42,8 @@ export const poolInputSchema = z.object({
   photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH).optional(),
   adminId: nonEmptyString,
 });
+
+// Input de criação no CLIENT: igual ao acima, sem `adminId` (definido pela sessão
+// no servidor). Usado pela camada de serviço p/ revalidar Zod antes do POST
+// (review WR-01 — falha cedo, sem round-trip inútil).
+export const poolCreateClientSchema = poolInputSchema.omit({ adminId: true });

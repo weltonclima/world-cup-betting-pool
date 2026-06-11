@@ -89,6 +89,20 @@ describe("pools › poolSchema", () => {
     ).toBe(false);
   });
 
+  it("updatedAt: opcional, aceita ISO, rejeita não-ISO", () => {
+    // Ausente (docs criados na TASK-04 nascem sem ele) → ok.
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+    // Presente e ISO (auditoria de mutação server-side, TASK-05) → ok.
+    expect(
+      poolSchema.safeParse({ ...valid, updatedAt: "2026-06-06T09:30:00Z" })
+        .success,
+    ).toBe(true);
+    // Presente e não-ISO → rejeita.
+    expect(
+      poolSchema.safeParse({ ...valid, updatedAt: "ontem" }).success,
+    ).toBe(false);
+  });
+
   it("rejeita campo extra (.strict)", () => {
     expect(poolSchema.safeParse({ ...valid, extra: "x" }).success).toBe(false);
   });

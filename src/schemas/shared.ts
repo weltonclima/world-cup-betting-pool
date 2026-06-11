@@ -20,6 +20,12 @@ type RoleValue = z.infer<typeof roleSchema>;
 // Helpers de classificação de papel (fonte única de verdade para checagem de role).
 // Puros e totais: recebem Role válido, retornam boolean, nunca lançam.
 // Valor cru é preservado no doc; a equivalência legado↔novo vive aqui (remap físico é TASK-12).
+//
+// PRECONDIÇÃO (review WR-01): a entrada DEVE ser um Role já validado. Para input
+// não-confiável (claim de JWT, body cru) parseie antes com `roleSchema.safeParse`
+// — um valor inesperado aqui retorna `false` em todos (fail-closed: nega acesso,
+// nunca escala), mas isso pode virar lockout silencioso. Na TASK-06 (autorização)
+// sempre normalizar via `roleSchema` antes de chamar estes helpers.
 export function isSuperAdminRole(role: RoleValue): boolean {
   return role === "admin" || role === "super_admin"; // privilégio global
 }

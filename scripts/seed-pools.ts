@@ -5,11 +5,17 @@
  * a busca/detalhe (TASK-04/09). Idempotente — doc-id = slug; re-rodar não duplica
  * nem sobrescreve campos.
  *
- * Uso (runner: tsx):
- *   SEED_ADMIN_UID=<uid> npx tsx scripts/seed-pools.ts
+ * Uso (runner: tsx — devDependency):
+ *   SEED_ADMIN_UID=<uid> npm run seed:pools
  * Credencial: FIREBASE_SERVICE_ACCOUNT_KEY (JSON em uma linha) OU applicationDefault()
  * (Cloud Run / `gcloud auth application-default login`). Emulador respeita
  * FIRESTORE_EMULATOR_HOST.
+ *
+ * NB (review CR-01): o tsx não resolve o alias `@/*` por padrão. Por isso este
+ * script NÃO importa `poolSchema` em runtime — usa só `import type { Pool }`
+ * (apagado na transpilação, sem resolução de módulo) e constrói o doc com o tipo
+ * conferido em compilação. Os dados são estáticos/conhecidos; validação de
+ * contrato cobre as rotas/serviço (TASK-04), não o seed.
  */
 
 import {
@@ -21,7 +27,7 @@ import {
 } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-import { poolSchema } from "@/schemas";
+import type { Pool } from "@/types/pools";
 
 const SEED_SLUG = "bolao-dos-parcas";
 const SEED_NAME = "Bolão dos Parças";
@@ -53,14 +59,14 @@ async function main(): Promise<void> {
     return;
   }
 
-  const pool = poolSchema.parse({
+  const pool: Pool = {
     id: SEED_SLUG,
     name: SEED_NAME,
     slug: SEED_SLUG,
     status: "active",
     adminId: adminUid,
     createdAt: new Date().toISOString(),
-  });
+  };
 
   try {
     await ref.create(pool);

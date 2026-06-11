@@ -5,7 +5,13 @@ import { z } from "zod";
 
 import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
-import { poolSchema } from "@/schemas";
+import {
+  isGroupAdminRole,
+  isParticipantRole,
+  poolSchema,
+  roleSchema,
+  userStatusSchema,
+} from "@/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,7 +82,9 @@ export async function PATCH(
       const newUser = newUserSchema.safeParse(
         newSnap.exists ? newSnap.data() : undefined,
       );
-      if (!newUser.success || newUser.data.status !== "approved") {
+      // Status validado pelo schema canônico (review WR-02) — não string crua.
+      const newStatus = userStatusSchema.safeParse(newUser.success ? newUser.data.status : undefined);
+      if (!newUser.success || !newStatus.success || newStatus.data !== "approved") {
         throw new SwapError(409, "Usuário inválido para admin do grupo.");
       }
       // `groupId` ausente é aceito (dupla-compat: opcional até TASK-07/12). Presente
@@ -85,17 +93,27 @@ export async function PATCH(
         throw new SwapError(409, "Usuário pertence a outro grupo.");
       }
 
+      // Role do novo admin, normalizado via schema (review WR-03). undefined =
+      // doc sem role (tratado como participante p/ fim de promoção).
+      const newRole = roleSchema.safeParse(newUser.data.role);
+
       // Reads-before-writes: ler o admin anterior ANTES de qualquer escrita.
       const oldAdminId = pool.adminId;
       let demoteOld = false;
       if (oldAdminId !== newAdminId) {
         const oldSnap = await tx.get(db.collection("users").doc(oldAdminId));
-        demoteOld = oldSnap.exists && oldSnap.data()?.["role"] === "group_admin";
+        const oldRole = roleSchema.safeParse(oldSnap.exists ? oldSnap.data()?.["role"] : undefined);
+        // Só rebaixa quem era group_admin (não toca super_admin/legado admin).
+        demoteOld = oldRole.success && isGroupAdminRole(oldRole.data);
       }
 
       tx.update(poolRef, { adminId: newAdminId, updatedAt });
-      // Promove só se ainda não for group_admin (evita escrita espúria no self-swap).
-      if (newUser.data.role !== "group_admin") {
+      // Promove a group_admin APENAS participante (review WR-01): super_admin/legado
+      // admin mantêm o papel global — virar admin de pool não os rebaixa. Quem já é
+      // group_admin não recebe escrita espúria (self-swap).
+      const shouldPromote =
+        !newRole.success || isParticipantRole(newRole.data);
+      if (shouldPromote) {
         tx.update(newRef, { role: "group_admin", updatedAt });
       }
       if (demoteOld) {
