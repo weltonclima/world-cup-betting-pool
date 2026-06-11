@@ -1,5 +1,4 @@
-import type { OpenFootballMatch } from "../../types";
-export { MOCK_COPA_DATA } from "../../mockData";
+import type { OpenFootballData, OpenFootballMatch } from "../../types";
 
 // ─── Matches de grupo ────────────────────────────────────────────────────────
 
@@ -113,5 +112,28 @@ export const knockoutMatch1E: OpenFootballMatch = {
   team1: "1E",
   team2: "3ABC",
   ground: "Mexico City",
+};
+
+// ─── Payload completo (test-only) ─────────────────────────────────────────────
+
+/**
+ * Conjunto de partidas representativo (grupo + mata-mata) usado nos testes do
+ * copaData. Antes vivia em `mockData.ts` (mock de runtime, removido) — agora é
+ * fixture de teste, composto das partidas acima.
+ */
+export const MOCK_COPA_DATA: OpenFootballData = {
+  name: "World Cup 2026",
+  matches: [
+    groupMatchBasic,
+    groupMatchFinished,
+    groupMatchNoTime,
+    knockoutMatchRound32,
+    knockoutMatchRound16,
+    knockoutMatchQuarterfinal,
+    knockoutMatchSemifinal,
+    knockoutMatchThirdPlace,
+    knockoutMatchFinal,
+    knockoutMatch1E,
+  ],
 };
 

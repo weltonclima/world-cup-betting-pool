@@ -6,14 +6,14 @@ import type { TeamWithId } from "@/types";
 import { API_BASE, buildHttpError, parseWithId } from "./_apiClient";
 
 /**
- * Camada de serviço de seleções (integracao-api-football, TASK-05).
+ * Camada de serviço de seleções (TASK-05).
  *
  * Consome o Route Handler `GET /api/teams` (substitui a leitura direta do
- * Firestore). Dados da Copa vêm da API-Football via servidor Next — o browser
- * NUNCA fala com a API-Football.
+ * Firestore). Dados da Copa vêm do openfootball/worldcup.json via servidor Next
+ * — o browser NUNCA fala com a fonte externa.
  *
  * A resposta é REVALIDADA com Zod no client (`teamWithIdSchema`). O `id`
- * (= `String(team.id)` da API) já vem embutido em cada item (não é doc id de
+ * (= `String(team.id)`) já vem embutido em cada item (não é doc id de
  * Firestore), por isso o schema do client inclui `id` (diferente do `teamSchema`
  * `.strict()` do Firestore, que não tem `id`).
  *

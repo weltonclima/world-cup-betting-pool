@@ -3,16 +3,13 @@ import "server-only";
 /**
  * Barrel do módulo copaData.
  *
- * Expõe a mesma assinatura pública de apiFootballData.ts:
+ * Expõe a API pública de dados da Copa (fonte: openfootball/worldcup.json):
  *   fetchAllMatches(): Promise<MatchWithId[]>
  *   fetchAllTeams():   Promise<TeamWithId[]>
- *
- * Usa COPA_DATA_USE_MOCK=true para ativar o mock (dev/CI sem rede).
  */
 
 import { HttpCopaDataClient } from "./client";
-import { MockCopaDataClient } from "./mock";
-import { COPA_DATA_URL, isUseMockFallback } from "./config";
+import { COPA_DATA_URL } from "./config";
 import { mapOpenFootballMatch } from "./mapper";
 import { resolveTeam } from "./teamRegistry";
 import type { CopaDataClient } from "./client";
@@ -22,11 +19,10 @@ import type { TeamWithId } from "@/types/teams";
 // ─── Factory ────────────────────────────────────────────────────────────────
 
 function getCopaDataClient(): CopaDataClient {
-  if (isUseMockFallback()) return new MockCopaDataClient();
   return new HttpCopaDataClient(COPA_DATA_URL);
 }
 
-// ─── Funções públicas (mesma assinatura de apiFootballData.ts) ───────────────
+// ─── Funções públicas ────────────────────────────────────────────────────────
 
 /**
  * Busca todos os matches da Copa 2026 via openfootball, mapeia para MatchWithId[].
