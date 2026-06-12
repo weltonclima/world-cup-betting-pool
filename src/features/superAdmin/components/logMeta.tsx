@@ -81,6 +81,12 @@ const LOG_META: Record<SystemLogType, LogMeta> = {
     title: "Usuário adicionado a grupo",
     className: "bg-success-bg text-success",
   },
+  // PRD-12 (palpite manual lançado pelo admin de grupo)
+  group_admin_manual_prediction: {
+    icon: Pencil,
+    title: "Palpite lançado pelo admin",
+    className: "bg-info-bg text-info",
+  },
   // PRD-07 (legados — exibidos no mesmo feed/lista)
   login_admin: { icon: ShieldCheck, title: "Login de admin", className: "bg-muted text-muted-foreground" },
   user_approved: { icon: CheckCircle2, title: "Usuário aprovado", className: "bg-success-bg text-success" },
