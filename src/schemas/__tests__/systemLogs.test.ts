@@ -34,6 +34,15 @@ describe("systemLogSchema", () => {
       systemLogSchema.safeParse({ ...validLog, level: "debug" }).success,
     ).toBe(false);
   });
+
+  it("aceita type 'group_admin_manual_prediction' (PRD-12)", () => {
+    expect(
+      systemLogSchema.safeParse({
+        ...validLog,
+        type: "group_admin_manual_prediction",
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("systemLogInputSchema", () => {

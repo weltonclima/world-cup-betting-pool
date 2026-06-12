@@ -1,13 +1,18 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  groupManualPredictionInputSchema,
   predictionInputSchema,
   predictionSchema,
 } from "@/schemas/predictions";
 import { predictionStatusSchema } from "@/schemas/shared";
 import { predictionDocId } from "@/features/predictions/lib";
-import type { Prediction, PredictionInput } from "@/types/predictions";
-import type { PredictionStatus } from "@/types/shared";
+import type {
+  GroupManualPredictionInput,
+  Prediction,
+  PredictionInput,
+} from "@/types/predictions";
+import type { PredictionStatus, Role } from "@/types/shared";
 
 const valid = {
   uid: "abc123",
@@ -172,6 +177,146 @@ describe("predictions › predictionSchema (doc Firestore)", () => {
       "pending" | "correct" | "wrong" | "locked" | undefined
     >();
     expectTypeOf<Prediction["points"]>().toEqualTypeOf<0 | 1 | undefined>();
+    expectTypeOf<Prediction["editedBy"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<Prediction["editedByRole"]>().toEqualTypeOf<
+      Role | undefined
+    >();
+    expectTypeOf<Prediction["editedAt"]>().toEqualTypeOf<string | undefined>();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-01 (PRD-12): campos de origem manual no doc + .strict() não-descarte.
+// ---------------------------------------------------------------------------
+describe("predictions › predictionSchema (campos de origem manual)", () => {
+  const origin = {
+    editedBy: "admin-uid",
+    editedByRole: "group_admin" as const,
+    editedAt: "2026-06-12T15:00:00+00:00",
+  };
+
+  it("aceita doc com editedBy/editedByRole/editedAt válidos", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, ...origin }).success,
+    ).toBe(true);
+  });
+
+  it("aceita doc SEM campos de origem (retrocompat — palpite normal)", () => {
+    expect(predictionSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejeita editedByRole fora de roleSchema", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, ...origin, editedByRole: "boss" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejeita editedBy vazio", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, ...origin, editedBy: "" }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita editedAt com formato inválido", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, ...origin, editedAt: "ontem" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("round-trip não-descarte: doc completo que o endpoint grava passa em safeParse (.strict não rejeita)", () => {
+    // Doc exatamente como TASK-02 vai gravar — se .strict() rejeitar, o recalc
+    // descarta o palpite e ele some do ranking. Este teste é o guard-rail.
+    const docGravado = {
+      uid: "alvo-uid",
+      matchId: "match-9",
+      homeScore: 2,
+      awayScore: 0,
+      status: "correct" as const,
+      points: 1 as const,
+      editedBy: "admin-uid",
+      editedByRole: "group_admin" as const,
+      editedAt: "2026-06-12T15:00:00+00:00",
+      createdAt: "2026-06-12T15:00:00+00:00",
+      updatedAt: "2026-06-12T15:00:00+00:00",
+    };
+    expect(predictionSchema.safeParse(docGravado).success).toBe(true);
+  });
+
+  it(".strict() ainda rejeita campo extra não-declarado mesmo com campos de origem", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, ...origin, extra: "x" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("predictions › groupManualPredictionInputSchema (body do admin de grupo)", () => {
+  const validInput = {
+    targetUid: "membro-uid",
+    matchId: "match-1",
+    homeScore: 2,
+    awayScore: 1,
+  } as const;
+
+  it("aceita input válido", () => {
+    expect(groupManualPredictionInputSchema.safeParse(validInput).success).toBe(
+      true,
+    );
+  });
+
+  it("aceita placar 0 a 0", () => {
+    expect(
+      groupManualPredictionInputSchema.safeParse({
+        ...validInput,
+        homeScore: 0,
+        awayScore: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita targetUid ausente", () => {
+    const { targetUid: _t, ...sem } = validInput;
+    void _t;
+    expect(groupManualPredictionInputSchema.safeParse(sem).success).toBe(false);
+  });
+
+  it("rejeita targetUid vazio", () => {
+    expect(
+      groupManualPredictionInputSchema.safeParse({ ...validInput, targetUid: "" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("rejeita matchId ausente", () => {
+    const { matchId: _m, ...sem } = validInput;
+    void _m;
+    expect(groupManualPredictionInputSchema.safeParse(sem).success).toBe(false);
+  });
+
+  it("rejeita placar negativo", () => {
+    expect(
+      groupManualPredictionInputSchema.safeParse({
+        ...validInput,
+        homeScore: -1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita placar não inteiro", () => {
+    expect(
+      groupManualPredictionInputSchema.safeParse({
+        ...validInput,
+        awayScore: 1.5,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("inferência de tipo GroupManualPredictionInput", () => {
+    expectTypeOf<GroupManualPredictionInput["targetUid"]>().toEqualTypeOf<string>();
+    expectTypeOf<GroupManualPredictionInput["matchId"]>().toEqualTypeOf<string>();
+    expectTypeOf<GroupManualPredictionInput["homeScore"]>().toEqualTypeOf<number>();
+    expectTypeOf<GroupManualPredictionInput["awayScore"]>().toEqualTypeOf<number>();
   });
 });
 
