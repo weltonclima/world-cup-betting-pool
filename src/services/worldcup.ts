@@ -1,84 +1,50 @@
-import { bracketResponseSchema, groupsResponseSchema } from "@/schemas/worldcup";
-import type { BracketResponse, GroupsResponse } from "@/types";
+import { groupsResponseSchema, bracketResponseSchema } from "@/schemas/worldcup";
+import type { GroupsResponse, BracketResponse } from "@/types/worldcup";
 
-import { API_BASE, extractErrorDetail } from "./_apiClient";
+import { API_BASE, buildHttpError } from "./_apiClient";
 
 /**
- * Camada de serviço da Copa — fase de grupos e chaveamento (grupos-eliminatorias,
- * TASK-05).
+ * Camada de serviço da Copa do Mundo — grupos e chaveamento (TASK-05).
  *
- * Consome os Route Handlers `/api/worldcup/groups` e `/api/worldcup/bracket`
- * (TASK-04), que já fazem proxy + cache Firestore + validação no servidor. O
- * browser NUNCA fala com o openfootball — só com as rotas same-origin.
+ * Consome os Route Handlers `/api/worldcup/{groups,bracket}` (TASK-04).
+ * O browser NUNCA fala com a fonte externa; tudo passa pelo proxy Next.
  *
- * Cada resposta é REVALIDADA com Zod no client (`groupsResponseSchema` /
- * `bracketResponseSchema`) — defesa em profundidade: o servidor já valida, mas
- * não confiamos cegamente na rede.
+ * Cada resposta é REVALIDADA com Zod no client — defesa em profundidade:
+ * o servidor já valida, mas não confiamos cegamente na rede.
  *
- * Erros HTTP (status != 2xx) → lança `WorldcupServiceError` (status + mensagem
- * pt-BR), espelhando `PredictionServiceError`. A UI nunca lida com códigos HTTP.
+ * Erros HTTP (status != 2xx) → lança `Error` com mensagem útil (corpo `{ error }`
+ * quando presente). Lança `Error` puro — consistente com `matches.ts` vizinho
+ * (desvio consciente do plano: não criar classe `WorldcupServiceError`; spec §6.2).
+ *
+ * Sem `"use client"` — serviço é client-safe (fetch relativo), sem diretiva.
  */
 
 /**
- * Erro tipado para respostas HTTP de erro das rotas da Copa.
- * Encapsula o status HTTP e uma mensagem pt-BR pronta para a UI.
- */
-export class WorldcupServiceError extends Error {
-  readonly status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "WorldcupServiceError";
-    this.status = status;
-  }
-}
-
-/**
- * Monta um `WorldcupServiceError` a partir de uma resposta HTTP de erro,
- * anexando o detalhe `{ error }` do corpo quando presente. Reusa
- * `extractErrorDetail` (`_apiClient`) — sem duplicar o guard de parsing (WR-02).
+ * Busca a classificação completa dos grupos via `GET /api/worldcup/groups`.
  *
- * @param res - Resposta HTTP (status != 2xx).
- * @param fallback - Mensagem base pt-BR quando não há detalhe no corpo.
- * @returns `WorldcupServiceError` com status e detalhe do corpo quando presente.
- */
-async function httpError(
-  res: Response,
-  fallback: string,
-): Promise<WorldcupServiceError> {
-  const detail = await extractErrorDetail(res);
-  const suffix = detail ? ` — ${detail}` : "";
-  return new WorldcupServiceError(res.status, `${fallback}${suffix}`);
-}
-
-/**
- * Busca a classificação da fase de grupos via `GET /api/worldcup/groups`.
- *
- * @throws WorldcupServiceError em falha HTTP (status != 2xx).
+ * @throws Error em falha HTTP (status != 2xx), com status e detalhe do corpo.
  * @throws ZodError se a resposta não casar com `groupsResponseSchema`.
- * @returns `GroupsResponse` validado.
+ * @returns `GroupsResponse` validada com `{ groups, hasLiveGroupMatch }`.
  */
 export async function getGroups(): Promise<GroupsResponse> {
   const res = await fetch(`${API_BASE}/worldcup/groups`);
   if (!res.ok) {
-    throw await httpError(res, "Não foi possível carregar a classificação dos grupos.");
+    throw await buildHttpError(res, "Falha ao carregar a classificação dos grupos");
   }
-  const data: unknown = await res.json();
-  return groupsResponseSchema.parse(data);
+  return groupsResponseSchema.parse(await res.json());
 }
 
 /**
- * Busca o chaveamento eliminatório via `GET /api/worldcup/bracket`.
+ * Busca o chaveamento do mata-mata via `GET /api/worldcup/bracket`.
  *
- * @throws WorldcupServiceError em falha HTTP (status != 2xx).
+ * @throws Error em falha HTTP (status != 2xx), com status e detalhe do corpo.
  * @throws ZodError se a resposta não casar com `bracketResponseSchema`.
- * @returns `BracketResponse` validado.
+ * @returns `BracketResponse` validada (6 buckets: roundOf32…final).
  */
 export async function getBracket(): Promise<BracketResponse> {
   const res = await fetch(`${API_BASE}/worldcup/bracket`);
   if (!res.ok) {
-    throw await httpError(res, "Não foi possível carregar o chaveamento.");
+    throw await buildHttpError(res, "Falha ao carregar o chaveamento");
   }
-  const data: unknown = await res.json();
-  return bracketResponseSchema.parse(data);
+  return bracketResponseSchema.parse(await res.json());
 }

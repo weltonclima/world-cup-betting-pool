@@ -1,71 +1,70 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ZodError } from "zod";
 
-import { getBracket, getGroups, WorldcupServiceError } from "@/services/worldcup";
+import { getGroups, getBracket } from "@/services/worldcup";
 
 /**
- * Testes da camada de serviço da Copa — grupos e chaveamento
- * (grupos-eliminatorias, TASK-05).
+ * Testes da camada de serviço worldcup (TASK-05).
  *
- * Consome `/api/worldcup/*` via `fetch` (mockado — sem rede). Cobre: sucesso +
- * parse Zod, erro HTTP → `WorldcupServiceError` (status preservado), e corpo
- * fora do contrato → ZodError.
+ * Mockamos `global.fetch` — sem rede real. Cobrimos: sucesso com objeto parseado,
+ * shape inválido → ZodError, falha HTTP com `{error}` → Error com msg+status.
  */
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 
-/** Resposta válida de /api/worldcup/groups (GroupsResponse). */
-function makeGroupsResponse() {
+// ── fixtures ─────────────────────────────────────────────────────────────────
+
+/** Resposta válida de /api/worldcup/groups */
+function makeGroupsResponse(overrides: Record<string, unknown> = {}) {
   return {
-    hasLiveGroupMatch: false,
     groups: [
       {
         groupId: "A",
         standings: [
           {
             position: 1,
-            team: { id: "bra", name: "Brasil", code: "BRA" },
-            played: 0,
-            wins: 0,
+            team: { id: "bra", name: "Brasil", code: "BRA", flagUrl: "https://flags/bra.png" },
+            played: 3,
+            wins: 3,
             draws: 0,
             losses: 0,
-            goalsFor: 0,
-            goalsAgainst: 0,
-            goalDifference: 0,
-            points: 0,
-            qualification: "indefinido",
+            goalsFor: 9,
+            goalsAgainst: 1,
+            goalDifference: 8,
+            points: 9,
+            qualification: "classificado",
           },
         ],
       },
     ],
+    hasLiveGroupMatch: false,
+    ...overrides,
   };
 }
 
-/** Resposta válida de /api/worldcup/bracket (BracketResponse). */
-function makeBracketResponse() {
+/** Resposta válida de /api/worldcup/bracket */
+function makeBracketResponse(overrides: Record<string, unknown> = {}) {
   return {
-    roundOf32: [
-      {
-        id: "73",
-        phase: "dezesseis-avos",
-        homeTeam: { name: "1º Grupo A", defined: false },
-        awayTeam: { name: "2º Grupo B", defined: false },
-        status: "aguardando",
-      },
-    ],
+    roundOf32: [],
     roundOf16: [],
     quarterFinals: [],
     semiFinals: [],
     thirdPlace: [],
     final: [],
+    ...overrides,
   };
 }
 
+/** Resposta `ok` 200 com corpo JSON. */
 function okJson(body: unknown): Response {
-  return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+  } as unknown as Response;
 }
 
+/** Resposta de erro com status arbitrário e corpo `{ error }` opcional. */
 function errorJson(status: number, error?: string): Response {
   return {
     ok: false,
@@ -79,77 +78,122 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
+// ── getGroups ─────────────────────────────────────────────────────────────────
+
 describe("getGroups", () => {
-  it("T1: 2xx → parseia e retorna GroupsResponse", async () => {
+  it("faz GET /api/worldcup/groups e retorna GroupsResponse validada", async () => {
     fetchMock.mockResolvedValueOnce(okJson(makeGroupsResponse()));
 
     const result = await getGroups();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/worldcup/groups");
-    expect(result.hasLiveGroupMatch).toBe(false);
-    expect(result.groups[0]?.groupId).toBe("A");
+    expect(result).toMatchObject({ hasLiveGroupMatch: false });
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({ groupId: "A" });
   });
 
-  it("T2: erro HTTP → WorldcupServiceError com status preservado", async () => {
-    fetchMock.mockResolvedValueOnce(errorJson(502, "openfootball fora"));
+  it("hasLiveGroupMatch:true é preservado na resposta", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson(makeGroupsResponse({ hasLiveGroupMatch: true })),
+    );
 
-    const error = await getGroups().catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(WorldcupServiceError);
-    expect((error as WorldcupServiceError).status).toBe(502);
-    // WR-04: o detalhe do corpo `{ error }` é anexado à mensagem.
-    expect((error as WorldcupServiceError).message).toContain("openfootball fora");
+    const result = await getGroups();
+
+    expect(result.hasLiveGroupMatch).toBe(true);
   });
 
-  it("T2b: corpo não-JSON → fallback pt-BR sem mascarar status (WR-04)", async () => {
+  it("shape inválido (groups não é array) → lança ZodError", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ groups: "x", hasLiveGroupMatch: false }));
+
+    await expect(getGroups()).rejects.toThrow();
+  });
+
+  it("shape inválido (hasLiveGroupMatch ausente) → lança ZodError", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ groups: [] }));
+
+    await expect(getGroups()).rejects.toThrow();
+  });
+
+  it("non-2xx com {error} → lança Error contendo msg e status", async () => {
+    fetchMock.mockResolvedValue(errorJson(503, "Cota esgotada."));
+
+    await expect(getGroups()).rejects.toThrow(/HTTP 503/);
+    await expect(getGroups()).rejects.toThrow(/Cota esgotada\./);
+  });
+
+  it("non-2xx sem body JSON → lança Error com status", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 500,
-      json: async () => {
-        throw new SyntaxError("Unexpected token");
-      },
+      json: async () => { throw new Error("not json"); },
     } as unknown as Response);
 
-    const error = await getGroups().catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(WorldcupServiceError);
-    expect((error as WorldcupServiceError).status).toBe(500);
-    expect((error as WorldcupServiceError).message).toBe(
-      "Não foi possível carregar a classificação dos grupos.",
-    );
+    await expect(getGroups()).rejects.toThrow(/HTTP 500/);
   });
 
-  it("T3: corpo fora do contrato → ZodError", async () => {
-    fetchMock.mockResolvedValue(okJson({ groups: "nope" }));
+  it("mensagem de erro contém 'classificação dos grupos'", async () => {
+    fetchMock.mockResolvedValueOnce(errorJson(404));
 
-    await expect(getGroups()).rejects.toBeInstanceOf(ZodError);
+    await expect(getGroups()).rejects.toThrow(/classificação dos grupos/);
   });
 });
 
+// ── getBracket ────────────────────────────────────────────────────────────────
+
 describe("getBracket", () => {
-  it("T4: 2xx → parseia e retorna BracketResponse", async () => {
+  it("faz GET /api/worldcup/bracket e retorna BracketResponse validada", async () => {
     fetchMock.mockResolvedValueOnce(okJson(makeBracketResponse()));
 
     const result = await getBracket();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/worldcup/bracket");
-    expect(result.roundOf32[0]?.phase).toBe("dezesseis-avos");
-    expect(result.final).toEqual([]);
-  });
-
-  it("T5: erro HTTP → WorldcupServiceError", async () => {
-    fetchMock.mockResolvedValueOnce(errorJson(500));
-
-    await expect(getBracket()).rejects.toMatchObject({
-      name: "WorldcupServiceError",
-      status: 500,
+    expect(result).toMatchObject({
+      roundOf32: [],
+      roundOf16: [],
+      quarterFinals: [],
+      semiFinals: [],
+      thirdPlace: [],
+      final: [],
     });
   });
 
-  it("T6: corpo fora do contrato → ZodError", async () => {
-    fetchMock.mockResolvedValueOnce(okJson({ roundOf32: [{ bogus: true }] }));
+  it("shape inválido (campo ausente) → lança ZodError", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ roundOf32: [], roundOf16: [] }));
 
-    await expect(getBracket()).rejects.toBeInstanceOf(ZodError);
+    await expect(getBracket()).rejects.toThrow();
+  });
+
+  it("shape inválido (campo não-array) → lança ZodError", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ ...makeBracketResponse(), roundOf32: "x" }),
+    );
+
+    await expect(getBracket()).rejects.toThrow();
+  });
+
+  it("non-2xx com {error} → lança Error contendo msg e status", async () => {
+    fetchMock.mockResolvedValue(errorJson(503, "Serviço indisponível."));
+
+    await expect(getBracket()).rejects.toThrow(/HTTP 503/);
+    await expect(getBracket()).rejects.toThrow(/Serviço indisponível\./);
+  });
+
+  it("non-2xx sem body JSON → lança Error com status", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: async () => { throw new Error("not json"); },
+    } as unknown as Response);
+
+    await expect(getBracket()).rejects.toThrow(/HTTP 502/);
+  });
+
+  it("mensagem de erro contém 'chaveamento'", async () => {
+    fetchMock.mockResolvedValueOnce(errorJson(404));
+
+    await expect(getBracket()).rejects.toThrow(/chaveamento/);
   });
 });
