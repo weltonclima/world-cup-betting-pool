@@ -12,4 +12,5 @@ export const groupKeys = {
     ["group", "users", status] as const,
   invites: () => ["group", "invites"] as const,
   settings: () => ["group", "settings"] as const,
+  predictions: () => ["group", "predictions"] as const,
 } as const;

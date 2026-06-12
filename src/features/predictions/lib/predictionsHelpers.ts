@@ -67,6 +67,20 @@ export function isPredictionLocked(match: MatchWithId, now: Date): boolean {
   return false;
 }
 
+/**
+ * Filtra só os jogos **bloqueados** para palpite (PRD-12 — o admin de grupo só
+ * lança palpite manual em jogo bloqueado). Puro; reusa `isPredictionLocked`.
+ *
+ * @param matches - Lista de partidas (`useMatches()`).
+ * @param now     - Data de referência (injetada — nunca new Date() interno).
+ */
+export function selectLockedMatches(
+  matches: MatchWithId[],
+  now: Date,
+): MatchWithId[] {
+  return matches.filter((match) => isPredictionLocked(match, now));
+}
+
 // ---------------------------------------------------------------------------
 // 2. scorePrediction
 // ---------------------------------------------------------------------------

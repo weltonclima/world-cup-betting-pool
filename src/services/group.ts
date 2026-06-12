@@ -1,8 +1,17 @@
 import { z } from "zod";
 
-import { inviteSchema, poolSchema, userSchema } from "@/schemas";
+import {
+  groupManualPredictionSavedSchema,
+  inviteSchema,
+  poolSchema,
+  userSchema,
+} from "@/schemas";
 import type { Invite } from "@/types/invites";
 import type { Pool } from "@/types/pools";
+import type {
+  GroupManualPredictionInput,
+  GroupManualPredictionSaved,
+} from "@/types/predictions";
 import type { User, UserStatus } from "@/types";
 
 import { extractErrorDetail } from "./_apiClient";
@@ -150,6 +159,30 @@ export async function promoteGroupUser(uid: string): Promise<Pool> {
   if (!response.ok) throw await toServiceError(response);
   const body = (await response.json()) as { pool: unknown };
   return poolSchema.parse(body.pool);
+}
+
+// ---------------------------------------------------------------------------
+// Palpites manuais (PRD-12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lança/sobrescreve o palpite de um membro aprovado do grupo num jogo bloqueado
+ * (PRD-12). Toda a autorização/escopo é server-side (`POST /api/group/predictions`);
+ * `targetUid` identifica o alvo, nunca autoriza. Resposta validada por schema
+ * (não `as`) antes de chegar à UI.
+ */
+export async function createGroupManualPrediction(
+  input: GroupManualPredictionInput,
+): Promise<GroupManualPredictionSaved> {
+  const response = await fetch("/api/group/predictions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw await toServiceError(response);
+  const body = (await response.json()) as { saved: unknown };
+  return groupManualPredictionSavedSchema.parse(body.saved);
 }
 
 // ---------------------------------------------------------------------------

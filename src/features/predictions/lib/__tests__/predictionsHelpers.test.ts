@@ -14,6 +14,7 @@ import {
   derivePredictionDisplayStatus,
   isPredictionLocked,
   scorePrediction,
+  selectLockedMatches,
 } from "@/features/predictions/lib";
 
 // ---------------------------------------------------------------------------
@@ -145,6 +146,55 @@ describe("isPredictionLocked", () => {
     // exatamente no kickoff (em UTC) → travado
     const nowExact = new Date(utcEquivalentMs);
     expect(isPredictionLocked(match, nowExact)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. selectLockedMatches (PRD-12 — só jogos bloqueados p/ palpite manual)
+// ---------------------------------------------------------------------------
+
+describe("selectLockedMatches", () => {
+  const kickoffFuturo = "2026-06-20T18:00:00.000Z";
+  const kickoffMs = new Date(kickoffFuturo).getTime();
+  const now = new Date(kickoffMs - 3_600_000); // 1h antes do jogo futuro
+
+  it("inclui encerrado, ao vivo e kickoff-passado; exclui scheduled-futuro", () => {
+    const agendadoFuturo = makeScheduledMatch({
+      id: "futuro",
+      kickoffAt: kickoffFuturo,
+    });
+    const encerrado = makeFinishedMatch({ id: "encerrado" });
+    const aoVivo = makeScheduledMatch({
+      id: "ao-vivo",
+      status: "live",
+      kickoffAt: kickoffFuturo,
+    });
+    const kickoffPassado = makeScheduledMatch({
+      id: "passado",
+      kickoffAt: new Date(now.getTime() - 60_000).toISOString(), // 1min antes de now
+    });
+
+    const result = selectLockedMatches(
+      [agendadoFuturo, encerrado, aoVivo, kickoffPassado],
+      now,
+    );
+    const ids = result.map((m) => m.id);
+
+    expect(ids).toContain("encerrado");
+    expect(ids).toContain("ao-vivo");
+    expect(ids).toContain("passado");
+    expect(ids).not.toContain("futuro");
+  });
+
+  it("lista vazia → vazia", () => {
+    expect(selectLockedMatches([], now)).toEqual([]);
+  });
+
+  it("não muta o array de entrada", () => {
+    const input = [makeFinishedMatch({ id: "x" })];
+    const copy = [...input];
+    selectLockedMatches(input, now);
+    expect(input).toEqual(copy);
   });
 });
 
