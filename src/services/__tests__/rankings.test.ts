@@ -5,6 +5,7 @@ import {
   getGeneralRanking,
   getGroupRanking,
   getParticipantProfile,
+  getPoolRanking,
   getPoolStats,
   getRankingByScope,
   getUserRanking,
@@ -22,6 +23,15 @@ vi.mock("@/firebase", () => ({
 
 const docMock = vi.mocked(doc);
 const getDocMock = vi.mocked(getDoc);
+
+// getRankingByScope/getGeneralRanking/getUserRanking agora leem via
+// GET /api/rankings/{scope} (server). Mockamos `fetch`. Os demais serviços
+// (group/statistics/pool_stats) seguem lendo Firestore client direto (getDoc).
+const fetchMock = vi.fn();
+
+function fetchResp(json: unknown, ok = true, status = 200): Response {
+  return { ok, status, json: async () => json } as unknown as Response;
+}
 
 function snap(data: Record<string, unknown> | null) {
   return {
@@ -77,46 +87,70 @@ function poolDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
-afterEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.stubGlobal("fetch", fetchMock);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("getRankingByScope", () => {
-  it("lê rankings/{scope} por doc id e retorna Ranking validado", async () => {
-    getDocMock.mockResolvedValueOnce(snap(rankingDoc({ scope: "oitavas" })));
+  it("lê GET /api/rankings/{scope} e retorna Ranking validado", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc({ scope: "oitavas" })));
     const result = await getRankingByScope("oitavas");
-    expect(docMock).toHaveBeenCalledWith(expect.anything(), "rankings", "oitavas");
+    expect(fetchMock).toHaveBeenCalledWith("/api/rankings/oitavas", { cache: "no-store" });
     expect(result?.scope).toBe("oitavas");
     expect(result?.entries).toHaveLength(2);
   });
 
-  it("retorna null quando doc não existe", async () => {
-    getDocMock.mockResolvedValueOnce(snap(null));
+  it("retorna null quando a resposta é null (doc não existe)", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(null));
     expect(await getRankingByScope("grupos")).toBeNull();
   });
 
   it("doc malformado rejeita (ZodError)", async () => {
-    getDocMock.mockResolvedValueOnce(snap(rankingDoc({ scope: "invalido" })));
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc({ scope: "invalido" })));
     await expect(getRankingByScope("geral")).rejects.toThrow();
   });
 
-  it("erro do getDoc propaga cru", async () => {
-    const err = Object.assign(new Error("denied"), { code: "permission-denied" });
-    getDocMock.mockRejectedValueOnce(err);
-    await expect(getRankingByScope("geral")).rejects.toBe(err);
+  it("status não-OK propaga como erro", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(null, false, 500));
+    await expect(getRankingByScope("geral")).rejects.toThrow(/500/);
   });
 });
 
 describe("getGeneralRanking", () => {
-  it("delega a getRankingByScope('geral') (doc id 'geral')", async () => {
-    getDocMock.mockResolvedValueOnce(snap(rankingDoc()));
+  it("delega a getRankingByScope('geral') (GET /api/rankings/geral)", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc()));
     const result = await getGeneralRanking();
-    expect(docMock).toHaveBeenCalledWith(expect.anything(), "rankings", "geral");
+    expect(fetchMock).toHaveBeenCalledWith("/api/rankings/geral", { cache: "no-store" });
     expect(result?.scope).toBe("geral");
   });
 
   it("retorna null quando vazio", async () => {
-    getDocMock.mockResolvedValueOnce(snap(null));
+    fetchMock.mockResolvedValueOnce(fetchResp(null));
     expect(await getGeneralRanking()).toBeNull();
+  });
+});
+
+describe("getPoolRanking", () => {
+  it("lê GET /api/rankings/pool e retorna Ranking validado", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc()));
+    const result = await getPoolRanking();
+    expect(fetchMock).toHaveBeenCalledWith("/api/rankings/pool", { cache: "no-store" });
+    expect(result?.scope).toBe("geral");
+  });
+
+  it("retorna null quando sem pool (resposta null)", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(null));
+    expect(await getPoolRanking()).toBeNull();
+  });
+
+  it("status não-OK propaga como erro", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(null, false, 500));
+    await expect(getPoolRanking()).rejects.toThrow(/500/);
   });
 });
 
@@ -136,7 +170,7 @@ describe("getGroupRanking", () => {
 
 describe("getUserRanking", () => {
   it("retorna entry do usuário + total quando presente no geral", async () => {
-    getDocMock.mockResolvedValueOnce(snap(rankingDoc()));
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc()));
     const result = await getUserRanking("u2");
     expect(result?.entry.uid).toBe("u2");
     expect(result?.entry.position).toBe(2);
@@ -144,12 +178,12 @@ describe("getUserRanking", () => {
   });
 
   it("retorna null quando uid ausente do ranking", async () => {
-    getDocMock.mockResolvedValueOnce(snap(rankingDoc()));
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc()));
     expect(await getUserRanking("desconhecido")).toBeNull();
   });
 
   it("retorna null quando não há ranking geral", async () => {
-    getDocMock.mockResolvedValueOnce(snap(null));
+    fetchMock.mockResolvedValueOnce(fetchResp(null));
     expect(await getUserRanking("u1")).toBeNull();
   });
 });

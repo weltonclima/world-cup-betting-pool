@@ -7,6 +7,7 @@ import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
 import { copaDataErrorResponse } from "@/app/api/_lib/copaDataError";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { writeAuditLog } from "@/server/admin/auditLog";
+import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { matchSchema, matchStatusSchema, scoreSchema } from "@/schemas";
 import type { MatchWithId } from "@/types/matches";
@@ -117,6 +118,10 @@ export async function PUT(
       level: "info",
     });
 
+    // Gatilho do ranking (PRD-11): o placar manual é a ÚNICA fonte de resultado —
+    // recalcula na hora (best-effort; falha não derruba o save).
+    await recalcRankingsBestEffort(db);
+
     return NextResponse.json({ id, ...merged.data }, { status: 200 });
   } catch (err) {
     console.error(`[admin/matches/${id}] erro inesperado:`, err);
@@ -175,6 +180,9 @@ export async function DELETE(
       message: `Partida ${id}: edição manual removida (volta ao sync oficial).`,
       level: "info",
     });
+
+    // Remoção do override muda o resultado efetivo → recalcula (best-effort).
+    await recalcRankingsBestEffort(db);
 
     return NextResponse.json({ id, cleared: true }, { status: 200 });
   } catch (err) {

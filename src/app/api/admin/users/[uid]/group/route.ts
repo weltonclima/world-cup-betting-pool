@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
 import { writeAuditLog } from "@/server/admin/auditLog";
+import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { isSuperAdminRole, roleSchema } from "@/schemas";
 
@@ -107,6 +108,9 @@ export async function PATCH(
         level: "info",
       });
     }
+
+    // Mudança de membro do pool → recalcula o ranking (HG-02, best-effort).
+    await recalcRankingsBestEffort(db);
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {

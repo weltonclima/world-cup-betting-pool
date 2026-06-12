@@ -2,7 +2,7 @@
 
 import { Bell } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   getInitials,
   getAvatarVariant,
@@ -15,6 +15,11 @@ export interface HomeHeaderProps {
   name: string | null;
   /** uid do Firebase Auth. null se não autenticado. */
   uid: string | null;
+  /**
+   * Foto do usuário (profile.avatarUrl — data URL base64, PRD-06). Opcional:
+   * ausente/null cai no fallback de iniciais.
+   */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -23,7 +28,7 @@ export interface HomeHeaderProps {
  *
  * Exibe: avatar por iniciais + saudação "Olá, {nome} 👋" + sino estático (MVP).
  */
-export function HomeHeader({ name, uid }: HomeHeaderProps) {
+export function HomeHeader({ name, uid, avatarUrl }: HomeHeaderProps) {
   // Derivações puras — sem hooks
   const initials = name ? getInitials(name) : "?";
   const avatarColorClass = uid
@@ -38,6 +43,15 @@ export function HomeHeader({ name, uid }: HomeHeaderProps) {
         {/* Avatar + texto */}
         <div className="flex items-center gap-3 min-w-0">
           <Avatar className="size-12 shrink-0">
+            {/* Foto do usuário quando disponível (base64). aria-hidden: o nome
+                completo já é lido na saudação ao lado. */}
+            {avatarUrl ? (
+              <AvatarImage
+                src={avatarUrl}
+                alt=""
+                aria-hidden="true"
+              />
+            ) : null}
             {/* aria-hidden: o nome completo já é lido na saudação ao lado (evita leitura redundante das iniciais). */}
             <AvatarFallback
               aria-hidden="true"

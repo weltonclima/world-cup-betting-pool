@@ -297,4 +297,27 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
     expect(screen.getByText("Fase não definida")).toBeTruthy();
     expect(screen.getByText("Nenhum aviso no momento")).toBeTruthy();
   });
+
+  // Regressão (RC5): o CTA "Enviar Palpite" era um botão inerte — HomeDashboard
+  // não repassava `ctaHref` ao NextMatchCard. Agora deve renderizar um link para
+  // a tela de palpites do jogo (predictionsHref vindo do compositor).
+  it("T28: CTA do próximo jogo é um link para predictionsHref", () => {
+    mockUseDashboard.mockReturnValue({
+      ...baseDashboardSuccess,
+      nextMatch: {
+        matchId: "m-1",
+        kickoffAt: "2026-06-20T18:00:00Z",
+        homeTeam: { name: "Brasil", flagUrl: undefined },
+        awayTeam: { name: "Argentina", flagUrl: undefined },
+        predictionStatus: "pendente",
+        userPrediction: null,
+        predictionsHref: "/matches/m-1/predict",
+      },
+    });
+
+    render(<HomeDashboard />);
+
+    const cta = screen.getByRole("link", { name: "Enviar Palpite" });
+    expect(cta.getAttribute("href")).toBe("/matches/m-1/predict");
+  });
 });

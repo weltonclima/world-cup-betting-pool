@@ -15,6 +15,7 @@ export { listUsersByStatus, updateUserStatus } from "./users";
 // Serviços de ranking (PRD-02 Home + PRD-05 Ranking).
 export {
   getGeneralRanking,
+  getPoolRanking,
   getRankingByScope,
   getGroupRanking,
   getUserRanking,

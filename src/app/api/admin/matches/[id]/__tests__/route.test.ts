@@ -26,11 +26,13 @@ const {
   getEffectiveMatchesMock,
   writeAuditLogMock,
   getFirestoreMock,
+  recalcBestEffortMock,
 } = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   getEffectiveMatchesMock: vi.fn(),
   writeAuditLogMock: vi.fn(),
   getFirestoreMock: vi.fn(),
+  recalcBestEffortMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -42,6 +44,9 @@ vi.mock("@/server/copaData/matchSource", () => ({
 }));
 vi.mock("@/server/admin/auditLog", () => ({ writeAuditLog: writeAuditLogMock }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
+vi.mock("@/server/rankings/recalc", () => ({
+  recalcRankingsBestEffort: recalcBestEffortMock,
+}));
 
 import { NextResponse } from "next/server";
 
@@ -103,6 +108,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   authorizeMock.mockResolvedValue({ authorized: true, actorUid: "admin-1" });
   writeAuditLogMock.mockResolvedValue(undefined);
+  recalcBestEffortMock.mockResolvedValue(undefined);
   mockDb();
 });
 
@@ -154,6 +160,14 @@ describe("PUT /api/admin/matches/[id]", () => {
     expect(saved["status"]).toBe("finished");
     expect(saved["homeScore"]).toBe(3);
     expect(saved["editedBy"]).toBe("admin-1");
+    // Encadeia o recalc do ranking (placar manual é a única fonte de resultado).
+    expect(recalcBestEffortMock).toHaveBeenCalledOnce();
+  });
+
+  it("não dispara recalc quando a edição é rejeitada (422)", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([effMatch("m1")]);
+    await PUT(makeReq({ body: { status: "finished", homeScore: null, awayScore: null } }), ctx("m1"));
+    expect(recalcBestEffortMock).not.toHaveBeenCalled();
   });
 });
 
@@ -185,5 +199,13 @@ describe("DELETE /api/admin/matches/[id] (un-protect)", () => {
     expect(matchDelete).toHaveBeenCalledOnce();
     const body = (await res.json()) as { cleared: boolean };
     expect(body.cleared).toBe(true);
+    // Remover override muda o resultado efetivo → recalcula.
+    expect(recalcBestEffortMock).toHaveBeenCalledOnce();
+  });
+
+  it("não dispara recalc quando não há override a remover (404)", async () => {
+    mockDb({ matchExists: false });
+    await DELETE(makeReq({}), ctx("m1"));
+    expect(recalcBestEffortMock).not.toHaveBeenCalled();
   });
 });

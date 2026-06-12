@@ -17,6 +17,7 @@ type MatchWithId = Match & { id: string };
 type TeamWithId = Team & { id: string };
 
 import {
+  buildPredictionsHref,
   buildTeamMap,
   computeIsCorrect,
   deriveCurrentStage,
@@ -258,6 +259,24 @@ describe("derivePredictionStatus", () => {
   it("palpite para outro match + não bloqueado → 'pendente'", () => {
     const pred = makePrediction({ matchId: "match-99" });
     expect(derivePredictionStatus(matchId, [pred], false)).toBe("pendente");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4b. buildPredictionsHref
+// ---------------------------------------------------------------------------
+
+describe("buildPredictionsHref", () => {
+  it("pendente → tela de palpite do jogo", () => {
+    expect(buildPredictionsHref("m-1", "pendente")).toBe("/matches/m-1/predict");
+  });
+
+  it("enviado → tela de palpite do jogo (editar)", () => {
+    expect(buildPredictionsHref("m-1", "enviado")).toBe("/matches/m-1/predict");
+  });
+
+  it("bloqueado → detalhe do jogo (ver)", () => {
+    expect(buildPredictionsHref("m-1", "bloqueado")).toBe("/matches/m-1");
   });
 });
 

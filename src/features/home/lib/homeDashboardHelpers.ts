@@ -42,6 +42,8 @@ export interface NextMatchSummary {
   predictionStatus: HomePredictionStatus;
   /** Palpite do usuário, se enviado. */
   userPrediction: { homeScore: number; awayScore: number } | null;
+  /** Destino do CTA "Enviar/Editar Palpite" — tela de palpites do jogo. */
+  predictionsHref: string;
 }
 
 /** Um resultado recente com acertou/errou calculado. */
@@ -174,6 +176,27 @@ export function derivePredictionStatus(
   if (predictionsLocked) return "bloqueado";
   const hasPrediction = predictions.some((p) => p.matchId === matchId);
   return hasPrediction ? "enviado" : "pendente";
+}
+
+// ---------------------------------------------------------------------------
+// 4b. buildPredictionsHref — destino do CTA do próximo jogo
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a rota do CTA do próximo jogo, por `matchId`. Palpite editável
+ * (pendente/enviado) → tela de palpite do jogo (`/matches/{id}/predict`). Jogo
+ * encerrado (`bloqueado`, CTA "Ver Jogo") → detalhe do jogo (`/matches/{id}`).
+ *
+ * `matchId` é o id estável do jogo (slug para grupos), casando com o parâmetro
+ * de `/matches/[id]`.
+ */
+export function buildPredictionsHref(
+  matchId: string,
+  status: HomePredictionStatus,
+): string {
+  return status === "bloqueado"
+    ? `/matches/${matchId}`
+    : `/matches/${matchId}/predict`;
 }
 
 // ---------------------------------------------------------------------------

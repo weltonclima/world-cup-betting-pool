@@ -169,7 +169,17 @@ describe("getMatchById", () => {
 });
 
 describe("getNextScheduledMatch (derivado de listMatches)", () => {
-  it("filtra status=scheduled, ordena kickoffAt asc e devolve o primeiro", async () => {
+  // Fixa apenas o relógio (Date) — o filtro de "próximo" depende de Date.now().
+  // Mantém timers reais para não interferir nas promises do fetch mock.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-12T00:00:00.000Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("filtra scheduled FUTUROS, ordena kickoffAt asc e devolve o primeiro", async () => {
     fetchMock.mockResolvedValueOnce(
       okJson([
         makeFinishedMatch({ id: "f1" }),
@@ -182,6 +192,33 @@ describe("getNextScheduledMatch (derivado de listMatches)", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/api/matches");
     expect(result).toMatchObject({ id: "s-early", status: "scheduled" });
+  });
+
+  // Regressão (RC1): a fonte openfootball não popula `score.ft` em tempo real,
+  // então um jogo já iniciado/encerrado permanece "scheduled". Sem o filtro de
+  // futuro, `getNextScheduledMatch` devolvia esse jogo passado como "próximo".
+  it("exclui scheduled já no passado e devolve o próximo futuro", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson([
+        makeScheduledMatch({ id: "s-past", kickoffAt: "2026-06-11T13:00:00.000Z" }),
+        makeScheduledMatch({ id: "s-future", kickoffAt: "2026-06-13T20:00:00.000Z" }),
+      ]),
+    );
+
+    const result = await getNextScheduledMatch();
+
+    expect(result).toMatchObject({ id: "s-future", status: "scheduled" });
+  });
+
+  it("retorna null quando todos os scheduled já passaram", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson([
+        makeScheduledMatch({ id: "s-past1", kickoffAt: "2026-06-11T13:00:00.000Z" }),
+        makeScheduledMatch({ id: "s-past2", kickoffAt: "2026-06-10T20:00:00.000Z" }),
+      ]),
+    );
+
+    await expect(getNextScheduledMatch()).resolves.toBeNull();
   });
 
   it("retorna null quando não há partidas agendadas", async () => {

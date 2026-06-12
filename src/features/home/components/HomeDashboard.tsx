@@ -144,6 +144,7 @@ export function HomeDashboard() {
         <HomeHeader
           name={profile?.name ?? null}
           uid={firebaseUser?.uid ?? null}
+          avatarUrl={profile?.avatarUrl ?? null}
         />
       )}
 
@@ -170,7 +171,10 @@ export function HomeDashboard() {
       {isLoading ? (
         <NextMatchCardSkeleton />
       ) : (
-        <NextMatchCard nextMatch={nextMatch} />
+        <NextMatchCard
+          nextMatch={nextMatch}
+          ctaHref={nextMatch?.predictionsHref}
+        />
       )}
 
       {/* Fase Atual — card full-width */}

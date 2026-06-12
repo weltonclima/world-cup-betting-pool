@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { HomeHeader } from "@/features/home/components/HomeHeader";
 
 describe("HomeHeader", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("T1: renderiza saudação com nome quando name é fornecido", () => {
     render(<HomeHeader name="Ana Lima" uid="abc123" />);
 
@@ -68,5 +72,36 @@ describe("HomeHeader", () => {
 
     const section = screen.getByRole("region", { name: "Boas-vindas" });
     expect(section).toBeTruthy();
+  });
+
+  it("T10: renderiza <img> com a foto (avatarUrl) quando fornecida", async () => {
+    // jsdom não carrega imagens reais: o Radix AvatarImage só monta o <img>
+    // após o onload. Simula o carregamento disparando onload ao setar src.
+    class MockImage {
+      onload: (() => void) | null = null;
+      set src(_value: string) {
+        this.onload?.();
+      }
+    }
+    vi.stubGlobal("Image", MockImage);
+
+    const dataUrl = "data:image/jpeg;base64,QUJD";
+    const { container } = render(
+      <HomeHeader name="Ana Lima" uid="abc123" avatarUrl={dataUrl} />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector("img")).not.toBeNull();
+    });
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(dataUrl);
+  });
+
+  it("T11: sem avatarUrl não renderiza <img> — cai no fallback de iniciais", () => {
+    const { container } = render(
+      <HomeHeader name="Ana Lima" uid="abc123" avatarUrl={null} />,
+    );
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("AL")).toBeTruthy();
   });
 });

@@ -6,7 +6,7 @@ import { Crown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { useGeneralRanking } from "@/features/rankings";
+import { usePoolRanking } from "@/features/rankings";
 import { paginate } from "@/features/rankings/lib";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +33,22 @@ function accuracyLabel(entry: RankingEntry): string {
   return entry.accuracy === undefined ? "—" : `${entry.accuracy}%`;
 }
 
-/** Tela 01 — Ranking Geral (PRD-05, TASK-08). */
+/** Tela 01 — Ranking do pool do usuário (PRD-05 TASK-08, fechado por pool PRD-09). */
 export function GeneralRanking() {
-  const { data, isLoading, isError, refetch } = useGeneralRanking();
-  const currentUid = useAuth().firebaseUser?.uid;
+  const auth = useAuth();
+  const groupId = auth.profile?.groupId;
+  const currentUid = auth.firebaseUser?.uid;
+  const { data, isLoading, isError, refetch } = usePoolRanking(groupId);
   const [page, setPage] = useState(1);
 
+  // Usuário sem pool não pertence a ranking nenhum (e nunca aparece em outro).
+  if (!groupId)
+    return (
+      <RankingEmptyState
+        message="Você ainda não está em um grupo"
+        subtitle="Entre ou crie um grupo para ver o ranking dos participantes."
+      />
+    );
   if (isLoading) return <RankingSkeleton />;
   if (isError) return <RankingErrorState onRetry={() => void refetch()} />;
   if (!data || data.entries.length === 0) return <RankingEmptyState />;

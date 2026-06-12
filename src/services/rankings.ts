@@ -29,18 +29,45 @@ import type {
  * `statistics/{uid}`, `pool_stats/current`.
  */
 
-/** Ranking de um escopo ("geral" ou uma das 5 fases). */
+/**
+ * Ranking de um escopo ("geral" ou uma das 5 fases).
+ *
+ * Lê via Route Handler `GET /api/rankings/{scope}` (server, admin SDK) em vez do
+ * Firestore client direto: o servidor aplica o recalc preguiçoso (TTL +
+ * stale-while-revalidate) e mantém o doc fresco sem depender de cron. Doc ausente
+ * → resposta `null`. Status não-OK propaga como erro (React Query trata isError).
+ */
 export async function getRankingByScope(
   scope: RankingScope,
 ): Promise<Ranking | null> {
-  const snapshot = await getDoc(doc(firestore, "rankings", scope));
-  if (!snapshot.exists()) return null;
-  return rankingSchema.parse(snapshot.data());
+  const res = await fetch(`/api/rankings/${scope}`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Falha ao carregar ranking (${res.status}).`);
+  }
+  const json: unknown = await res.json();
+  if (json === null) return null;
+  return rankingSchema.parse(json);
 }
 
 /** Ranking geral consolidado. Delega a `getRankingByScope("geral")`. */
 export async function getGeneralRanking(): Promise<Ranking | null> {
   return getRankingByScope("geral");
+}
+
+/**
+ * Ranking FECHADO do pool do usuário logado (PRD-09). Lê via
+ * `GET /api/rankings/pool` — o servidor resolve o `groupId` pela sessão e serve
+ * `rankings/pool-{groupId}-geral`. O client NÃO passa o pool (isolamento). Usuário
+ * sem pool → `null`. Status não-OK propaga como erro (React Query trata isError).
+ */
+export async function getPoolRanking(): Promise<Ranking | null> {
+  const res = await fetch("/api/rankings/pool", { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Falha ao carregar ranking do grupo (${res.status}).`);
+  }
+  const json: unknown = await res.json();
+  if (json === null) return null;
+  return rankingSchema.parse(json);
 }
 
 /** Ranking de um grupo individual (A–L). Doc `rankings/group-{groupId}`. */

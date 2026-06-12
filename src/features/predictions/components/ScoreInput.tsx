@@ -59,8 +59,8 @@ export function ScoreInput({
         {label}
       </span>
 
-      {/* Controles do stepper */}
-      <div className="flex items-center gap-4">
+      {/* Controles do stepper — gap menor no mobile p/ caber em telas estreitas */}
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* Botão decrementar */}
         <button
           type="button"
@@ -76,7 +76,7 @@ export function ScoreInput({
         <output
           aria-live="polite"
           aria-label={`${label}: ${value}`}
-          className="text-5xl font-bold text-foreground min-w-[3rem] text-center"
+          className="text-4xl sm:text-5xl font-bold text-foreground min-w-[2rem] text-center"
         >
           {value}
         </output>
