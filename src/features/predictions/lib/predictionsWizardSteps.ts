@@ -5,7 +5,7 @@
  * helpers para resolver a etapa atual a partir do pathname e calcular o destino
  * de Anterior/Próximo. Consumida por usePredictionsWizard / PredictionsWizard.
  *
- * A etapa "Grupos" agrega `/predictions/grupos` e `/predictions/grupos/[groupId]`
+ * A etapa "Grupos" agrega `/predictions/groups` e `/predictions/groups/[groupId]`
  * (a sub-navegação dos 12 grupos é da tela de seleção; o Próximo do wizard leva
  * ao Resumo de Grupos).
  */
@@ -29,7 +29,7 @@ export interface WizardStep {
 /**
  * Ordem canônica do fluxo. A primeira etapa é o Hub; a última é o Resumo Final.
  * As fases eliminatórias seguem a ordem FIFA (16 avos → final), com o 3º lugar
- * renderizado junto da final (rota `/predictions/chave/final`).
+ * renderizado junto da final (rota `/predictions/knockout/final`).
  */
 export const WIZARD_STEPS: readonly WizardStep[] = [
   {
@@ -41,56 +41,56 @@ export const WIZARD_STEPS: readonly WizardStep[] = [
   {
     key: "grupos",
     label: "Grupos",
-    href: "/predictions/grupos",
-    match: ["/predictions/grupos"],
+    href: "/predictions/groups",
+    match: ["/predictions/groups"],
   },
   {
     key: "resumo-grupos",
     label: "Resumo dos grupos",
-    href: "/predictions/resumo-grupos",
-    match: ["/predictions/resumo-grupos"],
+    href: "/predictions/groups-summary",
+    match: ["/predictions/groups-summary"],
   },
   {
     key: "melhores-terceiros",
     label: "Melhores terceiros",
-    href: "/predictions/melhores-terceiros",
-    match: ["/predictions/melhores-terceiros"],
+    href: "/predictions/best-thirds",
+    match: ["/predictions/best-thirds"],
   },
   {
     key: "dezesseis-avos",
     label: "16 avos",
-    href: "/predictions/chave/dezesseis-avos",
-    match: ["/predictions/chave/dezesseis-avos"],
+    href: "/predictions/knockout/dezesseis-avos",
+    match: ["/predictions/knockout/dezesseis-avos"],
   },
   {
     key: "oitavas",
     label: "Oitavas",
-    href: "/predictions/chave/oitavas",
-    match: ["/predictions/chave/oitavas"],
+    href: "/predictions/knockout/oitavas",
+    match: ["/predictions/knockout/oitavas"],
   },
   {
     key: "quartas",
     label: "Quartas",
-    href: "/predictions/chave/quartas",
-    match: ["/predictions/chave/quartas"],
+    href: "/predictions/knockout/quartas",
+    match: ["/predictions/knockout/quartas"],
   },
   {
     key: "semifinal",
     label: "Semifinais",
-    href: "/predictions/chave/semifinal",
-    match: ["/predictions/chave/semifinal"],
+    href: "/predictions/knockout/semifinal",
+    match: ["/predictions/knockout/semifinal"],
   },
   {
     key: "final",
     label: "Final e 3º lugar",
-    href: "/predictions/chave/final",
-    match: ["/predictions/chave/final"],
+    href: "/predictions/knockout/final",
+    match: ["/predictions/knockout/final"],
   },
   {
     key: "resumo",
     label: "Resumo final",
-    href: "/predictions/resumo",
-    match: ["/predictions/resumo"],
+    href: "/predictions/summary",
+    match: ["/predictions/summary"],
   },
 ];
 
@@ -112,8 +112,8 @@ function normalizePathname(pathname: string): string {
  * Resolve o índice (0-based) da etapa do wizard correspondente ao pathname.
  *
  * Escolhe o match mais específico: entre todas as etapas cujo `match` é prefixo
- * do pathname, retorna a de prefixo mais longo (ex.: `/predictions/grupos/A`
- * casa "grupos" e não "hub", pois "/predictions/grupos" é mais longo que
+ * do pathname, retorna a de prefixo mais longo (ex.: `/predictions/groups/A`
+ * casa "grupos" e não "hub", pois "/predictions/groups" é mais longo que
  * "/predictions").
  *
  * @param pathname - Pathname atual (com ou sem query/hash).

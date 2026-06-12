@@ -202,7 +202,7 @@ function renderRanking(
     allGroupsComplete: true,
     completedGroupsCount: 12,
     totalGroupsCount: 12,
-    bracketHref: "/predictions/chave/dezesseis-avos",
+    bracketHref: "/predictions/knockout/dezesseis-avos",
     isLoading: false,
     isError: false,
     onRetry: vi.fn(),
@@ -259,7 +259,7 @@ describe("BestThirdsRanking — CTA Gerar 16 Avos", () => {
       name: "Gerar a chave dos 16 avos de final",
     });
     expect(link.getAttribute("href")).toBe(
-      "/predictions/chave/dezesseis-avos",
+      "/predictions/knockout/dezesseis-avos",
     );
     // Sem botão desabilitado nem texto de contagem.
     expect(screen.queryByText(/Complete os 12 grupos/)).toBeNull();

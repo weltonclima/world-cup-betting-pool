@@ -25,7 +25,7 @@ import type {
  * doc fora do schema faz a Promise rejeitar. Doc inexistente → `null`.
  *
  * Leitura por doc id direto (mais barata que query) — alinhada aos paths gravados
- * pelo recalc (TASK-03): `rankings/{scope}`, `rankings/grupo-{groupId}`,
+ * pelo recalc (TASK-03): `rankings/{scope}`, `rankings/group-{groupId}`,
  * `statistics/{uid}`, `pool_stats/current`.
  */
 
@@ -43,7 +43,7 @@ export async function getGeneralRanking(): Promise<Ranking | null> {
   return getRankingByScope("geral");
 }
 
-/** Ranking de um grupo individual (A–L). Doc `rankings/grupo-{groupId}`. */
+/** Ranking de um grupo individual (A–L). Doc `rankings/group-{groupId}`. */
 export async function getGroupRanking(
   groupId: string,
 ): Promise<GroupRanking | null> {

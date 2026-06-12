@@ -100,7 +100,7 @@ describe("buildGroupSummaries", () => {
 
   it("gera href e name corretos", () => {
     const out = buildGroupSummaries(groupMatches("D"), []);
-    expect(out[0]!.href).toBe("/predictions/grupos/D");
+    expect(out[0]!.href).toBe("/predictions/groups/D");
     expect(out[0]!.name).toBe("Grupo D");
   });
 });
@@ -115,7 +115,7 @@ function makeSummaries(): GroupSummary[] {
     totalCount: 6,
     filledCount: idx === 0 ? 6 : idx === 1 ? 3 : 0,
     status: idx === 0 ? "concluido" : idx === 1 ? "andamento" : "nao-iniciado",
-    href: `/predictions/grupos/${groupId}`,
+    href: `/predictions/groups/${groupId}`,
   }));
 }
 
@@ -143,12 +143,12 @@ describe("GroupSelectionGrid — render", () => {
     expect(screen.getByText("Grupo L")).toBeTruthy();
   });
 
-  it("cada card navega para /predictions/grupos/{id}", () => {
+  it("cada card navega para /predictions/groups/{id}", () => {
     renderGrid();
     const a = screen.getByRole("link", { name: /Grupo A/ });
-    expect(a.getAttribute("href")).toBe("/predictions/grupos/A");
+    expect(a.getAttribute("href")).toBe("/predictions/groups/A");
     const l = screen.getByRole("link", { name: /Grupo L/ });
-    expect(l.getAttribute("href")).toBe("/predictions/grupos/L");
+    expect(l.getAttribute("href")).toBe("/predictions/groups/L");
   });
 
   it("status no aria-label do card (concluído / em andamento / não iniciado)", () => {

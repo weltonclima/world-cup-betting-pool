@@ -169,11 +169,11 @@ describe("PhaseCard", () => {
         gamesCount={72}
         pendingCount={12}
         status="andamento"
-        href="/predictions/grupos"
+        href="/predictions/groups"
       />,
     );
     const link = screen.getByRole("link", { name: /Fase de Grupos/ });
-    expect(link.getAttribute("href")).toBe("/predictions/grupos");
+    expect(link.getAttribute("href")).toBe("/predictions/groups");
     expect(screen.getByText("12 pendentes · 72 jogos")).toBeTruthy();
   });
 
@@ -184,7 +184,7 @@ describe("PhaseCard", () => {
         gamesCount={4}
         pendingCount={4}
         status="bloqueado"
-        href="/predictions/chave/quartas"
+        href="/predictions/knockout/quartas"
       />,
     );
     expect(screen.queryByRole("link")).toBeNull();
@@ -200,7 +200,7 @@ describe("PhaseCard", () => {
         gamesCount={72}
         pendingCount={0}
         status="concluido"
-        href="/predictions/grupos"
+        href="/predictions/groups"
       />,
     );
     expect(screen.getByText("Concluído")).toBeTruthy();
@@ -217,11 +217,11 @@ describe("GroupCard", () => {
         filledCount={3}
         totalCount={6}
         status="andamento"
-        href="/predictions/grupos/C"
+        href="/predictions/groups/C"
       />,
     );
     const link = screen.getByRole("link", { name: "Grupo C, 3 de 6 jogos, em andamento" });
-    expect(link.getAttribute("href")).toBe("/predictions/grupos/C");
+    expect(link.getAttribute("href")).toBe("/predictions/groups/C");
     expect(screen.getByText("Grupo C")).toBeTruthy();
     expect(screen.getByText("3 / 6")).toBeTruthy();
   });

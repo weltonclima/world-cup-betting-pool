@@ -32,6 +32,33 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
 }));
 
+// Busca de grupos (PRD-09, TASK-07): o campo embutido usa `useSearchGroups`.
+// Mockado para devolver um pool ativo selecionável, isolando React Query/fetch.
+vi.mock("@/features/groups/hooks", () => ({
+  useSearchGroups: () => ({
+    data: [
+      {
+        id: "pool-1",
+        name: "Bolão dos Parças",
+        slug: "bolao-dos-parcas",
+        status: "active",
+        adminId: "admin-1",
+        createdAt: "2026-06-10T00:00:00Z",
+      },
+    ],
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+}));
+
+// `redeemInvite` (PRD-10, A2) importa `@/firebase` no nível de módulo, que valida
+// as envs NEXT_PUBLIC_FIREBASE_* ao carregar. Mockado para isolar o SignupForm
+// do cliente Firebase real (sem o mock, o import quebra a suíte na carga).
+vi.mock("@/services/invites", () => ({
+  redeemInvite: vi.fn(async () => true),
+}));
+
 // Helpers de seleção de campos por label/placeholder.
 function getInput(placeholder: string): HTMLInputElement {
   return screen.getByPlaceholderText(placeholder) as HTMLInputElement;
@@ -68,6 +95,8 @@ function fillTextFields({
   fireEvent.change(getInput("Confirme sua senha"), {
     target: { value: confirmPassword },
   });
+  // Seleciona o grupo (campo embutido, PRD-09 TASK-07): clica na única opção.
+  fireEvent.click(screen.getByRole("option", { name: /Bolão dos Parças/i }));
 }
 
 function submitButton(): HTMLButtonElement {
@@ -128,6 +157,7 @@ describe("SignupForm", () => {
       nickname: "Fulano",
       email: "fulano@example.com",
       password: "secret123",
+      groupId: "pool-1",
     });
 
     // Não envia campos exclusivos do frontend ao serviço.

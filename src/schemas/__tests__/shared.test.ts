@@ -1,6 +1,9 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  isGroupAdminRole,
+  isParticipantRole,
+  isSuperAdminRole,
   isoDateTime,
   matchStatusSchema,
   nonEmptyString,
@@ -20,10 +23,17 @@ import type {
 } from "@/types/shared";
 
 describe("shared › enums", () => {
-  it("roleSchema aceita valores válidos e rejeita inválidos", () => {
+  it("roleSchema aceita os 3 valores canônicos + 2 legados (dupla-compat)", () => {
+    // canônicos PRD-09
+    expect(roleSchema.safeParse("participant").success).toBe(true);
+    expect(roleSchema.safeParse("group_admin").success).toBe(true);
+    expect(roleSchema.safeParse("super_admin").success).toBe(true);
+    // legados (aceitos durante a transição — removidos na TASK-12)
     expect(roleSchema.safeParse("user").success).toBe(true);
     expect(roleSchema.safeParse("admin").success).toBe(true);
+    // inválidos
     expect(roleSchema.safeParse("root").success).toBe(false);
+    expect(roleSchema.safeParse("").success).toBe(false);
   });
 
   it("userStatusSchema aceita válidos e rejeita inválidos", () => {
@@ -82,6 +92,46 @@ describe("shared › enums", () => {
   });
 });
 
+describe("shared › helpers de role (dupla-compat)", () => {
+  it("isSuperAdminRole: true para admin (legado) e super_admin", () => {
+    expect(isSuperAdminRole("admin")).toBe(true);
+    expect(isSuperAdminRole("super_admin")).toBe(true);
+    expect(isSuperAdminRole("group_admin")).toBe(false);
+    expect(isSuperAdminRole("participant")).toBe(false);
+    expect(isSuperAdminRole("user")).toBe(false);
+  });
+
+  it("isGroupAdminRole: true só para group_admin (sem equivalente legado)", () => {
+    expect(isGroupAdminRole("group_admin")).toBe(true);
+    expect(isGroupAdminRole("admin")).toBe(false);
+    expect(isGroupAdminRole("super_admin")).toBe(false);
+    expect(isGroupAdminRole("participant")).toBe(false);
+    expect(isGroupAdminRole("user")).toBe(false);
+  });
+
+  it("isParticipantRole: true para user (legado) e participant", () => {
+    expect(isParticipantRole("user")).toBe(true);
+    expect(isParticipantRole("participant")).toBe(true);
+    expect(isParticipantRole("admin")).toBe(false);
+    expect(isParticipantRole("super_admin")).toBe(false);
+    expect(isParticipantRole("group_admin")).toBe(false);
+  });
+
+  it("TODO valor do roleSchema cai em exatamente um helper (partição total)", () => {
+    // Itera as opções do schema (não lista hard-coded): adicionar um role novo
+    // sem atualizar os helpers quebra este teste (review WR-02).
+    const roles = roleSchema.options;
+    for (const r of roles) {
+      const hits = [
+        isSuperAdminRole(r),
+        isGroupAdminRole(r),
+        isParticipantRole(r),
+      ].filter(Boolean).length;
+      expect(hits).toBe(1);
+    }
+  });
+});
+
 describe("shared › primitivos", () => {
   it("nonEmptyString rejeita string vazia", () => {
     expect(nonEmptyString.safeParse("x").success).toBe(true);
@@ -114,7 +164,9 @@ describe("shared › primitivos", () => {
 
 describe("shared › inferência de tipos", () => {
   it("tipos derivados batem com os enums", () => {
-    expectTypeOf<Role>().toEqualTypeOf<"user" | "admin">();
+    expectTypeOf<Role>().toEqualTypeOf<
+      "participant" | "group_admin" | "super_admin" | "user" | "admin"
+    >();
     expectTypeOf<UserStatus>().toEqualTypeOf<
       "pending" | "approved" | "blocked"
     >();

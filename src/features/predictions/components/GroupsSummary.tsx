@@ -5,7 +5,7 @@
  *
  * Componente APRESENTACIONAL: recebe o resumo já derivado (buildGroupsSummary)
  * + estados de loading/erro via props. O data-fetching e a derivação ficam na
- * página (`/predictions/resumo-grupos`).
+ * página (`/predictions/groups-summary`).
  *
  * Lista os 12 grupos (A–L) com 1º/2º classificados previstos e o 3º marcado como
  * candidato a melhor terceiro; ✓ por grupo concluído. CTA "Ver Melhores

@@ -1,6 +1,9 @@
 // Barrel de schemas. Reexporta os schemas Zod das 9 coleções Firestore + shared (TASK-07).
 export * from "./shared";
 export * from "./users";
+export * from "./pools";
+export * from "./invites";
+export * from "./poolStatusTransition";
 export * from "./userStatusTransition";
 export * from "./teams";
 export * from "./groups";
@@ -13,5 +16,6 @@ export * from "./systemSettings";
 export * from "./notifications";
 export * from "./notificationPreferences";
 export * from "./systemLogs";
+export * from "./syncLogs";
 export * from "./webauthnCredentials";
 export * from "./worldcup";

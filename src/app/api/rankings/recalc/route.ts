@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 
 import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
-import { fetchAllMatches } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { scorePrediction } from "@/features/predictions/lib";
 import {
   buildDistribution,
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // ─── 2. Buscar partidas finalizadas ────────────────────────────────────────
   let matches: MatchWithId[];
   try {
-    matches = await fetchAllMatches();
+    matches = await getEffectiveMatches();
   } catch (err) {
     return copaDataErrorResponse(err);
   }
@@ -244,6 +244,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }),
   );
 
+  // ─── 6.1 Rankings por pool (multi-tenant, PRD-09 TASK-10) ──────────────────
+  // Mesma pontuação geral (acertos do usuário são absolutos), mas RE-RANKEADA
+  // dentro de cada pool: a posição é relativa só aos membros do mesmo `groupId`.
+  // Consumido por GET /api/group/users/approved, que lê `rankings/pool-{id}-geral`
+  // (D5: lê, não recalcula). Usuário sem `groupId` (legado pré-backfill) fica de
+  // fora — não há pool a que pertencer.
+  const geralByUid = new Map(geralParticipants.map((p) => [p.uid, p]));
+  const poolMembers = new Map<string, RankableParticipant[]>();
+  for (const u of approved) {
+    if (!u.groupId) continue;
+    const list = poolMembers.get(u.groupId) ?? [];
+    list.push(geralByUid.get(u.uid)!);
+    poolMembers.set(u.groupId, list);
+  }
+  let poolsWritten = 0;
+  for (const [poolId, participants] of poolMembers) {
+    writes.push(
+      db.collection("rankings").doc(`pool-${poolId}-geral`).set({
+        scope: "geral",
+        updatedAt: nowIso,
+        entries: rankParticipants(participants).map(toEntry),
+      }),
+    );
+    poolsWritten += 1;
+  }
+
   // ─── 7. Rankings por fase (5) ──────────────────────────────────────────────
   let scopesWritten = 1;
   for (const scope of RANKING_STAGE_SCOPES) {
@@ -365,6 +391,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     {
       scopes: scopesWritten,
       groups: groupsWritten,
+      pools: poolsWritten,
       participants: approved.length,
       finishedMatches: finished.length,
       statisticsUpdated: approved.length,

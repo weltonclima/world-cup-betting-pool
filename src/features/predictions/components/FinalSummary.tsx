@@ -5,7 +5,7 @@
  *
  * Componente APRESENTACIONAL e puro: recebe os finalistas já derivados (campeão /
  * vice / 3º / 4º), a contagem global e callbacks por props. A derivação e o
- * data-fetching ficam no page.tsx (`/predictions/resumo`).
+ * data-fetching ficam no page.tsx (`/predictions/summary`).
  *
  * - PRD03-12: cards de finalistas + contagem + CTA "Confirmar e Enviar".
  * - PRD03-15: estado "Enviado" (A5 — derivado da existência das predictions;

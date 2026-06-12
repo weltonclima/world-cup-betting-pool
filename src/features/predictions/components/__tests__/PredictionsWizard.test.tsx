@@ -20,8 +20,8 @@ function renderBar(
       stepIndex={4}
       totalSteps={10}
       stepLabel="16 avos"
-      prevHref="/predictions/melhores-terceiros"
-      nextHref="/predictions/chave/oitavas"
+      prevHref="/predictions/best-thirds"
+      nextHref="/predictions/knockout/oitavas"
       active
       onExit={onExit}
       {...overrides}
@@ -51,8 +51,8 @@ describe("PredictionsWizard", () => {
     renderBar();
     const prev = screen.getByRole("link", { name: "Etapa anterior" });
     const next = screen.getByRole("link", { name: "Próxima etapa" });
-    expect(prev.getAttribute("href")).toBe("/predictions/melhores-terceiros");
-    expect(next.getAttribute("href")).toBe("/predictions/chave/oitavas");
+    expect(prev.getAttribute("href")).toBe("/predictions/best-thirds");
+    expect(next.getAttribute("href")).toBe("/predictions/knockout/oitavas");
   });
 
   it("oculta Anterior na primeira etapa", () => {

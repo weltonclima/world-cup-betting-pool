@@ -47,4 +47,11 @@ export {
   updatePreferences,
 } from "./notifications";
 export { createLog, listLogs } from "./systemLogs";
-export { getGroups, getBracket } from "./worldcup";
+export { getGroups, getBracket, WorldcupServiceError } from "./worldcup";
+export {
+  createPool,
+  searchPools,
+  getPool,
+  PoolServiceError,
+  type CreatePoolInput,
+} from "./pools";

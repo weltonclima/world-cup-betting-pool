@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/hooks/useAuth";
+import { isSuperAdminRole } from "@/schemas/shared";
 
 import { LoadingScreen } from "./LoadingScreen";
 
@@ -27,20 +28,24 @@ export function AdminGuard({ children }: AdminGuardProps) {
   const { loading, role } = useAuth();
   const router = useRouter();
 
+  // Dupla-compat (R4): privilégio global = `admin` (legado) OU `super_admin`
+  // (canônico PRD-09). `isSuperAdminRole` é a fonte única dessa equivalência.
+  const allowed = role !== null && isSuperAdminRole(role);
+
   useEffect(() => {
     if (loading) return;
-    if (role !== "admin") {
+    if (!allowed) {
       // replace (não push): não deixa /admin no histórico do não-admin.
       router.replace("/home");
     }
-  }, [loading, role, router]);
+  }, [loading, allowed, router]);
 
   if (loading) {
     return <LoadingScreen />;
   }
 
-  // Não-admin — renderiza null enquanto o redirect acontece (sem pintar o painel).
-  if (role !== "admin") {
+  // Sem privilégio — renderiza null enquanto o redirect acontece (sem vazar painel).
+  if (!allowed) {
     return null;
   }
 

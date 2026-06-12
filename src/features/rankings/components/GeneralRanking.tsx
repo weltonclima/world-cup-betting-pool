@@ -107,7 +107,7 @@ function RankingPodium({
         return (
           <li key={entry.uid} className={cn("flex-1", visualOrder[i])}>
             <Link
-              href={`/rankings/perfil/${entry.uid}`}
+              href={`/rankings/profile/${entry.uid}`}
               aria-label={`${entry.position}º lugar: ${entry.name ?? entry.nickname}, ${entry.points} pontos${you ? " (você)" : ""}`}
               className={cn(
                 "flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-colors",
@@ -153,7 +153,7 @@ function RankingRow({
   return (
     <li>
       <Link
-        href={`/rankings/perfil/${entry.uid}`}
+        href={`/rankings/profile/${entry.uid}`}
         className={cn(
           "flex min-h-11 items-center gap-3 rounded-lg border border-border p-3 transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

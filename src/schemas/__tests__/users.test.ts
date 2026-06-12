@@ -65,12 +65,45 @@ describe("users", () => {
     ).toBe(false);
   });
 
+  it("dupla-compat: doc legado (role admin/user, sem groupId) ainda parseia", () => {
+    expect(userSchema.safeParse({ ...valid, role: "admin" }).success).toBe(true);
+    expect(userSchema.safeParse({ ...valid, role: "user" }).success).toBe(true);
+  });
+
+  it("aceita roles canônicos novos (participant/group_admin/super_admin)", () => {
+    expect(
+      userSchema.safeParse({ ...valid, role: "participant", groupId: "pool-1" })
+        .success,
+    ).toBe(true);
+    expect(
+      userSchema.safeParse({ ...valid, role: "group_admin", groupId: "pool-1" })
+        .success,
+    ).toBe(true);
+    expect(
+      userSchema.safeParse({ ...valid, role: "super_admin" }).success,
+    ).toBe(true);
+  });
+
+  it("groupId é opcional e nonEmptyString quando presente", () => {
+    // ausente → ok (transição; obrigatório só na TASK-12)
+    expect(userSchema.safeParse(valid).success).toBe(true);
+    // presente e válido → ok
+    expect(
+      userSchema.safeParse({ ...valid, groupId: "bolao-dos-parcas" }).success,
+    ).toBe(true);
+    // string vazia → rejeita
+    expect(userSchema.safeParse({ ...valid, groupId: "" }).success).toBe(false);
+  });
+
   it("inferência de tipo", () => {
-    expectTypeOf<User["role"]>().toEqualTypeOf<"user" | "admin">();
+    expectTypeOf<User["role"]>().toEqualTypeOf<
+      "participant" | "group_admin" | "super_admin" | "user" | "admin"
+    >();
     expectTypeOf<User["status"]>().toEqualTypeOf<
       "pending" | "approved" | "blocked"
     >();
     expectTypeOf<User["email"]>().toEqualTypeOf<string>();
+    expectTypeOf<User["groupId"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<User["createdAt"]>().toEqualTypeOf<string | undefined>();
   });
 });

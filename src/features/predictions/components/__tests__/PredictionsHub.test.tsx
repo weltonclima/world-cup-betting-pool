@@ -28,7 +28,7 @@ function makeInput(overrides: Partial<HubPhaseInput> = {}): HubPhaseInput {
   return {
     stage: "grupos",
     title: "Fase de Grupos",
-    href: "/predictions/grupos",
+    href: "/predictions/groups",
     gamesCount: 72,
     filledCount: 0,
     ...overrides,
@@ -40,13 +40,13 @@ function makePhases(
   fillByStage: Partial<Record<string, number>> = {},
 ): PhaseHubItem[] {
   const defs: HubPhaseInput[] = [
-    makeInput({ stage: "grupos", title: "Fase de Grupos", href: "/predictions/grupos", gamesCount: 72 }),
-    makeInput({ stage: "dezesseis-avos", title: "16 Avos de Final", href: "/predictions/chave/dezesseis-avos", gamesCount: 16 }),
-    makeInput({ stage: "oitavas", title: "Oitavas de Final", href: "/predictions/chave/oitavas", gamesCount: 8 }),
-    makeInput({ stage: "quartas", title: "Quartas de Final", href: "/predictions/chave/quartas", gamesCount: 4 }),
-    makeInput({ stage: "semifinal", title: "Semifinal", href: "/predictions/chave/semifinal", gamesCount: 2 }),
-    makeInput({ stage: "terceiro", title: "Disputa de 3º Lugar", href: "/predictions/chave/terceiro", gamesCount: 1 }),
-    makeInput({ stage: "final", title: "Final", href: "/predictions/chave/final", gamesCount: 1 }),
+    makeInput({ stage: "grupos", title: "Fase de Grupos", href: "/predictions/groups", gamesCount: 72 }),
+    makeInput({ stage: "dezesseis-avos", title: "16 Avos de Final", href: "/predictions/knockout/dezesseis-avos", gamesCount: 16 }),
+    makeInput({ stage: "oitavas", title: "Oitavas de Final", href: "/predictions/knockout/oitavas", gamesCount: 8 }),
+    makeInput({ stage: "quartas", title: "Quartas de Final", href: "/predictions/knockout/quartas", gamesCount: 4 }),
+    makeInput({ stage: "semifinal", title: "Semifinal", href: "/predictions/knockout/semifinal", gamesCount: 2 }),
+    makeInput({ stage: "terceiro", title: "Disputa de 3º Lugar", href: "/predictions/knockout/terceiro", gamesCount: 1 }),
+    makeInput({ stage: "final", title: "Final", href: "/predictions/knockout/final", gamesCount: 1 }),
   ].map((d) => ({ ...d, filledCount: fillByStage[d.stage] ?? 0 }));
   return buildHubPhases(defs);
 }
@@ -56,7 +56,7 @@ function renderHub(overrides: Partial<React.ComponentProps<typeof PredictionsHub
     filled: 32,
     total: 104,
     phases: makePhases({ grupos: 32 }),
-    completeHref: "/predictions/grupos",
+    completeHref: "/predictions/groups",
     isComplete: false,
     isLoading: false,
     isError: false,
@@ -140,20 +140,20 @@ describe("PredictionsHub — render", () => {
 
 describe("PredictionsHub — estados", () => {
   it("estado vazio: copy de incentivo + CTA 'Ir para Fase de Grupos'", () => {
-    renderHub({ filled: 0, phases: makePhases({}), completeHref: "/predictions/grupos" });
+    renderHub({ filled: 0, phases: makePhases({}), completeHref: "/predictions/groups" });
     expect(screen.getByText("Ainda não há palpites")).toBeTruthy();
     const cta = screen.getByRole("link", { name: /Ir para Fase de Grupos/ });
-    expect(cta.getAttribute("href")).toBe("/predictions/grupos");
+    expect(cta.getAttribute("href")).toBe("/predictions/groups");
   });
 
   it("estado em andamento: CTA 'Completar Copa' com href do próximo passo", () => {
     renderHub({
       filled: 32,
       phases: makePhases({ grupos: 32 }),
-      completeHref: "/predictions/grupos",
+      completeHref: "/predictions/groups",
     });
     const cta = screen.getByRole("link", { name: /Completar Copa/ });
-    expect(cta.getAttribute("href")).toBe("/predictions/grupos");
+    expect(cta.getAttribute("href")).toBe("/predictions/groups");
   });
 
   it("estado completo/enviado: banner de conclusão + CTA 'Ver Resumo Final'", () => {
@@ -170,11 +170,11 @@ describe("PredictionsHub — estados", () => {
         terceiro: 1,
         final: 1,
       }),
-      completeHref: "/predictions/resumo",
+      completeHref: "/predictions/summary",
     });
     expect(screen.getByText("Copa completa!")).toBeTruthy();
     const cta = screen.getByRole("link", { name: /Ver Resumo Final/ });
-    expect(cta.getAttribute("href")).toBe("/predictions/resumo");
+    expect(cta.getAttribute("href")).toBe("/predictions/summary");
   });
 });
 
@@ -185,7 +185,7 @@ describe("PredictionsHub — bloqueio A6 (PRD03-16)", () => {
     renderHub({ filled: 10, phases: makePhases({ grupos: 10 }) });
     // Grupos navegável
     const grupos = screen.getByRole("link", { name: /Fase de Grupos/ });
-    expect(grupos.getAttribute("href")).toBe("/predictions/grupos");
+    expect(grupos.getAttribute("href")).toBe("/predictions/groups");
     // 16 avos bloqueado → não existe link com esse nome
     expect(screen.queryByRole("link", { name: /16 Avos de Final/ })).toBeNull();
     // mas o card existe com aria-disabled
@@ -196,7 +196,7 @@ describe("PredictionsHub — bloqueio A6 (PRD03-16)", () => {
   it("concluir grupos torna 16 avos navegável", () => {
     renderHub({ filled: 72, phases: makePhases({ grupos: 72 }) });
     const avos = screen.getByRole("link", { name: /16 Avos de Final/ });
-    expect(avos.getAttribute("href")).toBe("/predictions/chave/dezesseis-avos");
+    expect(avos.getAttribute("href")).toBe("/predictions/knockout/dezesseis-avos");
   });
 });
 

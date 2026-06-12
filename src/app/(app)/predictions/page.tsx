@@ -31,22 +31,22 @@ import type { Stage } from "@/types";
  * Ordem fixa das 6 fases no Hub + rótulo e destino de cada uma.
  *
  * A disputa de 3º lugar (`terceiro`) NÃO é uma fase própria no Hub: ela é
- * preenchida junto com a Final na rota `/predictions/chave/final` (PRD03-11).
+ * preenchida junto com a Final na rota `/predictions/knockout/final` (PRD03-11).
  * Por isso o card "Final" agrega as métricas de `final` + `terceiro` (ver
  * abaixo), mantendo o grafo de fases coerente com as rotas e o wizard (6 fases)
  * e evitando link para uma rota inexistente `/chave/terceiro` (404).
  */
 const HUB_PHASES: ReadonlyArray<{ stage: Stage; title: string; href: string }> = [
-  { stage: "grupos", title: "Fase de Grupos", href: "/predictions/grupos" },
+  { stage: "grupos", title: "Fase de Grupos", href: "/predictions/groups" },
   {
     stage: "dezesseis-avos",
     title: "16 Avos de Final",
-    href: "/predictions/chave/dezesseis-avos",
+    href: "/predictions/knockout/dezesseis-avos",
   },
-  { stage: "oitavas", title: "Oitavas de Final", href: "/predictions/chave/oitavas" },
-  { stage: "quartas", title: "Quartas de Final", href: "/predictions/chave/quartas" },
-  { stage: "semifinal", title: "Semifinal", href: "/predictions/chave/semifinal" },
-  { stage: "final", title: "Final e 3º Lugar", href: "/predictions/chave/final" },
+  { stage: "oitavas", title: "Oitavas de Final", href: "/predictions/knockout/oitavas" },
+  { stage: "quartas", title: "Quartas de Final", href: "/predictions/knockout/quartas" },
+  { stage: "semifinal", title: "Semifinal", href: "/predictions/knockout/semifinal" },
+  { stage: "final", title: "Final e 3º Lugar", href: "/predictions/knockout/final" },
 ];
 
 export default function PredictionsHubPage() {
@@ -93,11 +93,11 @@ export default function PredictionsHubPage() {
   // wizard (TASK-16) via `?wizard=1` — salvo se o destino é o Resumo Final (copa
   // completa), onde o fluxo guiado não precisa iniciar.
   const completeHref = useMemo(() => {
-    if (isComplete) return "/predictions/resumo";
+    if (isComplete) return "/predictions/summary";
     const next = phases.find(
       (p) => p.status === "andamento" || p.status === "nao-iniciado",
     );
-    const target = next?.href ?? "/predictions/grupos";
+    const target = next?.href ?? "/predictions/groups";
     return `${target}?wizard=1`;
   }, [phases, isComplete]);
 

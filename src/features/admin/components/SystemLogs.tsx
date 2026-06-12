@@ -44,6 +44,17 @@ const SOURCE_LABEL: Record<SystemLogType, string> = {
   user_unblocked: "Admin",
   api_error: "API-Football",
   ranking_update: "Sistema",
+  // PRD-11 — tipos globais do Super Admin (exibidos no mesmo feed legado).
+  worldcup_synced: "Sistema",
+  match_edited: "Super Admin",
+  group_approved: "Super Admin",
+  group_rejected: "Super Admin",
+  group_blocked: "Super Admin",
+  group_reactivated: "Super Admin",
+  pool_admin_changed: "Super Admin",
+  group_created: "Super Admin",
+  group_updated: "Super Admin",
+  user_group_assigned: "Super Admin",
 };
 
 /** Tela — Logs do Sistema (PRD07-06). */

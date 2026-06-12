@@ -238,7 +238,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof GroupsSummary>
     groups: [completeGroup],
     allComplete: true,
     completeCount: 1,
-    continueHref: "/predictions/melhores-terceiros",
+    continueHref: "/predictions/best-thirds",
     isLoading: false,
     isError: false,
     onRetry: vi.fn(),
@@ -327,7 +327,7 @@ describe("GroupsSummary — CTA Ver Melhores Terceiros", () => {
   it("T24: habilitado e navegável quando allComplete=true", () => {
     render(<GroupsSummary {...baseProps({ allComplete: true })} />);
     const link = screen.getByRole("link", { name: "Ver Melhores Terceiros" });
-    expect(link.getAttribute("href")).toBe("/predictions/melhores-terceiros");
+    expect(link.getAttribute("href")).toBe("/predictions/best-thirds");
   });
 
   it("T25: desabilitado quando há grupo incompleto e mostra contagem", () => {

@@ -2,65 +2,84 @@
 
 ## 1. Task id and title
 - Task: TASK-05
-- Title: Service + hooks React Query (worldcup)
+- Title: Service + hooks React Query para groups e bracket
 
 ## 2. Objective
-Camada de data-access client p/ as rotas `/api/worldcup/{groups,bracket}`: service com revalidação Zod + hooks TanStack Query com keys do PRD e cache espelhado.
+Camada de data access client para a fase de grupos e o chaveamento. Consome as rotas da TASK-04 (`GET /api/worldcup/groups`, `GET /api/worldcup/bracket`), revalida com Zod no client e expõe hooks TanStack Query com cache espelhado.
 
 ## 3. In scope
 - `src/services/worldcup.ts`:
-  - `getGroups(): Promise<GroupsResponse>` — `GET /api/worldcup/groups`, revalida com `groupsResponseSchema`.
-  - `getBracket(): Promise<BracketResponse>` — `GET /api/worldcup/bracket`, revalida com `bracketResponseSchema`.
+  - `WorldcupServiceError extends Error` — erro tipado com `status: number` + mensagem pt-BR (espelha `PredictionServiceError`).
+  - `getGroups(): Promise<GroupsResponse>` — `fetch(\`${API_BASE}/worldcup/groups\`)`; erro HTTP → `WorldcupServiceError`; corpo revalidado por `groupsResponseSchema`.
+  - `getBracket(): Promise<BracketResponse>` — idem contra `/worldcup/bracket` + `bracketResponseSchema`.
 - `src/features/worldcup/hooks/`:
-  - `worldcupKeys.ts` — factory de keys (PRD: `["groups"]`, `["group", groupId]`, `["bracket"]`).
-  - `useGroups.ts` — `useGroups()` (key `worldcupKeys.groups()` = `["groups"]`).
-  - `useGroupStandings.ts` — `useGroupStandings(groupId)` derivada de `useGroups` via `select` (slice do grupo). Ver decisão §6.
-  - `useBracket.ts` — `useBracket()` (key `["bracket"]`).
-  - `index.ts` barrel.
-- Export de `getGroups`/`getBracket` no barrel `src/services/index.ts` (seguir padrão existente).
-- Testes co-localizados de service + hooks.
+  - `worldcupKeys.ts` — factory de query-keys: `groups()=["groups"]`, `bracket()=["bracket"]`, `group(groupId)=["group", groupId]` (presente p/ contrato PRD; ver §6 desvio).
+  - `useGroups()` — `useQuery` key `["groups"]`, `queryFn: getGroups`, `staleTime: STALE_TIME.grupos` (24h), `refetchInterval` 60s quando `data.hasLiveGroupMatch`.
+  - `useGroupStandings(groupId)` — `useQuery` key `["groups"]` + `select` que fatia o `GroupTable` do `groupId` (mesma cache entry, sem fetch extra).
+  - `useBracket()` — `useQuery` key `["bracket"]`, `queryFn: getBracket`, `staleTime: STALE_TIME.grupos` (24h).
+  - `index.ts` — barrel.
+- `src/services/index.ts` — reexporta `getGroups`, `getBracket`, `WorldcupServiceError`.
+- Testes: `worldcup.test.ts` (service) + `__tests__/` dos hooks.
 
 ## 4. Out of scope
-- UI/componentes (TASK-06/07/08). Rotas/cache (TASK-04 fechada). Contratos (TASK-01).
+- UI / componentes (TASK-07, TASK-08). Abas (TASK-06).
+- Alterar rotas TASK-04, schemas TASK-01, ou qualquer service existente.
+- Endpoint por grupo (não existe — ver §6).
 
 ## 5. Main technical areas involved
-- `src/services/worldcup.ts` (reuso `API_BASE`, `buildHttpError` de `_apiClient`; **não** usa `parseWithId` — respostas são objetos, não arrays de itens com id injetado).
-- `src/features/worldcup/hooks/*`.
-- Reuso `STALE_TIME` (`@/server/cache/tiers`).
+- Novo `src/services/worldcup.ts`; reuso de `API_BASE` (`./_apiClient`).
+- Novo `src/features/worldcup/hooks/*`; reuso de `STALE_TIME` (`@/server/cache/tiers`).
+- Contratos: `groupsResponseSchema`/`bracketResponseSchema` + types `GroupsResponse`/`BracketResponse`/`GroupTable` (`@/schemas/worldcup`, `@/types`).
 
 ## 6. Business rules and behavior
-1. **Service:** `fetch(\`${API_BASE}/worldcup/groups\`)`; `!res.ok` → `throw await buildHttpError(res, "Falha ao carregar a classificação dos grupos")` (mensagem pt-BR; o corpo `{error}` da rota é anexado). Sucesso → `groupsResponseSchema.parse(await res.json())` (revalidação defesa-em-profundidade, espelha `matches.ts`). Idem bracket com `bracketResponseSchema` e mensagem "Falha ao carregar o chaveamento".
-2. **Erro:** lançar `Error` puro (consistente com `matches.ts` vizinho; **não** criar classe `WorldcupServiceError` — desvio consciente do plano p/ alinhar ao padrão do módulo irmão; o plano mencionou a classe mas `matches.ts`/`teams.ts` não a usam).
-3. **Keys (PRD literais):** `groups: () => ["groups"]`, `group: (groupId) => ["group", groupId]`, `bracket: () => ["bracket"]`. Factory `as const`.
-4. **useGroups:** `useQuery({ queryKey: worldcupKeys.groups(), queryFn: getGroups, staleTime: STALE_TIME.grupos })` (24h). `refetchInterval`: quando `data?.hasLiveGroupMatch` → `60_000`, senão `false`.
-5. **useGroupStandings(groupId):** mesma query base (`queryKey: worldcupKeys.groups()`, `queryFn: getGroups`) + `select: (data) => data.groups.find(g => g.groupId === groupId) ?? null`. **Decisão travada (plan-checker):** a key `["group", groupId]` do PRD **não** vira cache entry separada — `select` não altera a key; é um seletor memoizado sobre `["groups"]`. `worldcupKeys.group(groupId)` existe na factory p/ fidelidade ao PRD mas **não** é usada como queryKey aqui (documentar no JSDoc). Retorno: `UseQueryResult<GroupTable | null>`. `refetchInterval` idem useGroups (deriva de `data` pré-select? não — `refetchInterval` recebe a query; usar callback que olha `query.state.data?.hasLiveGroupMatch` no objeto base; **atenção:** com `select`, `data` no callback é o transformado. Usar a forma `refetchInterval: (query) => query.state.data` — checar a fonte não-transformada). Ver §14.
-6. **useBracket:** `useQuery({ queryKey: worldcupKeys.bracket(), queryFn: getBracket, staleTime: STALE_TIME.grupos })` (24h; bracket é estático como grupos). Sem `hasLiveGroupMatch` no body do bracket → sem refetchInterval dinâmico (aceito; bracket muda devagar).
-7. `"use client"` nos hooks (consomem React Query). Service é client-safe (fetch relativo), sem diretiva.
+
+### Service
+- Sucesso (2xx): `res.json()` → `schema.parse(data)` → retorna tipado. ZodError propaga (defesa em profundidade; servidor já valida, client não confia cegamente na rede).
+- Erro HTTP (não-2xx): lança `WorldcupServiceError(status, mensagemPtBr)`. Mensagem genérica pt-BR ("Não foi possível carregar a classificação dos grupos." / "...o chaveamento."), com tentativa best-effort de ler `{ error }` do corpo (tolerante a corpo não-JSON).
+- Base relativa `API_BASE = "/api"` (browser resolve contra a origem; rotas são same-origin).
+
+### Hooks
+- `useGroups`: `staleTime` `STALE_TIME.grupos` (24h) — alinhado ao TTL da rota (TASK-04). `refetchInterval: (query) => query.state.data?.hasLiveGroupMatch ? 60_000 : false` — quando há jogo de grupo ao vivo, espelha o TTL dinâmico de 60s do servidor.
+- `useGroupStandings(groupId)`: mesma query `["groups"]` + `select: (data) => data.groups.find((g) => g.groupId === groupId)` → `GroupTable | undefined`. **Decisão travada (plano §TASK-05):** `select` NÃO muda a query-key; não há cache entry `["group", groupId]` separada nem endpoint por grupo. A key `group(groupId)` fica no factory por fidelidade ao PRD, mas não é usada como cache entry — desvio documentado aqui.
+- `useBracket`: `staleTime` `STALE_TIME.grupos` (24h). **Sem `refetchInterval`:** o body de `/worldcup/bracket` é `BracketResponse` puro (decisão TASK-04 §6 — `hasLiveGroupMatch` só no payload de groups). Sem flag no payload do bracket → não há gatilho de refetch ao vivo no client. Desvio documentado; revalidação fica a cargo do `staleTime` + invalidação manual.
 
 ## 7. Contracts and interfaces
-- `getGroups` → `GroupsResponse` `{ groups: GroupTable[], hasLiveGroupMatch }`.
-- `getBracket` → `BracketResponse` (6 buckets).
-- `useGroupStandings(groupId)` → `GroupTable | null` (null quando grupo inexistente).
+- `getGroups(): Promise<GroupsResponse>` — `{ groups: GroupTable[], hasLiveGroupMatch: boolean }`.
+- `getBracket(): Promise<BracketResponse>` — `{ roundOf32, roundOf16, quarterFinals, semiFinals, thirdPlace, final }`.
+- `useGroups(): UseQueryResult<GroupsResponse>`.
+- `useGroupStandings(groupId: string): UseQueryResult<GroupTable | undefined>`.
+- `useBracket(): UseQueryResult<BracketResponse>`.
+- `worldcupKeys.groups()` → `["worldcup", "groups"]`; `.bracket()` → `["worldcup", "bracket"]`; `.group(id)` → `["worldcup", "group", id]`. **Revisão BL-01:** o PRD pedia keys literais `["groups"]`/`["bracket"]`, mas a feature irmã `groups` (pool de apostas, PRD-09) já ocupa `["groups"]` (`groupsKeys.all`); como o React Query casa invalidação por prefixo no QueryClient compartilhado, manter o literal faria `invalidateQueries(["groups"])` (criação de pool) derrubar a classificação da Copa. Keys namespaced sob `["worldcup", …]` eliminam a colisão.
 
 ## 8. Data and persistence impact
-Nenhum (client-side).
+- Nenhum. Só leitura via rotas existentes. Sem Firestore client, sem migration.
 
 ## 9. Required tests
-- `services/__tests__/worldcup.test.ts`: mock `fetch`. getGroups: 2xx válido → objeto parseado; 2xx com shape inválido → ZodError; non-2xx com `{error}` → Error com msg+status; idem getBracket.
-- `hooks/__tests__/*`: render com QueryClientProvider (espelhar teste de hook existente, ex. `useMatchesList.test.ts`). useGroups → chama getGroups, retorna data; useGroupStandings("A") → slice correto; grupo inexistente → null; useBracket → data. Mock do service.
-- refetchInterval: teste de que com `hasLiveGroupMatch: true` o intervalo é 60s (pode ser teste leve do retorno da função de intervalo, sem timers reais).
+- `src/services/__tests__/worldcup.test.ts` (mock global `fetch`):
+  - `getGroups` 2xx → parseia e retorna `GroupsResponse`.
+  - `getBracket` 2xx → parseia e retorna `BracketResponse`.
+  - HTTP 500 → lança `WorldcupServiceError` com `status` correto.
+  - corpo fora do contrato → lança (ZodError).
+- `src/features/worldcup/hooks/__tests__/`:
+  - `worldcupKeys` — keys estáveis (`["groups"]`, `["bracket"]`, `["group", id]`).
+  - `useGroups` (mock service) → resolve dados; key correta.
+  - `useGroupStandings` → `select` devolve o `GroupTable` do grupo pedido; `undefined` p/ grupo inexistente; compartilha a cache `["groups"]` (1 fetch para 2 hooks).
+  - `useBracket` → resolve dados; key correta.
+  - Wrapper `QueryClient` com `retry: false` (padrão `useUsers.test.tsx`).
 
 ## 10. Acceptance criteria
-- `npx vitest run` integral verde; `npx tsc --noEmit` e eslint limpos.
-- Keys exatamente `["groups"]`/`["bracket"]` (e `["group", id]` na factory).
-- Revalidação Zod no client comprovada (teste de shape inválido).
-- Sem regressão nos services existentes.
+- `npx vitest run` integral verde, sem regressão.
+- `npx tsc --noEmit` e eslint limpos.
+- Service revalida com Zod; erros HTTP viram `WorldcupServiceError`.
+- `useGroupStandings` reusa a cache `["groups"]` (zero fetch extra — comprovado em teste).
+- `refetchInterval` de `useGroups` ativa só com `hasLiveGroupMatch: true`.
+- Nenhum service/hook existente alterado (git diff não os toca, exceto barrel `services/index.ts`).
 
 ## 11. Constraints
 - TS strict, zero `any`, alias `@/*`, comentários pt-BR.
-- Não usar `parseWithId` (não é lista de itens-com-id).
-- Não duplicar `API_BASE`/`buildHttpError` — reusar `_apiClient`.
-- `"use client"` só nos hooks.
+- Hooks `"use client"` (padrão `useMatches.ts`).
+- Não introduzir dependência nova.
+- Não duplicar `buildHttpError`/`parseWithId` desnecessariamente; mas erros aqui são `WorldcupServiceError` (não `Error` cru) — wrapper próprio fino.
 
 ## 12. Execution cost profile
 - tdd: n/a
@@ -69,8 +88,8 @@ Nenhum (client-side).
 - review: sonnet/high
 
 ## 13. Frontend indicator
-- is_frontend: false
-- reason: data-access (service + hooks de dados), sem componentes/telas. UI vem nas TASK-06/07/08. (Não dispara /ui-spec.)
+- is_frontend: true (data access client; sem render — track de UI não se aplica, sem ui-spec).
+- reason: service + hooks React Query; sem componentes visuais.
 
 ## 14. Open questions
-- `refetchInterval` com `select`: confirmar na implementação a assinatura do TanStack Query v5 — `refetchInterval` recebe a `Query` (não o data transformado). Usar `(query) => (query.state.data as GroupsResponse | undefined)?.hasLiveGroupMatch ? 60_000 : false`. O `query.state.data` é o dado **bruto** (pré-select), portanto `GroupsResponse`. Implementador deve verificar via context7 se houver dúvida na versão instalada do `@tanstack/react-query`.
+Nenhuma. Dois desvios do PRD travados e documentados em §6: (a) `["group", groupId]` não vira cache entry (select sobre `["groups"]`); (b) `useBracket` sem `refetchInterval` (payload bracket não carrega `hasLiveGroupMatch`).

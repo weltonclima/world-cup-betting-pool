@@ -3,11 +3,13 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { AtSign, Lock, Mail, User } from "lucide-react";
+import { AtSign, Check, Lock, Mail, User } from "lucide-react";
 
 import { signupFormSchema, type SignupFormValues } from "@/features/auth/schemas";
 import { mapAuthError } from "@/features/auth/errors";
+import { GroupSelectField } from "@/features/groups/components/GroupSelectField";
 import { signUp } from "@/services/auth";
+import { redeemInvite } from "@/services/invites";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +33,30 @@ import {
  * Não navega no sucesso: o usuário recém-criado nasce `pending` e os guards
  * (AuthLayout) cuidam do redirecionamento para `/pending`.
  */
-export function SignupForm() {
+/** Grupo pré-selecionado por um convite (fluxo `/invite/[code]`). */
+interface PresetGroup {
+  id: string;
+  name: string;
+}
+
+interface SignupFormProps {
+  /**
+   * Quando presente (fluxo de convite), o grupo é TRAVADO neste pool: o campo de
+   * busca dá lugar a uma confirmação read-only e `groupId` não é editável.
+   */
+  presetGroup?: PresetGroup;
+  /** Código do convite — dispara o registro de consumo (best-effort) pós-cadastro. */
+  inviteCode?: string;
+}
+
+/**
+ * Formulário de cadastro (PRD-01, TASK-08).
+ *
+ * Sem props: cadastro padrão (usuário busca e escolhe o grupo). Com `presetGroup`
+ * (PRD-10 — fluxo de convite): o grupo já vem fixado pelo convite e, no sucesso,
+ * `redeemInvite` contabiliza o uso (best-effort, não bloqueia o cadastro).
+ */
+export function SignupForm({ presetGroup, inviteCode }: SignupFormProps = {}) {
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupFormSchema),
     mode: "onChange",
@@ -39,6 +64,7 @@ export function SignupForm() {
       name: "",
       nickname: "",
       email: "",
+      groupId: presetGroup?.id ?? "",
       password: "",
       confirmPassword: "",
     },
@@ -53,7 +79,11 @@ export function SignupForm() {
         nickname: values.nickname,
         email: values.email,
         password: values.password,
+        // Convite trava o pool: ignora qualquer valor do form e usa o do convite.
+        groupId: presetGroup?.id ?? values.groupId,
       });
+      // Contabiliza o convite (best-effort): falha não desfaz o cadastro.
+      if (inviteCode) await redeemInvite(inviteCode);
       toast.success("Conta criada! Aguarde a aprovação do administrador.");
     } catch (error) {
       toast.error(mapAuthError((error as { code?: string }).code ?? ""));
@@ -156,6 +186,37 @@ export function SignupForm() {
             </FormItem>
           )}
         />
+
+        {presetGroup ? (
+          // Fluxo de convite: grupo fixado — confirmação read-only (sem busca).
+          <FormItem>
+            <FormLabel>Seu grupo</FormLabel>
+            <p className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
+              <Check size={16} aria-hidden="true" />
+              <span>
+                Você foi convidado para <strong>{presetGroup.name}</strong>
+              </span>
+            </p>
+          </FormItem>
+        ) : (
+          <FormField
+            control={form.control}
+            name="groupId"
+            render={({ field, fieldState }) => (
+              <FormItem>
+                <FormLabel>Qual é o seu grupo?</FormLabel>
+                {/* GroupSelectField não é um input DOM (gerencia busca + lista),
+                    por isso não usa FormControl (que injeta props de <input>). */}
+                <GroupSelectField
+                  value={field.value}
+                  onChange={field.onChange}
+                  invalid={Boolean(fieldState.error)}
+                />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}

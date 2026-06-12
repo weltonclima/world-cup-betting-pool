@@ -158,7 +158,7 @@ export function GroupQuickFill({
             Os jogos deste grupo ainda não estão disponíveis.
           </p>
           <Link
-            href="/predictions/grupos"
+            href="/predictions/groups"
             className={cn(
               buttonVariants({ variant: "outline", size: "lg" }),
               "min-h-[44px]",

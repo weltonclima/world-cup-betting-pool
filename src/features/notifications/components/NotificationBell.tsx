@@ -14,7 +14,7 @@ import { useUnreadCount } from "../hooks";
 export function NotificationBell(): JSX.Element {
   const unread = useUnreadCount();
   const pathname = usePathname();
-  const isActive = pathname.startsWith("/notificacoes");
+  const isActive = pathname.startsWith("/notifications");
   const label =
     unread > 0
       ? `Notificações, ${unread} não lidas`
@@ -22,7 +22,7 @@ export function NotificationBell(): JSX.Element {
 
   return (
     <Link
-      href="/notificacoes"
+      href="/notifications"
       aria-label={label}
       aria-current={isActive ? "page" : undefined}
       className={cn(buttonVariants({ variant: "ghost" }), "relative size-11")}
