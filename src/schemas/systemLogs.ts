@@ -24,6 +24,7 @@ export const systemLogTypeSchema = z.enum([
   "pool_admin_changed",
   "group_created",
   "group_updated",
+  "user_group_assigned",
 ]);
 
 export const systemLogLevelSchema = z.enum(["info", "warning", "error"]);

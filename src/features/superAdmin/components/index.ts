@@ -7,3 +7,4 @@ export { GroupsBlocked } from "./GroupsBlocked";
 export { AdminsList } from "./AdminsList";
 export { WorldCupMatches } from "./WorldCupMatches";
 export { GlobalLogs } from "./GlobalLogs";
+export { UsersWithoutGroup } from "./UsersWithoutGroup";

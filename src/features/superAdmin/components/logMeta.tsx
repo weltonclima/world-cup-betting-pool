@@ -76,6 +76,11 @@ const LOG_META: Record<SystemLogType, LogMeta> = {
     title: "Grupo editado",
     className: "bg-info-bg text-info",
   },
+  user_group_assigned: {
+    icon: UserCog,
+    title: "Usuário adicionado a grupo",
+    className: "bg-success-bg text-success",
+  },
   // PRD-07 (legados — exibidos no mesmo feed/lista)
   login_admin: { icon: ShieldCheck, title: "Login de admin", className: "bg-muted text-muted-foreground" },
   user_approved: { icon: CheckCircle2, title: "Usuário aprovado", className: "bg-success-bg text-success" },

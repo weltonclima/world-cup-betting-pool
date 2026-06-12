@@ -22,6 +22,7 @@ import {
   Trophy,
   UserCheck,
   UserCog,
+  UserPlus,
   Users,
   UserX,
 } from "lucide-react";
@@ -301,6 +302,12 @@ export function ProfileHub(): JSX.Element {
             title="Administradores"
             subtitle="Gerenciar Group Admins"
             href="/admin/administrators"
+          />
+          <ProfileMenuItem
+            icon={UserPlus}
+            title="Usuários sem grupo"
+            subtitle="Adicionar usuários a um grupo"
+            href="/admin/users-without-group"
           />
           <ProfileMenuItem
             icon={Trophy}

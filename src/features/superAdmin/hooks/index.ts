@@ -22,3 +22,8 @@ export {
   type EditMatchVars,
 } from "./useAdminMatches";
 export { useAdminLogs } from "./useAdminLogs";
+export {
+  useAssignableUsers,
+  useAssignUserToGroup,
+  type AssignUserToGroupVars,
+} from "./useAdminUsers";

@@ -54,6 +54,7 @@ const SOURCE_LABEL: Record<SystemLogType, string> = {
   pool_admin_changed: "Super Admin",
   group_created: "Super Admin",
   group_updated: "Super Admin",
+  user_group_assigned: "Super Admin",
 };
 
 /** Tela — Logs do Sistema (PRD07-06). */

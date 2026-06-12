@@ -214,6 +214,55 @@ export async function listPoolMembers(poolId: string): Promise<PoolMember[]> {
   return body.members.map((m) => poolMemberSchema.parse(m));
 }
 
+// ─── Usuários (atribuição de grupo) ───────────────────────────────────────────
+
+export const adminUserRowSchema = z.object({
+  uid: z.string().min(1),
+  name: z.string().min(1),
+  nickname: z.string(),
+  email: z.string(),
+  avatarUrl: z.string().nullable(),
+  status: z.enum(["pending", "approved", "blocked"]),
+  role: z.string().min(1),
+  groupId: z.string().nullable(),
+  groupName: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+
+export type AdminUserRow = z.infer<typeof adminUserRowSchema>;
+
+export type UsersAssignFilter = "without-group" | "all";
+
+/** Lista usuários para atribuição de grupo (órfãos por padrão; `all` p/ realocar). */
+export async function listAssignableUsers(
+  filter: UsersAssignFilter = "without-group",
+): Promise<AdminUserRow[]> {
+  const response = await fetch(`/api/admin/users?filter=${filter}`, {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  if (!response.ok) throw await toServiceError(response);
+  const body = (await response.json()) as { users: unknown[] };
+  return body.users.map((u) => adminUserRowSchema.parse(u));
+}
+
+/** Adiciona/realoca um usuário a um grupo (status → approved). super_admin. */
+export async function assignUserToGroup(
+  uid: string,
+  groupId: string,
+): Promise<void> {
+  const response = await fetch(
+    `/api/admin/users/${encodeURIComponent(uid)}/group`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ groupId }),
+    },
+  );
+  if (!response.ok) throw await toServiceError(response);
+}
+
 // ─── Administradores ──────────────────────────────────────────────────────────
 
 export const adminEntrySchema = z.object({
