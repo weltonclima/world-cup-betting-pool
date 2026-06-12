@@ -81,10 +81,18 @@ export async function getMatchById(id: string): Promise<MatchWithId | null> {
  */
 export async function getNextScheduledMatch(): Promise<MatchWithId | null> {
   const matches = await listMatches();
-  const scheduled = matches
-    .filter((m) => m.status === "scheduled")
-    .sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt));
-  return scheduled[0] ?? null;
+  const now = Date.now();
+  // Apenas jogos AINDA por vir (kickoff no futuro). A fonte openfootball não
+  // popula `score.ft` em tempo real, então um jogo já iniciado/encerrado
+  // permanece "scheduled" — sem este filtro, `[0]` retornaria a 1ª partida do
+  // torneio (já no passado) como "próximo jogo". Comparar via Date trata o
+  // offset de fuso embutido no ISO (ex.: 2026-06-11T13:00:00-06:00).
+  const upcoming = matches
+    .filter(
+      (m) => m.status === "scheduled" && new Date(m.kickoffAt).getTime() > now,
+    )
+    .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
+  return upcoming[0] ?? null;
 }
 
 /**

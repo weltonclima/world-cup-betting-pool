@@ -256,8 +256,8 @@ export function PredictionForm({ matchId }: PredictionFormProps) {
             Seu palpite
           </span>
 
-          {/* Steppers lado a lado */}
-          <div className="flex items-start justify-around gap-8 py-2">
+          {/* Steppers lado a lado — folgas reduzidas no mobile p/ não estourar a largura */}
+          <div className="flex items-start justify-center gap-2 sm:gap-8 py-2">
 
             {/* Stepper Mandante */}
             <FormField
@@ -280,7 +280,7 @@ export function PredictionForm({ matchId }: PredictionFormProps) {
 
             {/* Separador × */}
             <span
-              className="text-3xl font-bold text-muted-foreground mt-8"
+              className="text-2xl sm:text-3xl font-bold text-muted-foreground mt-8 shrink-0"
               aria-hidden="true"
             >
               ×

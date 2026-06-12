@@ -32,6 +32,7 @@ const baseMatch: NextMatchSummary = {
   awayTeam,
   predictionStatus: "pendente",
   userPrediction: null,
+  predictionsHref: "/matches/match-001/predict",
 };
 
 // ---------------------------------------------------------------------------

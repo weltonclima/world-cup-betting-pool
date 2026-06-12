@@ -1,8 +1,9 @@
 /**
  * Testes do Route Handler GET /api/matches.
  *
- * `@/server/copaData` é mockado para controlar fetchAllMatches.
- * Verifica sucesso (MatchWithId[]) e erros (CopaDataTimeoutError → 504, etc.).
+ * `@/server/copaData/matchSource` é mockado para controlar `getEffectiveMatches`
+ * (fonte efetiva = openfootball + overlay do banco, PRD-11). Verifica sucesso
+ * (MatchWithId[]) e erros (CopaDataTimeoutError → 504, etc.).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,24 +13,15 @@ import {
   CopaDataFetchError,
 } from "@/server/copaData/client";
 
-const { fetchAllMatchesMock } = vi.hoisted(() => ({
-  fetchAllMatchesMock: vi.fn(),
+const { getEffectiveMatchesMock } = vi.hoisted(() => ({
+  getEffectiveMatchesMock: vi.fn(),
 }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
 
-// server-only é importado pelo barrel de copaData
+// server-only é importado pela cadeia de copaData
 vi.mock("server-only", () => ({}));
 
 import { GET } from "@/app/api/matches/route";
@@ -51,7 +43,7 @@ const MOCK_MATCH = {
 
 describe("GET /api/matches", () => {
   beforeEach(() => {
-    fetchAllMatchesMock.mockReset();
+    getEffectiveMatchesMock.mockReset();
   });
 
   afterEach(() => {
@@ -59,7 +51,7 @@ describe("GET /api/matches", () => {
   });
 
   it("responde 200 com array de MatchWithId", async () => {
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
 
     const response = await GET();
     expect(response.status).toBe(200);
@@ -70,22 +62,22 @@ describe("GET /api/matches", () => {
     expect(body[0]?.stage).toBe("grupos");
   });
 
-  it("responde 504 quando fetchAllMatches lança CopaDataTimeoutError", async () => {
-    fetchAllMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
+  it("responde 504 quando getEffectiveMatches lança CopaDataTimeoutError", async () => {
+    getEffectiveMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
 
     const response = await GET();
     expect(response.status).toBe(504);
   });
 
-  it("responde 502 quando fetchAllMatches lança CopaDataFetchError", async () => {
-    fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+  it("responde 502 quando getEffectiveMatches lança CopaDataFetchError", async () => {
+    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
 
     const response = await GET();
     expect(response.status).toBe(502);
   });
 
   it("responde 500 em erro inesperado", async () => {
-    fetchAllMatchesMock.mockRejectedValue(new Error("erro inesperado"));
+    getEffectiveMatchesMock.mockRejectedValue(new Error("erro inesperado"));
 
     const response = await GET();
     expect(response.status).toBe(500);
