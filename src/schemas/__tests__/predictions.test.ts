@@ -84,6 +84,12 @@ describe("predictions › predictionSchema (doc Firestore)", () => {
     ).toBe(true);
   });
 
+  it("aceita status 'partial' (acertou o vencedor, +5)", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, status: "partial" }).success,
+    ).toBe(true);
+  });
+
   it("aceita status 'wrong'", () => {
     expect(
       predictionSchema.safeParse({ ...valid, status: "wrong" }).success,
@@ -108,25 +114,43 @@ describe("predictions › predictionSchema (doc Firestore)", () => {
     ).toBe(true);
   });
 
-  it("aceita points 1", () => {
+  it("aceita points 1 (legado binário — R1)", () => {
     expect(
       predictionSchema.safeParse({ ...valid, points: 1 }).success,
     ).toBe(true);
   });
 
-  it("rejeita points = 2 (fora de {0,1})", () => {
+  it("aceita points 5 (acertou o vencedor — ponderado)", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, points: 5 }).success,
+    ).toBe(true);
+  });
+
+  it("aceita points 10 (placar exato — ponderado)", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, points: 10 }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita points = 2 (fora de {0,1,5,10})", () => {
     expect(
       predictionSchema.safeParse({ ...valid, points: 2 }).success,
     ).toBe(false);
   });
 
-  it("rejeita points = -1 (fora de {0,1})", () => {
+  it("rejeita points = 3 (fora de {0,1,5,10})", () => {
+    expect(
+      predictionSchema.safeParse({ ...valid, points: 3 }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita points = -1 (fora de {0,1,5,10})", () => {
     expect(
       predictionSchema.safeParse({ ...valid, points: -1 }).success,
     ).toBe(false);
   });
 
-  it("rejeita points = 0.5 (decimal; fora de {0,1})", () => {
+  it("rejeita points = 0.5 (decimal; fora de {0,1,5,10})", () => {
     expect(
       predictionSchema.safeParse({ ...valid, points: 0.5 }).success,
     ).toBe(false);
@@ -174,9 +198,11 @@ describe("predictions › predictionSchema (doc Firestore)", () => {
     expectTypeOf<Prediction["homeScore"]>().toEqualTypeOf<number>();
     expectTypeOf<Prediction["uid"]>().toEqualTypeOf<string>();
     expectTypeOf<Prediction["status"]>().toEqualTypeOf<
-      "pending" | "correct" | "wrong" | "locked" | undefined
+      "pending" | "correct" | "partial" | "wrong" | "locked" | undefined
     >();
-    expectTypeOf<Prediction["points"]>().toEqualTypeOf<0 | 1 | undefined>();
+    expectTypeOf<Prediction["points"]>().toEqualTypeOf<
+      0 | 1 | 5 | 10 | undefined
+    >();
     expectTypeOf<Prediction["editedBy"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<Prediction["editedByRole"]>().toEqualTypeOf<
       Role | undefined
@@ -417,7 +443,7 @@ describe("predictions › predictionInputSchema (body do cliente)", () => {
 
 describe("predictions › predictionStatusSchema (enum)", () => {
   it("aceita todos os valores válidos do enum", () => {
-    for (const s of ["pending", "correct", "wrong", "locked"]) {
+    for (const s of ["pending", "correct", "partial", "wrong", "locked"]) {
       expect(predictionStatusSchema.safeParse(s).success).toBe(true);
     }
   });
@@ -430,7 +456,7 @@ describe("predictions › predictionStatusSchema (enum)", () => {
 
   it("inferência de tipo PredictionStatus", () => {
     expectTypeOf<PredictionStatus>().toEqualTypeOf<
-      "pending" | "correct" | "wrong" | "locked"
+      "pending" | "correct" | "partial" | "wrong" | "locked"
     >();
   });
 });

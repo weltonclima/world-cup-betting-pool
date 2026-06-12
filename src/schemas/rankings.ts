@@ -8,7 +8,8 @@ import {
 } from "@/schemas/shared";
 
 // Entrada de ranking (objeto aninhado).
-// Pontuação binária: `points` === acertos exatos no escopo (não há campo `correct` separado).
+// Pontuação ponderada: `points` === total de PONTOS ponderados (5/10) no escopo,
+// não a contagem de acertos exatos (esta é separada no recalc — TASK-03).
 // Campos de exibição (name/wrong/accuracy) são OPCIONAIS para compat retroativa com docs
 // já gravados no formato antigo {uid,nickname,position,points}; o recalc (TASK-03) passa
 // a gravá-los sempre.
@@ -18,9 +19,13 @@ export const rankingEntrySchema = z
     nickname: nonEmptyString, // desnormalizado para exibição
     name: nonEmptyString.optional(), // nome completo desnormalizado (users.name)
     position: z.int().min(1), // posição
-    points: z.int().min(0), // total de acertos exatos no escopo (binário) === acertos
+    points: z.int().min(0), // total de pontos ponderados (5/10) no escopo
     wrong: z.int().min(0).optional(), // palpites errados (partidas finalizadas) no escopo
     accuracy: percentageSchema.optional(), // aproveitamento 0–100
+    // Foto de perfil (PRD-06, data URL base64). Aditivo/opcional — propagado pelo
+    // recalc (TASK-05) sob orçamento de bytes por doc; omitido quando o orçamento
+    // estoura (cai no fallback de iniciais na UI). Docs antigos sem o campo seguem válidos.
+    avatarUrl: z.string().optional(),
   })
   .strict();
 

@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useRanking, useGroupRanking } from "@/features/rankings";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
@@ -282,6 +282,7 @@ function RankingRow({
           {entry.position}
         </span>
         <Avatar className="h-10 w-10 shrink-0">
+          <AvatarImage src={entry.avatarUrl} alt="" />
           <AvatarFallback>{initials(entry)}</AvatarFallback>
         </Avatar>
         <span className="flex min-w-0 flex-1 flex-col">

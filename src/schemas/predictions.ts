@@ -23,7 +23,15 @@ export const predictionSchema = z
     updatedAt: isoDateTime.optional(),
     // Gravados somente pelo Route Handler de pontuação (Admin SDK):
     status: predictionStatusSchema.optional(),
-    points: z.literal(0).or(z.literal(1)).optional(),
+    // Domínio ponderado {0,5,10} + legado `1` (R1): docs gravados pela regra
+    // binária têm `points: 1` e PRECISAM continuar válidos na leitura, senão o
+    // recalc (`safeParse(doc.data())`) descarta o palpite silenciosamente.
+    points: z
+      .literal(0)
+      .or(z.literal(1))
+      .or(z.literal(5))
+      .or(z.literal(10))
+      .optional(),
     // Origem manual (PRD-12) — gravados SÓ pelo Route Handler de palpite manual
     // do admin de grupo (`POST /api/group/predictions`). Opcionais: palpite
     // normal não os carrega. ⚠️ DEVEM estar declarados aqui: `predictionSchema`

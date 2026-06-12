@@ -130,6 +130,26 @@ describe("rankings", () => {
     ).toBe(false);
   });
 
+  // ── avatarUrl (TASK-05) — aditivo/opcional, retrocompatível ───────────────
+  it("aceita entrada com avatarUrl (data URL base64)", () => {
+    expect(
+      rankingEntrySchema.safeParse({
+        ...fullEntry,
+        avatarUrl: "data:image/jpeg;base64,QUJD",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita entrada sem avatarUrl (retrocompat)", () => {
+    expect(rankingEntrySchema.safeParse(fullEntry).success).toBe(true);
+  });
+
+  it("expõe avatarUrl opcional no tipo inferido", () => {
+    expectTypeOf<RankingEntry["avatarUrl"]>().toEqualTypeOf<
+      string | undefined
+    >();
+  });
+
   // ── groupRankingSchema (TASK-01) ──────────────────────────────────────────
   it("faz parse de ranking por grupo válido", () => {
     expect(groupRankingSchema.safeParse(validGroupRanking).success).toBe(true);

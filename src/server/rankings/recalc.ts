@@ -3,6 +3,7 @@ import "server-only";
 import type { Firestore } from "firebase-admin/firestore";
 
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
+import { applyAvatarBudget } from "@/server/rankings/avatarBudget";
 import { scorePrediction } from "@/features/predictions/lib";
 import {
   buildDistribution,
@@ -39,13 +40,19 @@ type RankingStageScope = (typeof RANKING_STAGE_SCOPES)[number];
 
 type Stage = Match["stage"];
 
-/** Acumulador por usuário. */
+/**
+ * Acumulador por usuário (TASK-03 — regra ponderada).
+ * Mantém DOIS números por escopo: pontos PONDERADOS (5/10) para a "pontuação"
+ * do ranking, e contagem de acertos EXATOS (`status === "correct"`) para
+ * aproveitamento/streak/distribuição (D2/R3/R4). `partial` soma só ao primeiro.
+ */
 interface UserAgg {
-  pointsGeral: number;
+  pointsGeral: number; // ponderado (5/10) — ordena o ranking geral
+  correctGeral: number; // exatos — alimenta accuracy/totalCorrect/distribution
   wrongGeral: number;
-  correctByStage: Partial<Record<Stage, number>>;
-  byStageScope: Map<RankingStageScope, { points: number; wrong: number }>;
-  byGroup: Map<string, { points: number; wrong: number }>;
+  correctByStage: Partial<Record<Stage, number>>; // contagem de EXATOS por fase
+  byStageScope: Map<RankingStageScope, { points: number; correct: number; wrong: number }>;
+  byGroup: Map<string, { points: number; correct: number; wrong: number }>;
   firstPredictionAt: string | undefined;
   finishedPreds: Array<{ kickoffAt: string; correct: boolean }>;
 }
@@ -53,6 +60,7 @@ interface UserAgg {
 function emptyAgg(): UserAgg {
   return {
     pointsGeral: 0,
+    correctGeral: 0,
     wrongGeral: 0,
     correctByStage: {},
     byStageScope: new Map(),
@@ -161,26 +169,31 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       if (!match) continue; // partida não finalizada / inexistente
 
       const { status, points } = scorePrediction(pred, match);
-      const correct = status === "correct";
+      const correct = status === "correct"; // EXATO (10). `partial` (5) NÃO é correct.
       agg.finishedPreds.push({ kickoffAt: match.kickoffAt, correct });
 
+      // Pontos PONDERADOS (5/10) somam ao escopo; acertos EXATOS contam à parte.
       agg.pointsGeral += points;
+      if (correct) agg.correctGeral += 1;
       if (status === "wrong") agg.wrongGeral += 1;
-      if (points > 0) {
-        agg.correctByStage[match.stage] = (agg.correctByStage[match.stage] ?? 0) + points;
+      // correctByStage = contagem de EXATOS por fase (D2); `partial` não entra.
+      if (correct) {
+        agg.correctByStage[match.stage] = (agg.correctByStage[match.stage] ?? 0) + 1;
       }
 
       if ((RANKING_STAGE_SCOPES as readonly string[]).includes(match.stage)) {
         const s = match.stage as RankingStageScope;
-        const cur = agg.byStageScope.get(s) ?? { points: 0, wrong: 0 };
+        const cur = agg.byStageScope.get(s) ?? { points: 0, correct: 0, wrong: 0 };
         cur.points += points;
+        if (correct) cur.correct += 1;
         if (status === "wrong") cur.wrong += 1;
         agg.byStageScope.set(s, cur);
       }
 
       if (match.stage === "grupos" && match.groupId) {
-        const cur = agg.byGroup.get(match.groupId) ?? { points: 0, wrong: 0 };
+        const cur = agg.byGroup.get(match.groupId) ?? { points: 0, correct: 0, wrong: 0 };
         cur.points += points;
+        if (correct) cur.correct += 1;
         if (status === "wrong") cur.wrong += 1;
         agg.byGroup.set(match.groupId, cur);
       }
@@ -200,8 +213,18 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       points: r.points,
       wrong: r.wrong,
       accuracy: r.accuracy,
+      // TASK-05: foto real (PRD-06). Incluída só quando o usuário tem avatar; o
+      // orçamento por doc (`applyAvatarBudget`) pode omiti-la depois (R2/D4).
+      ...(u.avatarUrl !== undefined ? { avatarUrl: u.avatarUrl } : {}),
     };
   };
+
+  /**
+   * Monta as entries de um doc de ranking a partir dos participantes já rankeados
+   * (ordenados por posição) e aplica o orçamento de avatares por documento (TASK-05).
+   */
+  const toBudgetedEntries = (ranked: Array<{ uid: string; position: number; points: number; wrong: number; accuracy: number }>): RankingEntry[] =>
+    applyAvatarBudget(ranked.map(toEntry));
 
   const nowIso = new Date().toISOString();
   const writes: Array<Promise<unknown>> = [];
@@ -211,8 +234,8 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     const a = aggByUid.get(u.uid)!;
     return {
       uid: u.uid,
-      points: a.pointsGeral,
-      accuracy: computeAccuracy(a.pointsGeral, finishedGeral),
+      points: a.pointsGeral, // ponderado (ordena o ranking)
+      accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
       wrong: a.wrongGeral,
       firstPredictionAt: a.firstPredictionAt,
     };
@@ -223,7 +246,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     db.collection("rankings").doc("geral").set({
       scope: "geral",
       updatedAt: nowIso,
-      entries: geralRanked.map(toEntry),
+      entries: toBudgetedEntries(geralRanked),
     }),
   );
 
@@ -247,7 +270,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       db.collection("rankings").doc(`pool-${poolId}-geral`).set({
         scope: "geral",
         updatedAt: nowIso,
-        entries: rankParticipants(participants).map(toEntry),
+        entries: toBudgetedEntries(rankParticipants(participants)),
       }),
     );
     poolsWritten += 1;
@@ -269,11 +292,11 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   for (const scope of RANKING_STAGE_SCOPES) {
     const denom = finishedByStage.get(scope) ?? 0;
     const participants: RankableParticipant[] = approved.map((u) => {
-      const a = aggByUid.get(u.uid)!.byStageScope.get(scope) ?? { points: 0, wrong: 0 };
+      const a = aggByUid.get(u.uid)!.byStageScope.get(scope) ?? { points: 0, correct: 0, wrong: 0 };
       return {
         uid: u.uid,
-        points: a.points,
-        accuracy: computeAccuracy(a.points, denom),
+        points: a.points, // ponderado
+        accuracy: computeAccuracy(a.correct, denom), // exatos
         wrong: a.wrong,
         firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
       };
@@ -282,7 +305,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       db.collection("rankings").doc(scope).set({
         scope,
         updatedAt: nowIso,
-        entries: rankParticipants(participants).map(toEntry),
+        entries: toBudgetedEntries(rankParticipants(participants)),
       }),
     );
     scopesWritten += 1;
@@ -292,11 +315,11 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   let groupsWritten = 0;
   for (const [groupId, denom] of finishedByGroup) {
     const participants: RankableParticipant[] = approved.map((u) => {
-      const a = aggByUid.get(u.uid)!.byGroup.get(groupId) ?? { points: 0, wrong: 0 };
+      const a = aggByUid.get(u.uid)!.byGroup.get(groupId) ?? { points: 0, correct: 0, wrong: 0 };
       return {
         uid: u.uid,
-        points: a.points,
-        accuracy: computeAccuracy(a.points, denom),
+        points: a.points, // ponderado
+        accuracy: computeAccuracy(a.correct, denom), // exatos
         wrong: a.wrong,
         firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
       };
@@ -305,7 +328,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       db.collection("rankings").doc(`grupo-${groupId}`).set({
         groupId,
         updatedAt: nowIso,
-        entries: rankParticipants(participants).map(toEntry),
+        entries: toBudgetedEntries(rankParticipants(participants)),
       }),
     );
     groupsWritten += 1;
@@ -348,9 +371,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     await db.collection("statistics").doc(u.uid).set(
       {
         uid: u.uid,
-        totalCorrect: a.pointsGeral,
+        totalCorrect: a.correctGeral, // EXATOS (não pontos ponderados)
         totalWrong: a.wrongGeral,
-        accuracy: computeAccuracy(a.pointsGeral, finishedGeral),
+        accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
         longestStreak: longestStreak(a.finishedPreds),
         correctByStage: a.correctByStage,
         positionHistory,
@@ -361,21 +384,25 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   writes.push(...statsWrites);
 
   // ─── 9. Pool stats ─────────────────────────────────────────────────────────
-  const pointsList = approved.map((u) => aggByUid.get(u.uid)!.pointsGeral);
-  const totalCorrect = pointsList.reduce((s, p) => s + p, 0);
+  // D2: highest/lowest/averagePoints = PONDERADO ("pontos"); totalCorrect e
+  // distribution = EXATOS (acertos de placar). Duas listas distintas.
+  const pointsList = approved.map((u) => aggByUid.get(u.uid)!.pointsGeral); // ponderado
+  const correctList = approved.map((u) => aggByUid.get(u.uid)!.correctGeral); // exatos
+  const totalCorrect = correctList.reduce((s, c) => s + c, 0); // exatos
+  const sumPoints = pointsList.reduce((s, p) => s + p, 0); // ponderado (p/ média)
   const highestPoints = pointsList.length > 0 ? Math.max(...pointsList) : 0;
   const lowestPoints = pointsList.length > 0 ? Math.min(...pointsList) : 0;
-  const averagePoints = pointsList.length > 0 ? totalCorrect / pointsList.length : 0;
+  const averagePoints = pointsList.length > 0 ? sumPoints / pointsList.length : 0;
   const leader = geralRanked[0];
   const poolStats = {
     updatedAt: nowIso,
     totalParticipants: approved.length,
-    highestPoints,
+    highestPoints, // ponderado
     ...(leader && approved.length > 0 ? { highestPointsName: userByUid.get(leader.uid)!.name } : {}),
-    lowestPoints,
-    averagePoints,
-    totalCorrect,
-    distribution: buildDistribution(pointsList, finishedGeral),
+    lowestPoints, // ponderado
+    averagePoints, // ponderado
+    totalCorrect, // EXATOS
+    distribution: buildDistribution(correctList, finishedGeral), // EXATOS (D2)
   };
   writes.push(db.collection("pool_stats").doc("current").set(poolStats));
 

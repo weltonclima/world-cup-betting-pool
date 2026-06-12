@@ -4,7 +4,7 @@ import { type JSX } from "react";
 
 import { useParticipantProfile, usePoolRanking } from "@/features/rankings";
 import { useAuth } from "@/hooks/useAuth";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { RankingEntry, Statistics } from "@/types";
 
 import { RankingSkeleton } from "./RankingSkeleton";
@@ -96,6 +96,7 @@ function ProfileIdentity({
   return (
     <section className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
       <Avatar className="h-20 w-20" role="img" aria-label={displayName}>
+        <AvatarImage src={entry.avatarUrl} alt="" />
         <AvatarFallback className="text-lg font-semibold">
           {initials(displayName)}
         </AvatarFallback>

@@ -12,7 +12,7 @@
 import type { ReactNode } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle2, Clock, Lock, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Lock, ShieldCheck, Trophy, XCircle } from "lucide-react";
 
 import {
   PREDICTION_DISPLAY_STATUS_COLOR,
@@ -76,6 +76,7 @@ function TeamFlag({ team }: { team: ResolvedTeam }) {
 const STATUS_ICONS: Record<PredictionDisplayStatus, ReactNode> = {
   pendente: <Clock size={12} aria-hidden="true" />,
   acertou: <CheckCircle2 size={12} aria-hidden="true" />,
+  acertou_vencedor: <Trophy size={12} aria-hidden="true" />,
   errou: <XCircle size={12} aria-hidden="true" />,
   bloqueado: <Lock size={12} aria-hidden="true" />,
 };

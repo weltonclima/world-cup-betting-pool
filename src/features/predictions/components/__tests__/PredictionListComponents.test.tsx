@@ -81,13 +81,21 @@ function setupLocalStorageMock() {
 // ===========================================================================
 
 describe("PredictionFilters — chips renderizados", () => {
-  it("T1: renderiza os 5 chips de filtro", () => {
+  it("T1: renderiza os 6 chips de filtro", () => {
     render(<PredictionFilters activeFilter="todos" onChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Todos" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Pendentes" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Acertos" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Vencedor" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Erros" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Bloqueados" })).toBeTruthy();
+  });
+
+  it("T1b: chip 'Vencedor' chama onChange com 'acertou_vencedor'", () => {
+    const onChange = vi.fn();
+    render(<PredictionFilters activeFilter="todos" onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Vencedor" }));
+    expect(onChange).toHaveBeenCalledWith("acertou_vencedor");
   });
 
   it("T2: wrapper tem role=group com aria-label='Filtrar palpites'", () => {
@@ -202,6 +210,12 @@ describe("PredictionFilters — persistência em localStorage", () => {
     const result = readStoredFilter();
     expect(result).toBe("errou");
   });
+
+  it("T15b: readStoredFilter retorna 'acertou_vencedor' quando salvo", () => {
+    localStorageMock.getItem.mockReturnValue("acertou_vencedor");
+    const result = readStoredFilter();
+    expect(result).toBe("acertou_vencedor");
+  });
 });
 
 describe("PredictionFilters — SSR safety", () => {
@@ -314,7 +328,13 @@ describe("PredictionListCard — placar palpitado", () => {
 });
 
 describe("PredictionListCard — badge de status", () => {
-  const statuses: PredictionDisplayStatus[] = ["pendente", "acertou", "errou", "bloqueado"];
+  const statuses: PredictionDisplayStatus[] = [
+    "pendente",
+    "acertou",
+    "acertou_vencedor",
+    "errou",
+    "bloqueado",
+  ];
 
   statuses.forEach((status) => {
     it(`T27/${status}: badge exibe o texto correto para status '${status}'`, () => {
@@ -342,6 +362,16 @@ describe("PredictionListCard — badge de status", () => {
   it("T31: badge 'Bloqueado' tem texto (não apenas cor)", () => {
     render(<PredictionListCard item={makeItem({ displayStatus: "bloqueado" })} />);
     expect(screen.getByText("Bloqueado")).toBeTruthy();
+  });
+
+  it("T31b: badge 'Acertou o vencedor' tem texto (3º estado, +5)", () => {
+    render(<PredictionListCard item={makeItem({ displayStatus: "acertou_vencedor" })} />);
+    expect(screen.getByText("Acertou o vencedor")).toBeTruthy();
+  });
+
+  it("T31c: label e cor existem para 'acertou_vencedor' (exhaustiveness)", () => {
+    expect(PREDICTION_DISPLAY_STATUS_LABEL["acertou_vencedor"]).toBe("Acertou o vencedor");
+    expect(PREDICTION_DISPLAY_STATUS_COLOR["acertou_vencedor"]).toBeTruthy();
   });
 
   it("T32: badge aplica classe de cor de PREDICTION_DISPLAY_STATUS_COLOR", () => {
@@ -566,10 +596,17 @@ describe("Filtro em memória — integração PredictionFilters + lógica de fil
     makeItem({ matchId: "m3", displayStatus: "errou" }),
     makeItem({ matchId: "m4", displayStatus: "bloqueado" }),
     makeItem({ matchId: "m5", displayStatus: "pendente" }),
+    makeItem({ matchId: "m6", displayStatus: "acertou_vencedor" }),
   ];
 
   it("T49: filtro 'todos' retorna todos os itens", () => {
-    expect(applyFilter(allItems, "todos")).toHaveLength(5);
+    expect(applyFilter(allItems, "todos")).toHaveLength(6);
+  });
+
+  it("T49b: filtro 'acertou_vencedor' retorna apenas o item do 3º estado", () => {
+    const filtered = applyFilter(allItems, "acertou_vencedor");
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.matchId).toBe("m6");
   });
 
   it("T50: filtro 'pendente' retorna apenas itens com displayStatus='pendente'", () => {
@@ -639,8 +676,15 @@ describe("Filtro em memória — integração PredictionFilters + lógica de fil
 
 describe("Tipos — confirma ausência de any", () => {
   it("T57: FilterChip é um tipo union correto", () => {
-    const validFilters: FilterChip[] = ["todos", "pendente", "acertou", "errou", "bloqueado"];
-    expect(validFilters).toHaveLength(5);
+    const validFilters: FilterChip[] = [
+      "todos",
+      "pendente",
+      "acertou",
+      "acertou_vencedor",
+      "errou",
+      "bloqueado",
+    ];
+    expect(validFilters).toHaveLength(6);
   });
 
   it("T58: makeItem retorna PredictionListItem corretamente tipado", () => {

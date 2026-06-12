@@ -18,8 +18,22 @@ vi.mock("@/hooks/useAuth", () => ({
 // Import por path direto p/ não cair no mock do barrel.
 import { GeneralRanking } from "@/features/rankings/components/GeneralRanking";
 
-function entry(uid: string, position: number, points: number, name: string) {
-  return { uid, nickname: name.toLowerCase(), name, position, points, accuracy: 50 };
+function entry(
+  uid: string,
+  position: number,
+  points: number,
+  name: string,
+  avatarUrl?: string,
+) {
+  return {
+    uid,
+    nickname: name.toLowerCase(),
+    name,
+    position,
+    points,
+    accuracy: 50,
+    ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+  };
 }
 
 const entries = [
@@ -79,5 +93,88 @@ describe("GeneralRanking", () => {
     // hook é chamado (regras de hooks) mas desabilitado via enabled:false — aqui
     // garantimos só que a tela não renderiza lista/pódio.
     expect(screen.queryByText("Joao Silva")).toBeNull();
+  });
+});
+
+// ── TASK-06: redesign do pódio (posição visível + foto/fallback) ────────────
+// Nota: o `<img>` do base-ui só monta no status "loaded" (load event do
+// browser); jsdom não dispara load → a foto cai sempre no fallback aqui. A
+// renderização real da imagem é coberta pelo /ui-review. Estes testes cobrem a
+// lógica testável: indicador de posição, aproveitamento, aria-label e fallback.
+describe("RankingPodium (TASK-06)", () => {
+  it("mostra o indicador de posição 1º/2º/3º nos três cards do pódio", () => {
+    render(<GeneralRanking />);
+    expect(screen.getByText("1º")).toBeTruthy();
+    expect(screen.getByText("2º")).toBeTruthy();
+    expect(screen.getByText("3º")).toBeTruthy();
+  });
+
+  it("expõe posição + nome + pontos + aproveitamento no aria-label do card", () => {
+    render(<GeneralRanking />);
+    expect(
+      screen.getByLabelText(
+        "1º lugar: Joao Silva, 98 pontos, 50% de aproveitamento",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        "2º lugar: Maria Souza, 95 pontos, 50% de aproveitamento",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renderiza as iniciais (fallback) quando o usuário não tem foto", () => {
+    render(<GeneralRanking />);
+    // Joao Silva → "JS" no fallback do avatar do pódio.
+    expect(screen.getByText("JS")).toBeTruthy();
+  });
+
+  it("aceita avatarUrl nas entries sem quebrar o pódio", () => {
+    const withPhotos = [
+      entry("u1", 1, 98, "Joao Silva", "data:image/jpeg;base64,QUJD"),
+      entry("u2", 2, 95, "Maria Souza", "data:image/jpeg;base64,QUJD"),
+      entry("u3", 3, 90, "Pedro Lima"),
+    ];
+    usePoolRankingMock.mockReturnValue({
+      data: { scope: "geral", updatedAt: "x", entries: withPhotos },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<GeneralRanking />);
+    // pódio renderiza posição e nome normalmente, com ou sem foto.
+    expect(screen.getByText("1º")).toBeTruthy();
+    expect(screen.getByText("Joao Silva")).toBeTruthy();
+    expect(screen.getByText("Pedro Lima")).toBeTruthy();
+  });
+
+  it("exibe o aproveitamento no card do pódio", () => {
+    render(<GeneralRanking />);
+    // 3 cards do pódio + linhas #4/#5 também mostram 50%.
+    expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ── TASK-07: foto real na linha da lista (#4+) ──────────────────────────────
+// Mesmo limite do jsdom (o `<img>` do base-ui não monta sem evento `load`):
+// validar que a linha aceita `avatarUrl` e mantém as iniciais como fallback.
+describe("RankingRow lista (TASK-07)", () => {
+  it("aceita avatarUrl na linha #4+ e mantém iniciais como fallback", () => {
+    const withPhotos = [
+      entry("u1", 1, 98, "Joao Silva"),
+      entry("u2", 2, 95, "Maria Souza"),
+      entry("u3", 3, 90, "Pedro Lima"),
+      entry("u5", 5, 82, "Lucas Pereira", "data:image/jpeg;base64,QUJD"),
+    ];
+    usePoolRankingMock.mockReturnValue({
+      data: { scope: "geral", updatedAt: "x", entries: withPhotos },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<GeneralRanking />);
+    expect(screen.getByText("Lucas Pereira")).toBeTruthy();
+    // Sem foto (jsdom) → fallback de iniciais "LP".
+    expect(screen.getByText("LP")).toBeTruthy();
   });
 });

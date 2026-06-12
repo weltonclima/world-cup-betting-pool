@@ -72,7 +72,8 @@ export const matchStatusSchema = z.enum([
 
 export const predictionStatusSchema = z.enum([
   "pending",   // palpite registrado, partida não finalizada
-  "correct",   // placar exato acertado (gravado pelo servidor)
+  "correct",   // placar exato acertado, +10 (gravado pelo servidor)
+  "partial",   // acertou o time vencedor sem placar exato, +5 (gravado pelo servidor)
   "wrong",     // placar errado (gravado pelo servidor)
   "locked",    // partida iniciada antes da finalização (não pontuada ainda)
 ]);

@@ -34,6 +34,7 @@ const CHIPS: { value: FilterChip; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "pendente", label: "Pendentes" },
   { value: "acertou", label: "Acertos" },
+  { value: "acertou_vencedor", label: "Vencedor" },
   { value: "errou", label: "Erros" },
   { value: "bloqueado", label: "Bloqueados" },
 ];
@@ -49,6 +50,7 @@ export function readStoredFilter(): FilterChip {
       raw === "todos" ||
       raw === "pendente" ||
       raw === "acertou" ||
+      raw === "acertou_vencedor" ||
       raw === "errou" ||
       raw === "bloqueado"
     ) {

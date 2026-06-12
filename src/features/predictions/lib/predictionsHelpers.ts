@@ -34,15 +34,25 @@ export function predictionDocId(uid: string, matchId: string): string {
  * ("pending"|"correct"|"wrong"|"locked" — valores em inglês, persistência Firestore).
  * Este tipo é exclusivo da camada de apresentação.
  */
-export type PredictionDisplayStatus = "pendente" | "acertou" | "errou" | "bloqueado";
+export type PredictionDisplayStatus =
+  | "pendente"
+  | "acertou"
+  | "acertou_vencedor"
+  | "errou"
+  | "bloqueado";
 
 /**
  * Resultado da pontuação de um palpite contra o resultado oficial.
  * Retornado por scorePrediction; consumido pelo Route Handler de pontuação (TASK-04).
  */
 export interface ScorePredictionResult {
-  status: "correct" | "wrong" | "pending";
-  points: 0 | 1;
+  // Domínio ponderado (TASK-02): placar exato = 10 (`correct`); acertou o
+  // vencedor real sem placar exato = 5 (`partial`); resto = 0 (`wrong`);
+  // partida não finalizada = 0 (`pending`). O legado `1` saiu do tipo de
+  // RETORNO — a LEITURA (`predictionSchema.points`) ainda aceita `1` para não
+  // descartar docs binários antigos (R1).
+  status: "correct" | "partial" | "wrong" | "pending";
+  points: 0 | 5 | 10;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,11 +96,19 @@ export function selectLockedMatches(
 // ---------------------------------------------------------------------------
 
 /**
- * Calcula o resultado binário de um palpite contra o placar oficial.
- * Só pontua quando match.status === "finished".
- * Pontuação binária: placar exato = 1 ponto; qualquer outro resultado = 0.
+ * Calcula o resultado PONDERADO de um palpite contra o placar oficial (TASK-02).
+ * Só pontua quando match.status === "finished". Regra de dois critérios:
+ * - placar exato                              → `correct`, 10 pontos.
+ * - acertou o vencedor real (sem placar exato)→ `partial`, 5 pontos.
+ * - errou o vencedor / empate inexato         → `wrong`, 0 pontos.
  *
- * Caso `finished` com scores null (inconsistência de dados) → trata como `wrong` (conservador).
+ * Vencedor derivado do SINAL de `homeScore − awayScore` (não há campo "winner").
+ * D1 (empate estrito): palpite de empate só pontua com placar exato (10);
+ * qualquer outro empate previsto = 0. O +5 exige um vencedor real acertado —
+ * nunca empate.
+ *
+ * Caso `finished` com scores null (inconsistência de dados) → `wrong` (conservador).
+ * Função pura, idempotente — `now` nunca interno.
  *
  * @param prediction - Palpite do usuário.
  * @param match      - Partida com resultado oficial.
@@ -105,13 +123,24 @@ export function scorePrediction(
 
   // Type narrowing: homeScore e awayScore são number | null no tipo TypeScript,
   // mesmo que o refinement Zod garanta number quando finished em runtime.
-  if (match.homeScore !== null && match.awayScore !== null) {
-    if (
-      prediction.homeScore === match.homeScore &&
-      prediction.awayScore === match.awayScore
-    ) {
-      return { status: "correct", points: 1 };
-    }
+  if (match.homeScore === null || match.awayScore === null) {
+    return { status: "wrong", points: 0 };
+  }
+
+  // Placar exato → 10.
+  if (
+    prediction.homeScore === match.homeScore &&
+    prediction.awayScore === match.awayScore
+  ) {
+    return { status: "correct", points: 10 };
+  }
+
+  // Vencedor real acertado (mesmo sinal de home − away) e não é empate → 5.
+  // Math.sign garante comparação por sinal: 1 (mandante), -1 (visitante), 0 (empate).
+  const matchSign = Math.sign(match.homeScore - match.awayScore);
+  const predictionSign = Math.sign(prediction.homeScore - prediction.awayScore);
+  if (matchSign !== 0 && predictionSign === matchSign) {
+    return { status: "partial", points: 5 };
   }
 
   return { status: "wrong", points: 0 };
@@ -126,9 +155,12 @@ export function scorePrediction(
  * Combina resultado (scorePrediction) + lock (isPredictionLocked).
  *
  * Prioridade (ordem de avaliação — decrescente):
- * 1. match.status === "finished" → "acertou" | "errou"
+ * 1. match.status === "finished" → "acertou" | "acertou_vencedor" | "errou"
  * 2. isPredictionLocked(match, now) === true → "bloqueado"
  * 3. caso contrário → "pendente"
+ *
+ * No ramo finished, mapeia o status ponderado de scorePrediction (TASK-04):
+ * "correct" → "acertou"; "partial" → "acertou_vencedor" (+5); resto → "errou".
  *
  * Rationale: `finished` tem prioridade sobre lock pois o resultado final
  * é mais informativo ao usuário do que o estado de bloqueio.
@@ -144,7 +176,9 @@ export function derivePredictionDisplayStatus(
 ): PredictionDisplayStatus {
   if (match.status === "finished") {
     const { status } = scorePrediction(prediction, match);
-    return status === "correct" ? "acertou" : "errou";
+    if (status === "correct") return "acertou";
+    if (status === "partial") return "acertou_vencedor";
+    return "errou";
   }
 
   if (isPredictionLocked(match, now)) {

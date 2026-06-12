@@ -22,3 +22,11 @@ serviceAccountKey.json
 
 # Vitest JSON output (scratch)
 vitest-*.json
+
+# vitest temp json reports
+.vitest-t*.json
+
+# scratch tool outputs (tsc/vitest parse helpers)
+.tscout*.txt
+.vtout*.json
+.vtparse*.cjs

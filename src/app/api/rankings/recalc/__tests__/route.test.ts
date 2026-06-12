@@ -4,8 +4,9 @@
  * Mocks: firebaseAdmin (auth + firestore), next/headers (cookies), copaData (fetchAllMatches),
  * server-only. scorePrediction usa implementação REAL (binário) via importActual.
  *
- * Cobre: auth dupla, exclusão de blocked/pending, pontuação binária por escopo/group,
- * aproveitamento, positionHistory append, pool stats, idempotência, doc malformado.
+ * Cobre: auth dupla, exclusão de blocked/pending, pontuação PONDERADA por escopo/group
+ * (TASK-03: pontos 5/10 vs acertos exatos separados), aproveitamento (exato),
+ * positionHistory append, pool stats, idempotência, doc malformado.
  */
 
 import { type NextRequest } from "next/server";
@@ -98,9 +99,10 @@ const USERS = [
 ];
 
 const PREDICTIONS = [
-  { uid: "u1", matchId: "g1", homeScore: 2, awayScore: 1, createdAt: iso(-200 * 3_600_000) }, // correct
-  { uid: "u1", matchId: "o1", homeScore: 1, awayScore: 0, createdAt: iso(-190 * 3_600_000) }, // correct
-  { uid: "u2", matchId: "g1", homeScore: 0, awayScore: 0, createdAt: iso(-180 * 3_600_000) }, // wrong
+  { uid: "u1", matchId: "g1", homeScore: 2, awayScore: 1, createdAt: iso(-200 * 3_600_000) }, // correct (10)
+  { uid: "u1", matchId: "o1", homeScore: 1, awayScore: 0, createdAt: iso(-190 * 3_600_000) }, // correct (10)
+  { uid: "u2", matchId: "g1", homeScore: 0, awayScore: 0, createdAt: iso(-180 * 3_600_000) }, // wrong (real 2x1, palpite empate)
+  { uid: "u2", matchId: "o1", homeScore: 3, awayScore: 0, createdAt: iso(-175 * 3_600_000) }, // partial (5): mandante certo (real 1x0), placar errado
   { uid: "u3", matchId: "g1", homeScore: 2, awayScore: 1, createdAt: iso(-170 * 3_600_000) }, // blocked → excluído
 ];
 
@@ -266,10 +268,10 @@ describe("POST /api/rankings/recalc", () => {
       const u1 = entries.find((e) => e.uid === "u1")!;
       const u2 = entries.find((e) => e.uid === "u2")!;
       expect(u1.position).toBe(1);
-      expect(u1.points).toBe(2); // 2 acertos (g1 + o1)
+      expect(u1.points).toBe(20); // 2 placares exatos × 10 (ponderado)
       expect(u2.position).toBe(2);
-      expect(u2.points).toBe(0);
-      expect(u2.wrong).toBe(1);
+      expect(u2.points).toBe(5); // 1 partial (vencedor certo) × 5
+      expect(u2.wrong).toBe(1); // só g1; partial NÃO é wrong
     });
 
     it("entries trazem name e nickname desnormalizados", async () => {
@@ -289,7 +291,9 @@ describe("POST /api/rankings/recalc", () => {
       const entries = find(writes, "rankings/geral")!.data.entries as Array<
         Record<string, unknown>
       >;
-      // finalizadas geral = 2 (g1, o1). u1 2/2=100, u2 0/2=0
+      // accuracy = ACERTOS EXATOS / finalizadas elegíveis (não pontos ponderados).
+      // finalizadas geral = 2 (g1, o1). u1 2 exatos/2=100; u2 0 exatos/2=0
+      // (o partial de u2 dá 5 pts mas NÃO conta como exato → accuracy 0).
       expect(entries.find((e) => e.uid === "u1")!.accuracy).toBe(100);
       expect(entries.find((e) => e.uid === "u2")!.accuracy).toBe(0);
     });
@@ -310,7 +314,7 @@ describe("POST /api/rankings/recalc", () => {
       const entries = find(writes, "rankings/oitavas")!.data.entries as Array<
         Record<string, unknown>
       >;
-      expect(entries.find((e) => e.uid === "u1")!.points).toBe(1); // só o1
+      expect(entries.find((e) => e.uid === "u1")!.points).toBe(10); // só o1 (exato × 10)
     });
 
     it("grava ranking por grupo grupo-A", async () => {
@@ -320,7 +324,7 @@ describe("POST /api/rankings/recalc", () => {
       expect(grupoA).toBeDefined();
       expect(grupoA!.data.groupId).toBe("A");
       const entries = grupoA!.data.entries as Array<Record<string, unknown>>;
-      expect(entries.find((e) => e.uid === "u1")!.points).toBe(1); // g1
+      expect(entries.find((e) => e.uid === "u1")!.points).toBe(10); // g1 (exato × 10)
     });
   });
 
@@ -330,10 +334,10 @@ describe("POST /api/rankings/recalc", () => {
       await POST(withSecret(SECRET));
       const stats = find(writes, "statistics/u1");
       expect(stats).toBeDefined();
-      expect(stats!.data.totalCorrect).toBe(2);
+      expect(stats!.data.totalCorrect).toBe(2); // EXATOS (não pontos ponderados = 20)
       expect(stats!.data.totalWrong).toBe(0);
       const cbs = stats!.data.correctByStage as Record<string, number>;
-      expect(cbs.grupos).toBe(1);
+      expect(cbs.grupos).toBe(1); // contagem de exatos por fase (não pontos)
       expect(cbs.oitavas).toBe(1);
       const hist = stats!.data.positionHistory as Array<Record<string, unknown>>;
       expect(hist.length).toBeGreaterThanOrEqual(1);
@@ -374,9 +378,58 @@ describe("POST /api/rankings/recalc", () => {
       const pool = find(writes, "pool_stats/current");
       expect(pool).toBeDefined();
       expect(pool!.data.totalParticipants).toBe(2); // só aprovados não-admin? inclui admin aprovado
-      expect(pool!.data.highestPoints).toBe(2);
-      expect(pool!.data.lowestPoints).toBe(0);
+      expect(pool!.data.highestPoints).toBe(20); // PONDERADO (u1: 2 exatos × 10)
+      expect(pool!.data.lowestPoints).toBe(5); // PONDERADO (u2: 1 partial × 5)
+      expect(pool!.data.totalCorrect).toBe(2); // EXATOS (u1 2 + u2 0), não pontos (25)
       expect(Array.isArray(pool!.data.distribution)).toBe(true);
+    });
+  });
+
+  describe("regra ponderada — pontos × exatos separados (TASK-03)", () => {
+    it("partial soma pontos mas NÃO conta como exato (accuracy/totalCorrect)", async () => {
+      const { writes } = makeDb();
+      await POST(withSecret(SECRET));
+      // u2 tem 1 partial (o1) + 1 wrong (g1): 5 pts ponderados, 0 exatos.
+      const geral = find(writes, "rankings/geral")!.data.entries as Array<
+        Record<string, unknown>
+      >;
+      const u2 = geral.find((e) => e.uid === "u2")!;
+      expect(u2.points).toBe(5); // ponderado > 0
+      expect(u2.accuracy).toBe(0); // exato = 0 → aproveitamento 0
+      const stats = find(writes, "statistics/u2")!.data;
+      expect(stats.totalCorrect).toBe(0); // partial não é exato
+      expect(stats.totalWrong).toBe(1); // partial não é wrong
+    });
+
+    it("partial NÃO entra em correctByStage (contagem de exatos por fase)", async () => {
+      const { writes } = makeDb();
+      await POST(withSecret(SECRET));
+      const cbs = find(writes, "statistics/u2")!.data.correctByStage as Record<
+        string,
+        number
+      >;
+      // o1 (oitavas) de u2 é partial → não conta como acerto exato de fase.
+      expect(cbs.oitavas ?? 0).toBe(0);
+    });
+
+    it("longestStreak conta só exatos: partial não cria sequência (D3)", async () => {
+      const { writes } = makeDb();
+      await POST(withSecret(SECRET));
+      // u1: correct, correct (cronológico) → streak 2.
+      expect(find(writes, "statistics/u1")!.data.longestStreak).toBe(2);
+      // u2: wrong + partial → nenhum exato → streak 0.
+      expect(find(writes, "statistics/u2")!.data.longestStreak).toBe(0);
+    });
+
+    it("ranking ordena por pontos ponderados, accuracy desempata por exatos", async () => {
+      const { writes } = makeDb();
+      await POST(withSecret(SECRET));
+      const geral = find(writes, "rankings/geral")!.data.entries as Array<
+        Record<string, unknown>
+      >;
+      // u1 (20 pts, 100% exato) > u2 (5 pts, 0% exato).
+      expect(geral[0]!.uid).toBe("u1");
+      expect(geral[1]!.uid).toBe("u2");
     });
   });
 

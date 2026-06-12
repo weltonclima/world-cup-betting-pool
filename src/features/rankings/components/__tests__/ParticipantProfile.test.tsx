@@ -92,4 +92,22 @@ describe("ParticipantProfile", () => {
     render(<ParticipantProfile uid="u-zzz" />, { wrapper });
     expect(screen.getByText("Participante não encontrado")).toBeTruthy();
   });
+
+  // TASK-07: foto real no avatar do header. base-ui só monta o `<img>` no evento
+  // `load` (jsdom não dispara) → testar caminho testável: aceita `avatarUrl` sem
+  // quebrar, mantém iniciais (fallback) e o aria-label do avatar.
+  it("aceita avatarUrl no header e mantém iniciais + aria-label", () => {
+    const withPhoto: Ranking = {
+      ...ranking,
+      entries: [
+        { ...ranking.entries[1]!, avatarUrl: "data:image/jpeg;base64,QUJD" },
+      ],
+    };
+    ok(withPhoto, stats);
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+    // Avatar acessível por nome (aria-label) preservado.
+    expect(screen.getByLabelText("Lucas Pereira")).toBeTruthy();
+    // Sem foto renderizada (jsdom) → iniciais "LP" no fallback.
+    expect(screen.getByText("LP")).toBeTruthy();
+  });
 });
