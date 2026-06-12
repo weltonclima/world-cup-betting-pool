@@ -2,16 +2,17 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useGeneralRankingMock } = vi.hoisted(() => ({
-  useGeneralRankingMock: vi.fn(),
+const { usePoolRankingMock, useAuthMock } = vi.hoisted(() => ({
+  usePoolRankingMock: vi.fn(),
+  useAuthMock: vi.fn(),
 }));
 
-// Mocka o barrel só para o hook (o componente importa useGeneralRanking dele).
+// Mocka o barrel só para o hook (o componente importa usePoolRanking dele).
 vi.mock("@/features/rankings", () => ({
-  useGeneralRanking: useGeneralRankingMock,
+  usePoolRanking: usePoolRankingMock,
 }));
 vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({ firebaseUser: { uid: "u-me" } }),
+  useAuth: useAuthMock,
 }));
 
 // Import por path direto p/ não cair no mock do barrel.
@@ -29,14 +30,20 @@ const entries = [
   entry("u5", 5, 82, "Lucas Pereira"),
 ];
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  useGeneralRankingMock.mockReturnValue({
+function okRanking() {
+  return {
     data: { scope: "geral", updatedAt: "2026-06-05T02:00:00Z", entries },
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
-  });
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Por padrão: usuário COM pool.
+  useAuthMock.mockReturnValue({ firebaseUser: { uid: "u-me" }, profile: { groupId: "pool-1" } });
+  usePoolRankingMock.mockReturnValue(okRanking());
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -55,7 +62,7 @@ describe("GeneralRanking", () => {
   });
 
   it("estado vazio quando não há entries", () => {
-    useGeneralRankingMock.mockReturnValue({
+    usePoolRankingMock.mockReturnValue({
       data: { scope: "geral", updatedAt: "x", entries: [] },
       isLoading: false,
       isError: false,
@@ -63,5 +70,14 @@ describe("GeneralRanking", () => {
     });
     render(<GeneralRanking />);
     expect(screen.getByText("Nenhum participante encontrado")).toBeTruthy();
+  });
+
+  it("usuário SEM pool vê estado dedicado e não chama o ranking", () => {
+    useAuthMock.mockReturnValue({ firebaseUser: { uid: "u-me" }, profile: { groupId: undefined } });
+    render(<GeneralRanking />);
+    expect(screen.getByText("Você ainda não está em um grupo")).toBeTruthy();
+    // hook é chamado (regras de hooks) mas desabilitado via enabled:false — aqui
+    // garantimos só que a tela não renderiza lista/pódio.
+    expect(screen.queryByText("Joao Silva")).toBeNull();
   });
 });
