@@ -49,6 +49,7 @@ function makeItem(
     awayTeam: { name: "França", flagUrl: "https://example.com/fr.png" },
     prediction: { homeScore: 2, awayScore: 1 },
     displayStatus: "pendente" as PredictionDisplayStatus,
+    isManual: false,
     ...overrides,
   };
 }
@@ -350,6 +351,26 @@ describe("PredictionListCard — badge de status", () => {
     // Verifica que a classe de cor está presente
     const colorClass = PREDICTION_DISPLAY_STATUS_COLOR["acertou"];
     expect(badge?.className).toContain(colorClass.split(" ")[0]);
+  });
+});
+
+describe("PredictionListCard — badge origem manual (PRD-12 TASK-05)", () => {
+  it("T-M1: exibe 'Lançado pelo admin' quando isManual=true", () => {
+    render(<PredictionListCard item={makeItem({ isManual: true })} />);
+    expect(screen.getByText("Lançado pelo admin")).toBeTruthy();
+  });
+
+  it("T-M2: NÃO exibe badge de origem quando isManual=false", () => {
+    render(<PredictionListCard item={makeItem({ isManual: false })} />);
+    expect(screen.queryByText("Lançado pelo admin")).toBeNull();
+  });
+
+  it("T-M3: badge de origem coexiste com o badge de status", () => {
+    render(
+      <PredictionListCard item={makeItem({ isManual: true, displayStatus: "acertou" })} />,
+    );
+    expect(screen.getByText("Lançado pelo admin")).toBeTruthy();
+    expect(screen.getByText("Acertou")).toBeTruthy();
   });
 });
 

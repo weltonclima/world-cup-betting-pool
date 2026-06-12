@@ -36,6 +36,8 @@ export interface PredictionListItem {
   prediction: { homeScore: number; awayScore: number };
   /** Status derivado para badge (TASK-02). */
   displayStatus: PredictionDisplayStatus;
+  /** Origem manual: palpite lançado/sobrescrito pelo admin de grupo (PRD-12 TASK-05). */
+  isManual: boolean;
 }
 
 /** Dado exposto pelo compositor à UI. */
@@ -114,6 +116,7 @@ export function usePredictionsList(): PredictionsListData {
         awayTeam: resolveTeam(match.awayTeamId, teamMap),
         prediction: { homeScore: prediction.homeScore, awayScore: prediction.awayScore },
         displayStatus: derivePredictionDisplayStatus(prediction, match, now),
+        isManual: Boolean(prediction.editedBy),
       };
     })
     .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
