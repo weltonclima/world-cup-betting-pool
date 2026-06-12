@@ -253,6 +253,17 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     poolsWritten += 1;
   }
 
+  // Limpa docs de pool ÓRFÃOS (HG-02): pools que perderam todos os membros — ex.:
+  // usuário movido p/ outro pool, último membro removido/bloqueado. Sem isso,
+  // GET /api/rankings/pool serviria entries stale de um pool já vazio.
+  const existingRankingDocs = await db.collection("rankings").get();
+  for (const d of existingRankingDocs.docs) {
+    const m = /^pool-(.+)-geral$/.exec(d.id);
+    if (m && m[1] && !poolMembers.has(m[1])) {
+      writes.push(d.ref.delete());
+    }
+  }
+
   // ─── 6. Rankings por fase (5) ──────────────────────────────────────────────
   let scopesWritten = 1;
   for (const scope of RANKING_STAGE_SCOPES) {

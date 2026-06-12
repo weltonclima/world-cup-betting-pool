@@ -123,12 +123,18 @@ service cloud.firestore {
     match /system_settings/{id}  { allow read: if isApproved(); allow write: if isAdmin(); }
 
     // ---- Derivados do recálculo (PRD-05): approved lê, NINGUÉM escreve pelo cliente ----
-    // rankings/statistics/pool_stats são gerados exclusivamente pelo Route Handler
-    // /api/rankings/recalc (Admin SDK, que bypassa as Rules). Write client = negado a
-    // todos, inclusive admin (a pontuação só existe no backend — critério de aceite PRD-05).
-    // `pool_stats/current` é lido pela Tela 06 (Estatísticas Gerais) — sem este match,
-    // o deny-by-default bloquearia a leitura no cliente.
-    match /rankings/{scope}      { allow read: if isApproved(); allow write: if false; }
+    // Gerados exclusivamente pelo Route Handler /api/rankings/recalc (Admin SDK, que
+    // bypassa as Rules). Write client = negado a todos, inclusive admin.
+    //
+    // ISOLAMENTO POR POOL (PRD-09, CR-04): o ranking GERAL (`geral`) e os rankings por
+    // POOL (`pool-{id}-geral`) NÃO são mais legíveis direto pelo client SDK — são
+    // servidos só pelos Route Handlers autenticados (`/api/rankings/{scope}` e
+    // `/api/rankings/pool`), que escopam por sessão. Isso impede burlar a closure
+    // lendo `rankings/geral` ou `pool-{outroGrupo}-geral` pelo cliente. Os rankings
+    // por GRUPO do torneio (`grupo-A`..`grupo-L`) seguem legíveis (leaderboard de fase,
+    // ainda consumido client-side por `useGroupRanking`). As 5 fases (`grupos`,
+    // `oitavas`…) também passam pelo Route Handler → negadas ao client direto.
+    match /rankings/{scope}      { allow read: if isApproved() && scope.matches("grupo-.*"); allow write: if false; }
     match /statistics/{uid}      { allow read: if isApproved(); allow write: if false; }
     match /pool_stats/{id}       { allow read: if isApproved(); allow write: if false; }
 

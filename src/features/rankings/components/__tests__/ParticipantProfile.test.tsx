@@ -6,14 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { Ranking, Statistics } from "@/types";
 
-const { useRankingMock, useParticipantProfileMock } = vi.hoisted(() => ({
-  useRankingMock: vi.fn(),
+const { usePoolRankingMock, useParticipantProfileMock } = vi.hoisted(() => ({
+  usePoolRankingMock: vi.fn(),
   useParticipantProfileMock: vi.fn(),
 }));
 
+// Fechado por pool: o perfil resolve a entry do ranking do PRÓPRIO pool do
+// espectador. Mockamos usePoolRanking + a sessão (groupId do espectador).
 vi.mock("@/features/rankings", () => ({
-  useRanking: useRankingMock,
+  usePoolRanking: usePoolRankingMock,
   useParticipantProfile: useParticipantProfileMock,
+}));
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ profile: { groupId: "pool-1" } }),
 }));
 
 import { ParticipantProfile } from "@/features/rankings/components/ParticipantProfile";
@@ -45,7 +50,7 @@ const stats: Statistics = {
 };
 
 function ok(rankingData: Ranking | null, statsData: Statistics | null) {
-  useRankingMock.mockReturnValue({
+  usePoolRankingMock.mockReturnValue({
     data: rankingData,
     isLoading: false,
     isError: false,

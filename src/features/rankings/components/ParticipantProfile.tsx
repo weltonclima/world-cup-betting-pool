@@ -2,7 +2,8 @@
 
 import { type JSX } from "react";
 
-import { useParticipantProfile, useRanking } from "@/features/rankings";
+import { useParticipantProfile, usePoolRanking } from "@/features/rankings";
+import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { RankingEntry, Statistics } from "@/types";
 
@@ -36,7 +37,10 @@ interface ParticipantProfileProps {
 export function ParticipantProfile({
   uid,
 }: ParticipantProfileProps): JSX.Element {
-  const rankingQuery = useRanking("geral");
+  // Fechado por pool (PRD-09): identidade/posição vêm do ranking do PRÓPRIO pool
+  // do espectador. uid de outro pool não está nas entries → "não encontrado".
+  const myGroupId = useAuth().profile?.groupId;
+  const rankingQuery = usePoolRanking(myGroupId);
   const statsQuery = useParticipantProfile(uid);
 
   if (rankingQuery.isLoading || statsQuery.isLoading) {

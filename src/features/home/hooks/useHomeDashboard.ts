@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 import {
+  buildPredictionsHref,
   buildTeamMap,
   computeIsCorrect,
   deriveCurrentStage,
@@ -19,7 +20,7 @@ import type {
   NextMatchSummary,
   RecentResult,
 } from "../lib/homeDashboardHelpers";
-import { useGeneralRanking } from "./useGeneralRanking";
+import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
 import { useNextMatch } from "./useNextMatch";
 import { usePredictions } from "./usePredictions";
 import { useRecentResults } from "./useRecentResults";
@@ -53,12 +54,14 @@ export type {
  * - teams: buscado uma vez, reutilizado como Map para O(1) lookup — sem N+1.
  */
 export function useHomeDashboard(): HomeDashboardData {
-  // 1. uid do usuário autenticado
-  const { firebaseUser } = useAuth();
+  // 1. uid + pool do usuário autenticado
+  const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 
   // 2. Queries por recurso (sem cache override — herdam global 30min/24h)
-  const rankingQuery     = useGeneralRanking();
+  // Ranking FECHADO por pool (PRD-09): o card da Home mostra só o pool do usuário,
+  // nunca o ranking global. Sem pool → query desabilitada (RankingSummary nulo).
+  const rankingQuery     = usePoolRanking(profile?.groupId);
   const statisticsQuery  = useStatistics(uid);
   const nextMatchQuery   = useNextMatch();
   const recentQuery      = useRecentResults();
@@ -152,6 +155,7 @@ export function useHomeDashboard(): HomeDashboardData {
       userPrediction: userPred
         ? { homeScore: userPred.homeScore, awayScore: userPred.awayScore }
         : null,
+      predictionsHref: buildPredictionsHref(nextMatch.id, predStatus),
     };
   }
 

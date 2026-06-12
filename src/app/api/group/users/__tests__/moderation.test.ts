@@ -15,9 +15,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeMock, getFirestoreMock } = vi.hoisted(() => ({
+const { authorizeMock, getFirestoreMock, recalcBestEffortMock } = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   getFirestoreMock: vi.fn(),
+  recalcBestEffortMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -25,6 +26,9 @@ vi.mock("@/app/api/group/_authorize", () => ({
   authorizeGroupAdminOfPool: authorizeMock,
 }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
+vi.mock("@/server/rankings/recalc", () => ({
+  recalcRankingsBestEffort: recalcBestEffortMock,
+}));
 vi.mock("firebase-admin/firestore", () => ({
   FieldValue: { delete: () => "__delete__" },
 }));

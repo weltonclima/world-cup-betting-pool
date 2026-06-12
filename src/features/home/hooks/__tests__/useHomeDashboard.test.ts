@@ -30,7 +30,7 @@ vi.mock("@/firebase", () => ({
 }));
 
 vi.mock("@/hooks/useAuth");
-vi.mock("../useGeneralRanking");
+vi.mock("@/features/rankings/hooks/usePoolRanking");
 vi.mock("../useStatistics");
 vi.mock("../useNextMatch");
 vi.mock("../useRecentResults");
@@ -41,7 +41,7 @@ vi.mock("../useSystemSettings");
 // ── imports pós-mock ─────────────────────────────────────────────────────────
 
 import { useAuth } from "@/hooks/useAuth";
-import { useGeneralRanking } from "../useGeneralRanking";
+import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
 import { useStatistics } from "../useStatistics";
 import { useNextMatch } from "../useNextMatch";
 import { useRecentResults } from "../useRecentResults";
@@ -54,7 +54,7 @@ import { useHomeDashboard } from "../useHomeDashboard";
 // ── helpers de tipagem para os mocks ─────────────────────────────────────────
 
 const mockUseAuth      = vi.mocked(useAuth);
-const mockRanking      = vi.mocked(useGeneralRanking);
+const mockRanking      = vi.mocked(usePoolRanking);
 const mockStatistics   = vi.mocked(useStatistics);
 const mockNextMatch    = vi.mocked(useNextMatch);
 const mockRecentResults = vi.mocked(useRecentResults);

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
+import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
   canTransition,
   isSuperAdminRole,
@@ -146,6 +147,10 @@ export async function handleStatusModeration(
 
     await db.collection("users").doc(uid).update(patch);
 
+    // Entra/sai do conjunto approved-com-pool → recalcula o ranking do pool
+    // (HG-02, best-effort: approve/unblock incluem, block exclui).
+    await recalcRankingsBestEffort(db);
+
     const updatedSnap = await db.collection("users").doc(uid).get();
     const updated = userSchema.parse(updatedSnap.data());
     return NextResponse.json({ user: updated }, { status: 200 });
@@ -208,6 +213,9 @@ export async function handleRemove(request: Request): Promise<NextResponse> {
       groupId: FieldValue.delete(),
       updatedAt,
     });
+
+    // Saiu do pool → recalcula (limpa o usuário do ranking; HG-02, best-effort).
+    await recalcRankingsBestEffort(db);
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
