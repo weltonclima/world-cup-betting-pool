@@ -112,7 +112,7 @@ describe("useGroupStandings", () => {
     expect(result.current.data?.groupId).toBe("B");
   });
 
-  it("T4: grupo inexistente → undefined", async () => {
+  it("T4: grupo inexistente → null", async () => {
     getGroupsMock.mockResolvedValueOnce(makeGroups());
 
     const { result } = renderHook(() => useGroupStandings("Z"), {
@@ -120,7 +120,7 @@ describe("useGroupStandings", () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toBeUndefined();
+    expect(result.current.data).toBeNull();
   });
 
   it("T5: useGroups + useGroupStandings compartilham a cache ['groups'] (1 fetch)", async () => {

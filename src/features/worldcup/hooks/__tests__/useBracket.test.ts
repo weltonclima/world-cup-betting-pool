@@ -80,7 +80,7 @@ describe("useBracket — dados", () => {
     expect(result.current.data).toEqual(data);
   });
 
-  it("queryKey é worldcupKeys.bracket() → [\"bracket\"]", async () => {
+  it("queryKey é worldcupKeys.bracket() → [\"worldcup\", \"bracket\"]", async () => {
     const { queryClient, wrapper } = createWrapper();
     mockGetBracket.mockResolvedValueOnce(makeBracketResponse());
 
@@ -90,7 +90,7 @@ describe("useBracket — dados", () => {
       queryClient.getQueryState(worldcupKeys.bracket()) !== undefined,
     );
 
-    expect(worldcupKeys.bracket()).toEqual(["bracket"]);
+    expect(worldcupKeys.bracket()).toEqual(["worldcup", "bracket"]);
     const state = queryClient.getQueryState(worldcupKeys.bracket());
     expect(state).toBeDefined();
   });

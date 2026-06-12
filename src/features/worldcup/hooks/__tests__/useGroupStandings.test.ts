@@ -118,8 +118,8 @@ describe("useGroupStandings — slice correto", () => {
       queryClient.getQueryState(worldcupKeys.groups()) !== undefined,
     );
 
-    // Cache key deve ser ["groups"], não ["group", "A"]
-    expect(worldcupKeys.groups()).toEqual(["groups"]);
+    // Cache key deve ser ["worldcup", "groups"], não ["worldcup", "group", "A"]
+    expect(worldcupKeys.groups()).toEqual(["worldcup", "groups"]);
     const baseState = queryClient.getQueryState(worldcupKeys.groups());
     expect(baseState).toBeDefined();
 

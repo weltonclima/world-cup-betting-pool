@@ -96,7 +96,7 @@ describe("useGroups — dados", () => {
     expect(result.current.data).toEqual(data);
   });
 
-  it("queryKey é worldcupKeys.groups() → [\"groups\"]", async () => {
+  it("queryKey é worldcupKeys.groups() → [\"worldcup\", \"groups\"]", async () => {
     const { queryClient, wrapper } = createWrapper();
     mockGetGroups.mockResolvedValueOnce(makeGroupsResponse());
 
@@ -106,7 +106,7 @@ describe("useGroups — dados", () => {
       queryClient.getQueryState(worldcupKeys.groups()) !== undefined,
     );
 
-    expect(worldcupKeys.groups()).toEqual(["groups"]);
+    expect(worldcupKeys.groups()).toEqual(["worldcup", "groups"]);
     const state = queryClient.getQueryState(worldcupKeys.groups());
     expect(state).toBeDefined();
   });
