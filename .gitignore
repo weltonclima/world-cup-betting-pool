@@ -30,3 +30,6 @@ vitest-*.json
 .tscout*.txt
 .vtout*.json
 .vtparse*.cjs
+
+ai/spec/
+ai/ui-spec/
