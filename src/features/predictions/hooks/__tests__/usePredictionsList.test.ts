@@ -289,7 +289,24 @@ describe("usePredictionsList — derivação de displayStatus", () => {
     expect(result.current.items[0]!.displayStatus).toBe("acertou");
   });
 
-  it("T10: match finished com erro → displayStatus='errou'", () => {
+  it("T10: match finished com vencedor errado → displayStatus='errou'", () => {
+    // Palpite 2×1 (mandante vence) mas jogo 0×3 (visitante vence) → vencedor errado.
+    const finishedMatch = makeMatch("match-001", {
+      kickoffAt: "2026-01-01T00:00:00Z",
+      status: "finished",
+      homeScore: 0,
+      awayScore: 3,
+    });
+    setupDefaultMocks({
+      predictions: [makePrediction("match-001", { homeScore: 2, awayScore: 1 })],
+      matches: [finishedMatch],
+    });
+    const { result } = renderHook(() => usePredictionsList());
+    expect(result.current.items[0]!.displayStatus).toBe("errou");
+  });
+
+  it("T10b: match finished com vencedor certo e placar errado → displayStatus='acertou_vencedor'", () => {
+    // Palpite 2×1 (mandante vence) e jogo 3×0 (mandante vence) → +5 (TASK-04).
     const finishedMatch = makeMatch("match-001", {
       kickoffAt: "2026-01-01T00:00:00Z",
       status: "finished",
@@ -301,7 +318,7 @@ describe("usePredictionsList — derivação de displayStatus", () => {
       matches: [finishedMatch],
     });
     const { result } = renderHook(() => usePredictionsList());
-    expect(result.current.items[0]!.displayStatus).toBe("errou");
+    expect(result.current.items[0]!.displayStatus).toBe("acertou_vencedor");
   });
 
   it("T11: match não scheduled e antes de terminar → displayStatus='bloqueado'", () => {

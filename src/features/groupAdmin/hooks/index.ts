@@ -13,3 +13,4 @@ export {
   useCreateInvite,
   useRevokeInvite,
 } from "./useGroupInvites";
+export { useCreateManualPrediction } from "./useCreateManualPrediction";

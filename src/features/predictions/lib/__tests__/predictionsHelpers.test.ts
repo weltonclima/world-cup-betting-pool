@@ -14,6 +14,7 @@ import {
   derivePredictionDisplayStatus,
   isPredictionLocked,
   scorePrediction,
+  selectLockedMatches,
 } from "@/features/predictions/lib";
 
 // ---------------------------------------------------------------------------
@@ -149,34 +150,118 @@ describe("isPredictionLocked", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 1b. selectLockedMatches (PRD-12 — só jogos bloqueados p/ palpite manual)
+// ---------------------------------------------------------------------------
+
+describe("selectLockedMatches", () => {
+  const kickoffFuturo = "2026-06-20T18:00:00.000Z";
+  const kickoffMs = new Date(kickoffFuturo).getTime();
+  const now = new Date(kickoffMs - 3_600_000); // 1h antes do jogo futuro
+
+  it("inclui encerrado, ao vivo e kickoff-passado; exclui scheduled-futuro", () => {
+    const agendadoFuturo = makeScheduledMatch({
+      id: "futuro",
+      kickoffAt: kickoffFuturo,
+    });
+    const encerrado = makeFinishedMatch({ id: "encerrado" });
+    const aoVivo = makeScheduledMatch({
+      id: "ao-vivo",
+      status: "live",
+      kickoffAt: kickoffFuturo,
+    });
+    const kickoffPassado = makeScheduledMatch({
+      id: "passado",
+      kickoffAt: new Date(now.getTime() - 60_000).toISOString(), // 1min antes de now
+    });
+
+    const result = selectLockedMatches(
+      [agendadoFuturo, encerrado, aoVivo, kickoffPassado],
+      now,
+    );
+    const ids = result.map((m) => m.id);
+
+    expect(ids).toContain("encerrado");
+    expect(ids).toContain("ao-vivo");
+    expect(ids).toContain("passado");
+    expect(ids).not.toContain("futuro");
+  });
+
+  it("lista vazia → vazia", () => {
+    expect(selectLockedMatches([], now)).toEqual([]);
+  });
+
+  it("não muta o array de entrada", () => {
+    const input = [makeFinishedMatch({ id: "x" })];
+    const copy = [...input];
+    selectLockedMatches(input, now);
+    expect(input).toEqual(copy);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 2. scorePrediction
 // ---------------------------------------------------------------------------
 
-describe("scorePrediction", () => {
-  it("finished + placar exato (2×1 vs 2×1) → { status: 'correct', points: 1 }", () => {
+describe("scorePrediction (regra ponderada — TASK-02)", () => {
+  // --- 10 pontos: placar exato ---
+  it("finished + placar exato decidido (2×1 vs 2×1) → { status: 'correct', points: 10 }", () => {
     const match = makeFinishedMatch({ homeScore: 2, awayScore: 1 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
-    expect(scorePrediction(prediction, match)).toEqual({ status: "correct", points: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "correct", points: 10 });
   });
 
-  it("finished + placares corretos mas invertidos (2×1 previsto, 1×2 real) → { status: 'wrong', points: 0 }", () => {
+  it("finished + empate exato (0×0 vs 0×0) → { status: 'correct', points: 10 }", () => {
+    const match = makeFinishedMatch({ homeScore: 0, awayScore: 0 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 0 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "correct", points: 10 });
+  });
+
+  // --- 5 pontos: acertou o vencedor real, placar errado ---
+  it("finished + vencedor mandante certo, placar errado (2×1 previsto, 3×1 real) → { status: 'partial', points: 5 }", () => {
+    const match = makeFinishedMatch({ homeScore: 3, awayScore: 1 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "partial", points: 5 });
+  });
+
+  it("finished + vencedor visitante certo, placar errado (0×1 previsto, 1×3 real) → { status: 'partial', points: 5 }", () => {
+    const match = makeFinishedMatch({ homeScore: 1, awayScore: 3 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "partial", points: 5 });
+  });
+
+  // --- 0 pontos: vencedor errado ---
+  it("finished + placar invertido (2×1 previsto, 1×2 real) → { status: 'wrong', points: 0 }", () => {
     const match = makeFinishedMatch({ homeScore: 1, awayScore: 2 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
     expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
   });
 
-  it("finished + empate exato (0×0 vs 0×0) → { status: 'correct', points: 1 }", () => {
-    const match = makeFinishedMatch({ homeScore: 0, awayScore: 0 });
-    const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 0 });
-    expect(scorePrediction(prediction, match)).toEqual({ status: "correct", points: 1 });
-  });
-
-  it("finished + placar errado (1×0 previsto, 0×1 real) → { status: 'wrong', points: 0 }", () => {
+  it("finished + vencedor errado (1×0 previsto, 0×1 real) → { status: 'wrong', points: 0 }", () => {
     const match = makeFinishedMatch({ homeScore: 0, awayScore: 1 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 0 });
     expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
   });
 
+  // --- 0 pontos: empate estrito (D1) ---
+  it("D1: empate previsto + jogo decidido (1×1 previsto, 2×1 real) → { status: 'wrong', points: 0 }", () => {
+    const match = makeFinishedMatch({ homeScore: 2, awayScore: 1 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
+  });
+
+  it("D1: empate previsto + empate real inexato (1×1 previsto, 2×2 real) → { status: 'wrong', points: 0 }", () => {
+    const match = makeFinishedMatch({ homeScore: 2, awayScore: 2 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
+  });
+
+  it("D1: vitória prevista + jogo empatou (2×1 previsto, 1×1 real) → { status: 'wrong', points: 0 }", () => {
+    const match = makeFinishedMatch({ homeScore: 1, awayScore: 1 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
+  });
+
+  // --- pending: não finalizado ---
   it("scheduled → { status: 'pending', points: 0 }", () => {
     const match = makeScheduledMatch({ homeScore: null, awayScore: null });
     const prediction = makePrediction({ matchId: match.id });
@@ -199,16 +284,17 @@ describe("scorePrediction", () => {
     expect(scorePrediction(prediction, match)).toEqual({ status: "pending", points: 0 });
   });
 
+  // --- idempotência + dado inconsistente ---
   it("idempotência: chamar duas vezes com os mesmos dados retorna o mesmo resultado", () => {
     const match = makeFinishedMatch({ homeScore: 3, awayScore: 2 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 3, awayScore: 2 });
     const result1 = scorePrediction(prediction, match);
     const result2 = scorePrediction(prediction, match);
     expect(result1).toEqual(result2);
-    expect(result1).toEqual({ status: "correct", points: 1 });
+    expect(result1).toEqual({ status: "correct", points: 10 });
   });
 
-  it("finished + narrowing de null: homeScore null → { status: 'wrong', points: 0 } (conservador)", () => {
+  it("finished + narrowing de null: scores null → { status: 'wrong', points: 0 } (conservador)", () => {
     // Simula inconsistência de dados (finished com scores null) — tratado como wrong
     const match = {
       ...makeFinishedMatch(),
@@ -238,6 +324,28 @@ describe("derivePredictionDisplayStatus", () => {
   it("finished + placar errado → 'errou'", () => {
     const match = makeFinishedMatch({ kickoffAt, homeScore: 2, awayScore: 1 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 3 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
+  });
+
+  // --- TASK-04: 3º estado (partial → "acertou_vencedor") ---
+  it("finished + vencedor mandante certo, placar errado (2×1 previsto, 3×1 real) → 'acertou_vencedor'", () => {
+    const match = makeFinishedMatch({ kickoffAt, homeScore: 3, awayScore: 1 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("acertou_vencedor");
+  });
+
+  it("finished + vencedor visitante certo, placar errado (0×1 previsto, 1×3 real) → 'acertou_vencedor'", () => {
+    const match = makeFinishedMatch({ kickoffAt, homeScore: 1, awayScore: 3 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("acertou_vencedor");
+  });
+
+  it("D1: empate previsto + jogo decidido (1×1 previsto, 2×1 real) → 'errou' (não 'acertou_vencedor')", () => {
+    const match = makeFinishedMatch({ kickoffAt, homeScore: 2, awayScore: 1 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
     const now = new Date(kickoffMs + 7_200_000);
     expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
   });

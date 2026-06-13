@@ -27,8 +27,17 @@ function entry(
   points: number,
   name: string,
   accuracy = 50,
+  avatarUrl?: string,
 ) {
-  return { uid, nickname: name.toLowerCase(), name, position, points, accuracy };
+  return {
+    uid,
+    nickname: name.toLowerCase(),
+    name,
+    position,
+    points,
+    accuracy,
+    ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+  };
 }
 
 function renderWithClient(ui: ReactNode) {
@@ -101,5 +110,25 @@ describe("PhaseRanking — GroupRankingView", () => {
     // A aba "Por Grupo" renderiza junto (TabsPanel montado); badge "Você" presente.
     expect(screen.getByText("Você")).toBeTruthy();
     expect(screen.getByText("Voce Mesmo")).toBeTruthy();
+  });
+
+  // TASK-07: foto real na linha do grupo. O `<img>` do base-ui só monta no
+  // evento `load` do browser (jsdom não dispara) → testar o caminho testável:
+  // linha aceita `avatarUrl` sem quebrar e cai nas iniciais (fallback).
+  it("aceita avatarUrl na linha do grupo e mantém iniciais como fallback", () => {
+    useGroupRankingMock.mockReturnValue(
+      okQuery({
+        groupId: "A",
+        updatedAt: "2026-06-05T02:00:00Z",
+        entries: [
+          entry("u1", 1, 8, "Joao Silva", 70, "data:image/jpeg;base64,QUJD"),
+          entry("u-me", 2, 5, "Voce Mesmo", 60),
+        ],
+      }),
+    );
+    renderWithClient(<PhaseRanking />);
+    expect(screen.getByText("Joao Silva")).toBeTruthy();
+    // Sem foto (jsdom) → fallback de iniciais "JS".
+    expect(screen.getByText("JS")).toBeTruthy();
   });
 });

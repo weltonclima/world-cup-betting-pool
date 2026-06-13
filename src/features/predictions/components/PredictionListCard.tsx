@@ -12,7 +12,7 @@
 import type { ReactNode } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle2, Clock, Lock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Lock, ShieldCheck, Trophy, XCircle } from "lucide-react";
 
 import {
   PREDICTION_DISPLAY_STATUS_COLOR,
@@ -76,9 +76,27 @@ function TeamFlag({ team }: { team: ResolvedTeam }) {
 const STATUS_ICONS: Record<PredictionDisplayStatus, ReactNode> = {
   pendente: <Clock size={12} aria-hidden="true" />,
   acertou: <CheckCircle2 size={12} aria-hidden="true" />,
+  acertou_vencedor: <Trophy size={12} aria-hidden="true" />,
   errou: <XCircle size={12} aria-hidden="true" />,
   bloqueado: <Lock size={12} aria-hidden="true" />,
 };
+
+// ---------------------------------------------------------------------------
+// Subcomponente: ManualOriginBadge (PRD-12 TASK-05)
+// Discreto (tokens neutros) — não compete com o badge de status colorido.
+// ---------------------------------------------------------------------------
+
+function ManualOriginBadge() {
+  return (
+    <span
+      title="Lançado pelo admin"
+      className="inline-flex items-center gap-1 rounded-sm bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+    >
+      <ShieldCheck size={12} aria-hidden="true" />
+      Lançado pelo admin
+    </span>
+  );
+}
 
 function PredictionStatusBadge({ displayStatus }: { displayStatus: PredictionDisplayStatus }) {
   return (
@@ -145,15 +163,18 @@ export function PredictionListCard({ item }: PredictionListCardProps) {
         {format(new Date(item.kickoffAt), "dd/MM/yyyy · HH:mm", { locale: ptBR })}
       </p>
 
-      {/* Divider + palpite repetido + badge de status */}
-      <div className="border-t border-border pt-3 flex items-center justify-between gap-2">
+      {/* Divider + palpite repetido + badges (origem manual + status) */}
+      <div className="border-t border-border pt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           Meu palpite:{" "}
           <span className="font-bold text-foreground">
             {item.prediction.homeScore} × {item.prediction.awayScore}
           </span>
         </p>
-        <PredictionStatusBadge displayStatus={item.displayStatus} />
+        <div className="flex flex-wrap items-center gap-2">
+          {item.isManual ? <ManualOriginBadge /> : null}
+          <PredictionStatusBadge displayStatus={item.displayStatus} />
+        </div>
       </div>
     </article>
   );

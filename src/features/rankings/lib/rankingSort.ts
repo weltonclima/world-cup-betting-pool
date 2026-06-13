@@ -1,10 +1,12 @@
 /**
  * Ordenação e desempate de ranking (PRD-05 "Critérios de Desempate"), funções puras.
  *
- * Sob pontuação binária `points === acertos exatos`, então o critério "mais acertos exatos"
- * do PRD é redundante com "maior pontuação". Cadeia efetiva de desempate:
- *   1. points DESC
- *   2. accuracy DESC
+ * `points` agora é PONDERADO (5/10, TASK-03) — não mais === acertos exatos. O critério
+ * do PRD "mais acertos exatos" deixa de ser redundante com "maior pontuação", mas NÃO se
+ * adiciona um passo novo: `accuracy DESC` (acertos exatos / mesmo denominador no escopo)
+ * já desempata por exatos. Cadeia efetiva de desempate:
+ *   1. points DESC (ponderado)
+ *   2. accuracy DESC (acertos exatos no escopo)
  *   3. wrong ASC
  *   4. firstPredictionAt ASC (mais antigo primeiro; ausente vai por último)
  *   5. uid ASC (fallback estável → ordem total determinística)
@@ -13,8 +15,8 @@
 /** Shape de domínio para ordenação. NÃO persistido (firstPredictionAt não está em RankingEntry). */
 export interface RankableParticipant {
   uid: string;
-  points: number; // acertos exatos (binário)
-  accuracy: number; // 0–100
+  points: number; // pontos PONDERADOS (5/10, TASK-03); ordena o ranking
+  accuracy: number; // 0–100 (derivado de acertos exatos no escopo)
   wrong: number; // erros
   firstPredictionAt?: string; // ISO; ausente = sem palpites
 }

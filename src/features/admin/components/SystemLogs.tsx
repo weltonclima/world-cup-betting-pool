@@ -55,6 +55,8 @@ const SOURCE_LABEL: Record<SystemLogType, string> = {
   group_created: "Super Admin",
   group_updated: "Super Admin",
   user_group_assigned: "Super Admin",
+  // PRD-12 — palpite manual lançado pelo admin do grupo.
+  group_admin_manual_prediction: "Admin do grupo",
 };
 
 /** Tela — Logs do Sistema (PRD07-06). */

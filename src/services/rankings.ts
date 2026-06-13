@@ -55,6 +55,26 @@ export async function getGeneralRanking(): Promise<Ranking | null> {
 }
 
 /**
+ * Reprocessa o ranking fechado do pool do group_admin logado
+ * (`POST /api/group/rankings/recalc`).
+ *
+ * Recomputa SÓ o doc `rankings/pool-{groupId}-geral` (Tela 01 / GET /api/rankings/pool),
+ * re-rankeando os membros do pool a partir dos palpites + resultados atuais. Corrige
+ * defasagem do próprio pool sem o custo do recalc global. A rota resolve o `groupId`
+ * pela sessão (o client nunca o envia) e autoriza só group_admin/super_admin; demais
+ * papéis recebem 403. Status não-OK → erro (o chamador trata).
+ */
+export async function triggerGroupRankingRecalc(): Promise<void> {
+  const res = await fetch("/api/group/rankings/recalc", {
+    method: "POST",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Falha ao reprocessar o ranking do grupo (${res.status}).`);
+  }
+}
+
+/**
  * Ranking FECHADO do pool do usuário logado (PRD-09). Lê via
  * `GET /api/rankings/pool` — o servidor resolve o `groupId` pela sessão e serve
  * `rankings/pool-{groupId}-geral`. O client NÃO passa o pool (isolamento). Usuário

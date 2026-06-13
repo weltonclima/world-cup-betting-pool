@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { usePoolRanking } from "@/features/rankings";
 import { paginate } from "@/features/rankings/lib";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { RankingEntry } from "@/types";
@@ -16,10 +16,11 @@ import type { RankingEntry } from "@/types";
 import { RankingSkeleton } from "./RankingSkeleton";
 import { RankingEmptyState } from "./RankingEmptyState";
 import { RankingErrorState } from "./RankingErrorState";
+import { RecalcGroupRankingButton } from "./RecalcGroupRankingButton";
 
 const PAGE_SIZE = 20;
 
-/** Iniciais p/ fallback de avatar (sem foto no schema). */
+/** Iniciais p/ fallback de avatar (quando sem foto ou imagem quebrada). */
 function initials(entry: RankingEntry): string {
   const base = entry.name ?? entry.nickname;
   return base
@@ -31,6 +32,26 @@ function initials(entry: RankingEntry): string {
 
 function accuracyLabel(entry: RankingEntry): string {
   return entry.accuracy === undefined ? "—" : `${entry.accuracy}%`;
+}
+
+/** Conectores de sobrenome ignorados na abreviação (preposições/artigos PT-BR). */
+const SURNAME_CONNECTORS = new Set(["da", "de", "do", "das", "dos", "e"]);
+
+/**
+ * Nome de exibição compacto: primeiro nome por extenso + iniciais ("X.") das
+ * palavras restantes do sobrenome, ignorando conectores ("da", "de", ...).
+ * Ex.: "Maria Eduarda Santos" → "Maria E. S."; "Welton da Silva Lima" →
+ * "Welton S. L.". Nome único (sem sobrenome) fica inalterado. O `aria-label`
+ * mantém o nome completo — a abreviação é só visual.
+ */
+function displayName(entry: RankingEntry): string {
+  const base = (entry.name ?? entry.nickname).trim();
+  const [first = base, ...rest] = base.split(/\s+/);
+  const surnameInitials = rest
+    .filter((w) => !SURNAME_CONNECTORS.has(w.toLowerCase()))
+    .map((w) => `${w.charAt(0).toUpperCase()}.`)
+    .join(" ");
+  return surnameInitials ? `${first} ${surnameInitials}` : first;
 }
 
 /** Tela 01 — Ranking do pool do usuário (PRD-05 TASK-08, fechado por pool PRD-09). */
@@ -60,6 +81,10 @@ export function GeneralRanking() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Ação admin: reprocessa o ranking do pool (só group_admin/super_admin;
+          retorna null p/ os demais — sem item flex, sem gap extra). */}
+      <RecalcGroupRankingButton onDone={() => void refetch()} />
+
       <RankingPodium top3={podium} currentUid={currentUid} />
 
       <ol className="flex flex-col gap-2">
@@ -100,6 +125,15 @@ export function GeneralRanking() {
 }
 
 // ───────────────────────── Pódio ─────────────────────────
+// Medalha por slot do pódio (0=ouro,1=prata,2=bronze). Ouro/prata/bronze não
+// existem no tema → cores diretas (convenção universal de pódio). O número textual
+// ("1º") garante a11y independente de cor (color-not-only).
+const MEDAL_CLASS = [
+  "bg-amber-400 text-amber-950", // 1º
+  "bg-zinc-300 text-zinc-800", // 2º
+  "bg-orange-300 text-orange-900", // 3º
+] as const;
+
 function RankingPodium({
   top3,
   currentUid,
@@ -110,34 +144,56 @@ function RankingPodium({
   // DOM em ordem de ranking (1º,2º,3º) p/ leitura; ordem visual 2-1-3 via `order`.
   const visualOrder = ["order-2", "order-1", "order-3"]; // índice 0=1º,1=2º,2=3º
   return (
-    <ul className="flex items-end justify-center gap-3">
+    <ul className="flex items-end justify-center gap-2 sm:gap-3">
       {top3.map((entry, i) => {
         const isFirst = i === 0;
         const you = entry.uid === currentUid;
+        const name = entry.name ?? entry.nickname;
         return (
-          <li key={entry.uid} className={cn("flex-1", visualOrder[i])}>
+          <li key={entry.uid} className={cn("min-w-0 flex-1", visualOrder[i])}>
             <Link
               href={`/rankings/profile/${entry.uid}`}
-              aria-label={`${entry.position}º lugar: ${entry.name ?? entry.nickname}, ${entry.points} pontos${you ? " (você)" : ""}`}
+              aria-label={`${entry.position}º lugar: ${name}, ${entry.points} pontos, ${accuracyLabel(entry)} de aproveitamento${you ? " (você)" : ""}`}
               className={cn(
-                "flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "flex flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center sm:gap-2 sm:p-3",
+                "transition-colors transition-transform duration-200 ease-out",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "motion-safe:active:scale-[0.98]",
                 isFirst
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "border-border bg-card hover:bg-accent",
+                  ? "border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                  : "border-border bg-card hover:bg-accent hover:text-accent-foreground",
               )}
             >
-              {isFirst && (
-                <Crown size={20} aria-hidden="true" className="shrink-0" />
-              )}
+              {/* Indicador de posição: medalha + número (visível nos 3). */}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
+                  MEDAL_CLASS[i],
+                )}
+              >
+                {isFirst && <Crown size={12} className="shrink-0" />}
+                {entry.position}º
+              </span>
               <Avatar className={isFirst ? "h-14 w-14" : "h-12 w-12"}>
+                <AvatarImage src={entry.avatarUrl} alt="" />
                 <AvatarFallback>{initials(entry)}</AvatarFallback>
               </Avatar>
-              <span className="max-w-full truncate text-sm font-medium">
-                {entry.name ?? entry.nickname}
+              <span className="max-w-full truncate text-xs font-medium sm:text-sm">
+                {displayName(entry)}
               </span>
-              <span className="text-lg font-bold tabular-nums">
+              <span className="text-base font-bold tabular-nums sm:text-lg">
                 {entry.points} pts
+              </span>
+              <span
+                className={cn(
+                  "text-xs tabular-nums",
+                  isFirst
+                    ? "text-primary-foreground/80"
+                    : "text-muted-foreground",
+                )}
+              >
+                {accuracyLabel(entry)}
               </span>
               {you && (
                 <Badge className="bg-primary text-primary-foreground">
@@ -174,11 +230,12 @@ function RankingRow({
           {entry.position}
         </span>
         <Avatar className="h-10 w-10 shrink-0">
+          <AvatarImage src={entry.avatarUrl} alt="" />
           <AvatarFallback>{initials(entry)}</AvatarFallback>
         </Avatar>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-2 truncate font-medium text-foreground">
-            {entry.name ?? entry.nickname}
+            {displayName(entry)}
             {isCurrentUser && (
               <Badge className="bg-primary text-primary-foreground">Você</Badge>
             )}

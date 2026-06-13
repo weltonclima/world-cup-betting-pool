@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   Link2,
+  Pencil,
   Settings,
   Shield,
   Users,
@@ -174,6 +175,11 @@ function DashboardContent({ data }: { data: GroupDashboardData }): JSX.Element {
             href="/group/settings"
             icon={<Settings size={20} aria-hidden="true" />}
             label="Configurações"
+          />
+          <QuickAction
+            href="/group/predictions"
+            icon={<Pencil size={20} aria-hidden="true" />}
+            label="Palpites"
           />
         </div>
       </section>
