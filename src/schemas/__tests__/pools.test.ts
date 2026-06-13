@@ -107,6 +107,14 @@ describe("pools › poolSchema", () => {
     expect(poolSchema.safeParse({ ...valid, extra: "x" }).success).toBe(false);
   });
 
+  it("strip() descarta campos extras e faz parse com sucesso (regressão TASK-01 — resolveInvite no Firestore)", () => {
+    // Docs Firestore podem ter campos de versões anteriores; .strip() na leitura
+    // garante que o parse não rejeita por campos desconhecidos.
+    const result = poolSchema.strip().safeParse({ ...valid, campoLegado: "ignorar" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty("campoLegado");
+  });
+
   it("rejeita campo obrigatório ausente (status)", () => {
     const { status: _status, ...semStatus } = valid;
     void _status;

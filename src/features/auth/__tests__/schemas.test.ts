@@ -256,7 +256,8 @@ describe("auth › inferência de tipos", () => {
       name: string;
       nickname: string;
       email: string;
-      groupId: string;
+      // Opcional: cadastro comum não escolhe grupo; só vem do convite via presetGroup.
+      groupId?: string;
       password: string;
       confirmPassword: string;
     }>();

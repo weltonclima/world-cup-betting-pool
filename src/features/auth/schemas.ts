@@ -33,18 +33,18 @@ export const loginFormSchema = z.object({
   password: passwordField,
 });
 
-// Cadastro: nome, apelido, e-mail, grupo, senha + confirmação.
+// Cadastro: nome, apelido, e-mail, senha + confirmação.
 // `confirmPassword` é validação exclusiva do frontend
 // (não vai ao Firebase Auth nem ao Firestore).
-// `groupId` (PRD-09, TASK-07): o id do pool ativo selecionado na busca embutida.
-// Obrigatório no signup novo (todo usuário pertence a um grupo) mesmo que o campo
-// seja opcional no `userSchema` durante a migração (R4 — não quebra docs legados).
+// `groupId` é OPCIONAL: o cadastro comum (`/signup`) não seleciona grupo; a
+// associação a um pool acontece apenas pelo fluxo de convite (`/invite/[code]`),
+// que injeta o `groupId` travado via `presetGroup` (não é campo do formulário).
 export const signupFormSchema = z
   .object({
     name: z.string().trim().min(1, { message: "Informe seu nome completo." }),
     nickname: z.string().trim().min(1, { message: "Informe seu apelido." }),
     email: emailField,
-    groupId: z.string().min(1, { message: "Selecione o seu grupo." }),
+    groupId: z.string().optional(),
     password: passwordField,
     confirmPassword: z.string(),
   })
