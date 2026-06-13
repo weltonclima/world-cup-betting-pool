@@ -46,7 +46,7 @@ export interface NextMatchSummary {
   predictionsHref: string;
 }
 
-/** Um resultado recente com acertou/errou calculado. */
+/** Um resultado recente com os pontos ponderados do palpite do usuário. */
 export interface RecentResult {
   matchId: string;
   kickoffAt: string;
@@ -55,7 +55,10 @@ export interface RecentResult {
   matchHomeScore: number;      // placar real — não null (jogo finished, validado pelo schema)
   matchAwayScore: number;
   userPrediction: { homeScore: number; awayScore: number } | null;
-  isCorrect: boolean;          // true se palpite == placar real; false se sem palpite ou errou
+  // Pontos ponderados do palpite neste jogo (scorePrediction): 10 = placar
+  // exato, 5 = acertou o vencedor, 0 = errou. Sem palpite → 0 (use
+  // `userPrediction === null` para distinguir "sem palpite" de "errou").
+  points: 0 | 5 | 10;
 }
 
 /** Resumo de estatísticas do usuário. */

@@ -4,10 +4,11 @@ import { useCallback } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 
+import { scorePrediction } from "@/features/predictions/lib";
+
 import {
   buildPredictionsHref,
   buildTeamMap,
-  computeIsCorrect,
   deriveCurrentStage,
   deriveNotices,
   derivePerformanceSummary,
@@ -159,9 +160,10 @@ export function useHomeDashboard(): HomeDashboardData {
     };
   }
 
-  // 10. Últimos resultados com join de teams + isCorrect
-  // W-02: placar non-null garantido pelo schema para jogos finished;
-  // guard explícito em computeIsCorrect protege contra dados inconsistentes.
+  // 10. Últimos resultados com join de teams + pontos ponderados
+  // W-02: placar non-null garantido pelo schema para jogos finished.
+  // Pontos vêm de scorePrediction (mesma regra do ranking: 10/5/0); sem
+  // palpite → 0 pts e userPrediction null (a UI distingue "sem palpite").
   const recentResults: RecentResult[] = recent.flatMap((match) => {
     // Omite jogo sem placar (não deveria ocorrer para finished, mas protege o tipo)
     if (match.homeScore === null || match.awayScore === null) return [];
@@ -174,7 +176,7 @@ export function useHomeDashboard(): HomeDashboardData {
       matchHomeScore: match.homeScore,
       matchAwayScore: match.awayScore,
       userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
-      isCorrect: computeIsCorrect(match, pred),
+      points: pred ? scorePrediction(pred, match).points : 0,
     }];
   });
 

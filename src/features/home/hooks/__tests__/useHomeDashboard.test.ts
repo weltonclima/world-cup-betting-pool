@@ -471,8 +471,8 @@ describe("useHomeDashboard — predictionStatus", () => {
   });
 });
 
-describe("useHomeDashboard — isCorrect em recentResults", () => {
-  it("isCorrect true para palpite com placar exato", () => {
+describe("useHomeDashboard — points em recentResults", () => {
+  it("10 pts para palpite com placar exato", () => {
     const match = makeFinishedMatch("match-01", 2, 1);
     setupMocks({
       recentData: [match],
@@ -481,10 +481,12 @@ describe("useHomeDashboard — isCorrect em recentResults", () => {
 
     const { result } = renderHook(() => useHomeDashboard());
     expect(result.current.recentResults).toHaveLength(1);
-    expect(result.current.recentResults[0]?.isCorrect).toBe(true);
+    expect(result.current.recentResults[0]?.points).toBe(10);
   });
 
-  it("isCorrect false para palpite errado", () => {
+  it("5 pts para palpite que acertou o vencedor (regressão do bug)", () => {
+    // Real 2x1 (mandante), palpite 3x0 (mandante): vencedor certo, placar
+    // errado → 5 pts. Antes era exibido como "Errou".
     const match = makeFinishedMatch("match-01", 2, 1);
     setupMocks({
       recentData: [match],
@@ -492,10 +494,22 @@ describe("useHomeDashboard — isCorrect em recentResults", () => {
     });
 
     const { result } = renderHook(() => useHomeDashboard());
-    expect(result.current.recentResults[0]?.isCorrect).toBe(false);
+    expect(result.current.recentResults[0]?.points).toBe(5);
   });
 
-  it("isCorrect false quando sem palpite para o jogo", () => {
+  it("0 pts para palpite que errou o vencedor", () => {
+    // Real 2x1 (mandante), palpite 0x3 (visitante): vencedor errado → 0 pts.
+    const match = makeFinishedMatch("match-01", 2, 1);
+    setupMocks({
+      recentData: [match],
+      predictionsData: [makePrediction("match-01", 0, 3)],
+    });
+
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.recentResults[0]?.points).toBe(0);
+  });
+
+  it("0 pts quando sem palpite para o jogo", () => {
     const match = makeFinishedMatch("match-01", 2, 1);
     setupMocks({
       recentData: [match],
@@ -503,7 +517,7 @@ describe("useHomeDashboard — isCorrect em recentResults", () => {
     });
 
     const { result } = renderHook(() => useHomeDashboard());
-    expect(result.current.recentResults[0]?.isCorrect).toBe(false);
+    expect(result.current.recentResults[0]?.points).toBe(0);
     expect(result.current.recentResults[0]?.userPrediction).toBeNull();
   });
 
