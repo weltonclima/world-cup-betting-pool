@@ -1,9 +1,9 @@
+import { Clock } from "lucide-react";
 import Link from "next/link";
 
 import { AuthLogo } from "@/components/auth/AuthLogo";
 import { SignupForm } from "@/features/auth/SignupForm";
-import { getAdminFirestore } from "@/server/firebaseAdmin";
-import { inviteCodeSchema, inviteSchema, poolSchema } from "@/schemas";
+import { resolveInvite } from "@/server/invites/resolveInvite";
 
 /**
  * Página pública de resgate de convite (PRD-10, A2) — destino do link
@@ -24,61 +24,6 @@ export const dynamic = "force-dynamic";
 
 interface InvitePageProps {
   params: Promise<{ code: string }>;
-}
-
-interface ValidInvite {
-  groupId: string;
-  groupName: string;
-}
-
-type Resolution =
-  | { ok: true; invite: ValidInvite }
-  | { ok: false; reason: string };
-
-/** Valida o convite server-side e resolve o nome do pool. Nunca lança. */
-async function resolveInvite(rawCode: string): Promise<Resolution> {
-  const parsedCode = inviteCodeSchema.safeParse(rawCode);
-  if (!parsedCode.success) {
-    return { ok: false, reason: "Este link de convite é inválido." };
-  }
-
-  try {
-    const db = getAdminFirestore();
-    const snap = await db.collection("invites").doc(parsedCode.data).get();
-    if (!snap.exists) {
-      return { ok: false, reason: "Convite não encontrado." };
-    }
-    const invite = inviteSchema.parse(snap.data());
-
-    if (!invite.isActive) {
-      return { ok: false, reason: "Este convite não está mais ativo." };
-    }
-    if (Date.parse(invite.expiresAt) <= Date.now()) {
-      return { ok: false, reason: "Este convite expirou." };
-    }
-    if (invite.usedCount >= invite.maxUses) {
-      return { ok: false, reason: "Este convite atingiu o limite de usos." };
-    }
-
-    const poolSnap = await db.collection("pools").doc(invite.groupId).get();
-    if (!poolSnap.exists) {
-      return { ok: false, reason: "O grupo deste convite não está mais disponível." };
-    }
-    const pool = poolSchema.parse(poolSnap.data());
-    if (pool.status === "blocked") {
-      return { ok: false, reason: "O grupo deste convite está bloqueado." };
-    }
-
-    return {
-      ok: true,
-      invite: { groupId: invite.groupId, groupName: pool.name },
-    };
-  } catch {
-    return {
-      ok: false,
-      reason: "Não foi possível validar o convite. Tente novamente.",
-    };
-  }
 }
 
 export default async function InvitePage({ params }: InvitePageProps) {
@@ -115,6 +60,26 @@ export default async function InvitePage({ params }: InvitePageProps) {
               }}
               inviteCode={code}
             />
+
+            <p className="text-center text-sm text-muted-foreground">
+              Já tem conta?{" "}
+              <Link href="/login" className="font-medium text-primary hover:underline">
+                Entrar
+              </Link>
+            </p>
+          </>
+        ) : resolution.code === "expired" ? (
+          <>
+            <div className="flex flex-col items-center gap-4 text-center">
+              <Clock aria-hidden className="h-12 w-12 text-muted-foreground" />
+              <h1 className="text-2xl font-bold text-foreground">
+                Este link expirou
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Este link de convite não está mais disponível. Peça ao
+                administrador do grupo para gerar um novo.
+              </p>
+            </div>
 
             <p className="text-center text-sm text-muted-foreground">
               Já tem conta?{" "}

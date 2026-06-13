@@ -5,7 +5,7 @@
 ## Feature slices (`src/features/*`)
 | Feature | Domain |
 |---|---|
-| `auth` | Login, signup, forgot/reset password, pending-approval gate. |
+| `auth` | Login, signup, forgot/reset password, pending-approval gate. **Signup dual-mode:** direct `/signup` (uses `GroupSelectField` — pool discovery); invite flow `/invite/[code]` (Server Component validates invite via Admin SDK via local `resolveInvite()`, renders `SignupForm` with `presetGroup`+`inviteCode` locked; on success calls `redeemInvite` which hits `POST /api/invite/[code]/redeem` to increment `usedCount`). `resolveInvite()` retorna `{ ok: true, invite }` ou `{ ok: false, reason, code: "expired" \| "generic" }` — discriminante "expired" aciona UI dedicada (Clock + mensagem "Este link expirou"). Login page **não** tem link de cadastro sem convite (removido). |
 | `home` | Landing/dashboard for approved users. Compositor `useHomeDashboard` wires 9 resource hooks (ranking, statistics, poolStats, nextMatch, recentResults, teams, predictions, settings, **matchesList**); pure derivations in `lib/homeDashboardHelpers.ts` (cards are dumb). Cards post home-revamp: `HeroCard` (rank+percentile+sparkline), `OpenMatchesCard` (open bets + notices inline), `RaioXCard` (donut breakdown), `NextMatchCard`, `LastResultsCard`. Derivations: `deriveHeroSummary`, `deriveOpenMatches`, `derivePredictionBreakdown`, `deriveCurrentStage`, `deriveNotices`, `deriveRankingSummary`. Note: `usePoolStats` lives in `rankings/hooks` (not `home/hooks`). |
 | `matches` | Match list + detail + predict entry. |
 | `predictions` | Palpites: per-match, group batch (mass score entry), bracket (chave/stage), best-thirds, summaries. Largest slice (~65 files). `lib`: `isPredictionLocked`, `predictionDocId`. |
@@ -14,7 +14,7 @@
 | `notifications` | List/detail + preferences. System notifications only (approval/blocking). |
 | `admin` | (legacy super-admin surface) Dashboard, users, api-status, logs. |
 | `superAdmin` | Global super_admin console (PRD-09/11): manage all pools, admins, worldcup sync, matches edit. |
-| `groupAdmin` | Pool-scoped group_admin console (PRD-09/10): own pool members (approve/block/reject/remove/promote), invites, settings, recalc. |
+| `groupAdmin` | Pool-scoped group_admin console (PRD-09/10): own pool members (approve/block/reject/remove/promote), invites (`GroupInvites.tsx` — generate/copy/share link), settings, recalc. |
 | `groups` | Pool discovery/join: search active pools, create pool, join via invite. `schemas.ts` local. |
 | `worldcup` | Tournament views (groups standings, bracket) — consumes `/api/worldcup/*`. |
 | `passkeys` | WebAuthn/passkey biometric login (register/login flows, credential mgmt). API under `api/auth/webauthn/*`. |
@@ -51,7 +51,8 @@
 | `rankings/[scope]`, `rankings/pool` | **Server-scoped ranking reads** — `geral`/`pool-{id}-geral` & phase scopes no longer client-readable; closure scoped by session/`groupId`. |
 | `group/*` | **group_admin** pool ops: `dashboard`, `settings`, `predictions`, `rankings/recalc`, `invites`(+`[id]`), `users/{pending,approved,blocked,approve,reject,block,unblock,promote,remove}`. |
 | `groups`, `groups/[id]`, `groups/search` | Pool discovery (approved, status=active). |
-| `invite/[code]/redeem` | Join a pool via invite code. |
+| `invite/[code]/redeem` | `POST` — join a pool via invite code (auth = ID token, increments `usedCount` atomically). |
+| `invite/[code]/resolve` | `GET` — **TASK-04 target, não existe ainda**. Endpoint público que resolve código → `{ groupId, groupName }` sem auth. Lógica extraída de `resolveInvite()` do Server Component para `src/server/invites/` (util compartilhado). |
 | `admin/*` | **super_admin** global ops: `dashboard`, `users`(+`[uid]/group`), `admins`, `groups`(+`[id]/{status,admin,members}`), `matches`(+`[id]`), `worldcup/sync` (openfootball→Firestore). |
 
 ## Firebase wrappers (`src/firebase/*`)

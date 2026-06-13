@@ -22,6 +22,7 @@ import {
   useCreateInvite,
   useGroupSettings,
 } from "@/features/groupAdmin/hooks";
+import { GroupServiceError } from "@/services/group";
 import type { Invite } from "@/types/invites";
 
 import { GroupAdminSubHeader } from "./GroupAdminSubHeader";
@@ -51,7 +52,7 @@ function validityDays(invite: Invite): number {
  * Geração desabilitada quando `allowInvites === false` (PRD10-05).
  */
 export function GroupInvites(): JSX.Element {
-  const { data, isLoading, isError, refetch } = useGroupInvites();
+  const { data, isLoading, isError, error, refetch } = useGroupInvites();
   const settings = useGroupSettings();
   const allowInvites = settings.data
     ? settings.data.allowInvites !== false
@@ -66,12 +67,22 @@ export function GroupInvites(): JSX.Element {
     )[0];
   }, [data]);
 
+  // 403: admin sem groupId no doc — configuração inválida, não erro transitório.
+  const isNotLinked =
+    error instanceof GroupServiceError && error.status === 403;
+
   return (
     <div className="flex flex-col gap-5">
       <GroupAdminSubHeader title="Convites" />
 
       {isError && !isLoading ? (
-        <ErrorState onRetry={() => void refetch()} />
+        isNotLinked ? (
+          <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+            Você não tem permissão para gerenciar convites. Contate o suporte para corrigir seu cadastro de administrador.
+          </p>
+        ) : (
+          <ErrorState onRetry={() => void refetch()} />
+        )
       ) : isLoading || !data ? (
         <ListSkeleton />
       ) : (
