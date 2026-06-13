@@ -14,6 +14,11 @@ vi.mock("@/features/rankings", () => ({
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: useAuthMock,
 }));
+// RecalcGroupRankingButton importa o serviço (barrel → firebase client). Mocka só a
+// função usada para o teste não carregar o env do Firebase.
+vi.mock("@/services", () => ({
+  triggerGroupRankingRecalc: vi.fn(),
+}));
 
 // Import por path direto p/ não cair no mock do barrel.
 import { GeneralRanking } from "@/features/rankings/components/GeneralRanking";

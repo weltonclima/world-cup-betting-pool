@@ -418,6 +418,128 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   };
 }
 
+export interface RecalcPoolSummary {
+  poolId: string;
+  participants: number;
+  finishedMatches: number;
+}
+
+/**
+ * Recálculo ESCOPADO a um único pool (PRD-09 multi-tenant).
+ *
+ * Reprocessa só o ranking fechado do pool `poolId` — doc `rankings/pool-{poolId}-geral`,
+ * o mesmo servido por `GET /api/rankings/pool` e exibido na Tela 01 (GeneralRanking).
+ * Gatilho: botão do group_admin na tela de ranking (`POST /api/group/rankings/recalc`),
+ * para corrigir defasagem do próprio pool sem o custo do recalc global (super_admin).
+ *
+ * Pontuação idêntica à do recalc geral (placar exato = 10, vencedor = 5 via
+ * `scorePrediction`), mas a posição é RE-RANKEADA só entre os membros do pool. O
+ * denominador de aproveitamento é o de partidas finalizadas GLOBAL (`finishedGeral`),
+ * igual ao `geralParticipants` do recalc completo. Idempotente. Lança em falha de
+ * fonte de dados (`getEffectiveMatches`) — o chamador trata.
+ */
+export async function recalcPoolRanking(
+  db: Firestore,
+  poolId: string,
+): Promise<RecalcPoolSummary> {
+  const matches = await getEffectiveMatches();
+  const finished = matches.filter((m) => m.status === "finished");
+  const matchById = new Map(finished.map((m) => [m.id, m]));
+  const finishedGeral = finished.length;
+
+  // Membros aprovados do pool. Filtra `groupId` em memória (evita índice composto
+  // status+groupId); só este pool é tocado — isolamento multi-tenant (D2).
+  const usersSnap = await db
+    .collection("users")
+    .where("status", "==", "approved")
+    .get();
+  const members = usersSnap.docs
+    .map((d) => {
+      const parsed = userSchema.safeParse(d.data());
+      if (!parsed.success) {
+        console.warn("[recalc-pool] user malformado ignorado:", d.id);
+        return null;
+      }
+      return parsed.data;
+    })
+    .filter((u): u is NonNullable<typeof u> => u !== null && u.groupId === poolId);
+
+  // Palpites só dos membros — lotes de 10 (limite do operador `in` do Firestore).
+  const predsByUid = new Map<string, Array<ReturnType<typeof predictionSchema.parse>>>();
+  const uids = members.map((u) => u.uid);
+  for (let i = 0; i < uids.length; i += 10) {
+    const chunk = uids.slice(i, i + 10);
+    if (chunk.length === 0) continue;
+    const snap = await db.collection("predictions").where("uid", "in", chunk).get();
+    for (const d of snap.docs) {
+      const parsed = predictionSchema.safeParse(d.data());
+      if (!parsed.success) continue;
+      const list = predsByUid.get(parsed.data.uid) ?? [];
+      list.push(parsed.data);
+      predsByUid.set(parsed.data.uid, list);
+    }
+  }
+
+  // Agregação ponderada por membro (mesma regra do recalc geral).
+  const participants: RankableParticipant[] = members.map((u) => {
+    let points = 0;
+    let correct = 0; // exatos — alimenta o aproveitamento
+    let wrong = 0;
+    let firstPredictionAt: string | undefined;
+    for (const pred of predsByUid.get(u.uid) ?? []) {
+      if (
+        pred.createdAt !== undefined &&
+        (firstPredictionAt === undefined || pred.createdAt < firstPredictionAt)
+      ) {
+        firstPredictionAt = pred.createdAt;
+      }
+      const match = matchById.get(pred.matchId);
+      if (!match) continue; // partida não finalizada / inexistente
+      const scored = scorePrediction(pred, match);
+      points += scored.points; // ponderado (5/10)
+      if (scored.status === "correct") correct += 1; // EXATO
+      if (scored.status === "wrong") wrong += 1;
+    }
+    return {
+      uid: u.uid,
+      points,
+      accuracy: computeAccuracy(correct, finishedGeral),
+      wrong,
+      firstPredictionAt,
+    };
+  });
+
+  const userByUid = new Map(members.map((u) => [u.uid, u]));
+  const ranked = rankParticipants(participants);
+  const entries: RankingEntry[] = applyAvatarBudget(
+    ranked.map((r) => {
+      const u = userByUid.get(r.uid)!;
+      return {
+        uid: r.uid,
+        nickname: u.nickname,
+        name: u.name,
+        position: r.position,
+        points: r.points,
+        wrong: r.wrong,
+        accuracy: r.accuracy,
+        ...(u.avatarUrl !== undefined ? { avatarUrl: u.avatarUrl } : {}),
+      };
+    }),
+  );
+
+  await db.collection("rankings").doc(`pool-${poolId}-geral`).set({
+    scope: "geral",
+    updatedAt: new Date().toISOString(),
+    entries,
+  });
+
+  return {
+    poolId,
+    participants: members.length,
+    finishedMatches: finished.length,
+  };
+}
+
 /**
  * Recalcula best-effort (nunca lança). Use após gravar um resultado
  * (`PUT/DELETE /api/admin/matches/[id]`): mantém o ranking fresco em segundos sem

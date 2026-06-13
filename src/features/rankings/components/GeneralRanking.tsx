@@ -16,6 +16,7 @@ import type { RankingEntry } from "@/types";
 import { RankingSkeleton } from "./RankingSkeleton";
 import { RankingEmptyState } from "./RankingEmptyState";
 import { RankingErrorState } from "./RankingErrorState";
+import { RecalcGroupRankingButton } from "./RecalcGroupRankingButton";
 
 const PAGE_SIZE = 20;
 
@@ -80,6 +81,10 @@ export function GeneralRanking() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Ação admin: reprocessa o ranking do pool (só group_admin/super_admin;
+          retorna null p/ os demais — sem item flex, sem gap extra). */}
+      <RecalcGroupRankingButton onDone={() => void refetch()} />
+
       <RankingPodium top3={podium} currentUid={currentUid} />
 
       <ol className="flex flex-col gap-2">

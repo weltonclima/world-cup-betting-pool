@@ -21,6 +21,7 @@ export {
   getUserRanking,
   getParticipantProfile,
   getPoolStats,
+  triggerGroupRankingRecalc,
   type UserRankingResult,
 } from "./rankings";
 export { getStatistics } from "./statistics";
