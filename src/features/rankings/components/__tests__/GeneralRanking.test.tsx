@@ -64,15 +64,42 @@ afterEach(() => vi.clearAllMocks());
 describe("GeneralRanking", () => {
   it("mostra pódio top-3 e a lista a partir de #4", () => {
     render(<GeneralRanking />);
-    expect(screen.getByText("Joao Silva")).toBeTruthy(); // pódio 1º
-    expect(screen.getByText("Maria Souza")).toBeTruthy(); // pódio 2º
-    expect(screen.getByText("Lucas Pereira")).toBeTruthy(); // lista #5
+    // Nome de exibição compacto: primeiro nome + inicial do sobrenome.
+    expect(screen.getByText("Joao S.")).toBeTruthy(); // pódio 1º
+    expect(screen.getByText("Maria S.")).toBeTruthy(); // pódio 2º
+    expect(screen.getByText("Lucas P.")).toBeTruthy(); // lista #5
   });
 
   it("destaca o usuário logado com badge 'Você'", () => {
     render(<GeneralRanking />);
     expect(screen.getByText("Você")).toBeTruthy();
-    expect(screen.getByText("Voce Mesmo")).toBeTruthy();
+    expect(screen.getByText("Voce M.")).toBeTruthy();
+  });
+
+  it("abrevia sobrenome (primeiro nome + iniciais) ignorando conectores", () => {
+    const named = [
+      entry("u1", 1, 98, "Welton da Silva Lima"), // conectores "da" caem
+      entry("u2", 2, 95, "Maria Eduarda Santos"), // pódio multi-sobrenome
+      entry("u3", 3, 90, "Ana"), // nome único: inalterado
+      entry("u-me", 4, 87, "Joao de Souza"), // lista: "de" cai
+    ];
+    usePoolRankingMock.mockReturnValue({
+      data: { scope: "geral", updatedAt: "x", entries: named },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<GeneralRanking />);
+    expect(screen.getByText("Welton S. L.")).toBeTruthy();
+    expect(screen.getByText("Maria E. S.")).toBeTruthy();
+    expect(screen.getByText("Ana")).toBeTruthy();
+    expect(screen.getByText("Joao S.")).toBeTruthy();
+    // a11y: aria-label preserva o nome completo.
+    expect(
+      screen.getByLabelText(
+        "1º lugar: Welton da Silva Lima, 98 pontos, 50% de aproveitamento",
+      ),
+    ).toBeTruthy();
   });
 
   it("estado vazio quando não há entries", () => {
@@ -142,10 +169,10 @@ describe("RankingPodium (TASK-06)", () => {
       refetch: vi.fn(),
     });
     render(<GeneralRanking />);
-    // pódio renderiza posição e nome normalmente, com ou sem foto.
+    // pódio renderiza posição e nome (compacto) normalmente, com ou sem foto.
     expect(screen.getByText("1º")).toBeTruthy();
-    expect(screen.getByText("Joao Silva")).toBeTruthy();
-    expect(screen.getByText("Pedro Lima")).toBeTruthy();
+    expect(screen.getByText("Joao S.")).toBeTruthy();
+    expect(screen.getByText("Pedro L.")).toBeTruthy();
   });
 
   it("exibe o aproveitamento no card do pódio", () => {
@@ -173,7 +200,7 @@ describe("RankingRow lista (TASK-07)", () => {
       refetch: vi.fn(),
     });
     render(<GeneralRanking />);
-    expect(screen.getByText("Lucas Pereira")).toBeTruthy();
+    expect(screen.getByText("Lucas P.")).toBeTruthy();
     // Sem foto (jsdom) → fallback de iniciais "LP".
     expect(screen.getByText("LP")).toBeTruthy();
   });

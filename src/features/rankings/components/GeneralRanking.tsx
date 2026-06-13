@@ -33,6 +33,26 @@ function accuracyLabel(entry: RankingEntry): string {
   return entry.accuracy === undefined ? "—" : `${entry.accuracy}%`;
 }
 
+/** Conectores de sobrenome ignorados na abreviação (preposições/artigos PT-BR). */
+const SURNAME_CONNECTORS = new Set(["da", "de", "do", "das", "dos", "e"]);
+
+/**
+ * Nome de exibição compacto: primeiro nome por extenso + iniciais ("X.") das
+ * palavras restantes do sobrenome, ignorando conectores ("da", "de", ...).
+ * Ex.: "Maria Eduarda Santos" → "Maria E. S."; "Welton da Silva Lima" →
+ * "Welton S. L.". Nome único (sem sobrenome) fica inalterado. O `aria-label`
+ * mantém o nome completo — a abreviação é só visual.
+ */
+function displayName(entry: RankingEntry): string {
+  const base = (entry.name ?? entry.nickname).trim();
+  const [first = base, ...rest] = base.split(/\s+/);
+  const surnameInitials = rest
+    .filter((w) => !SURNAME_CONNECTORS.has(w.toLowerCase()))
+    .map((w) => `${w.charAt(0).toUpperCase()}.`)
+    .join(" ");
+  return surnameInitials ? `${first} ${surnameInitials}` : first;
+}
+
 /** Tela 01 — Ranking do pool do usuário (PRD-05 TASK-08, fechado por pool PRD-09). */
 export function GeneralRanking() {
   const auth = useAuth();
@@ -155,7 +175,7 @@ function RankingPodium({
                 <AvatarFallback>{initials(entry)}</AvatarFallback>
               </Avatar>
               <span className="max-w-full truncate text-xs font-medium sm:text-sm">
-                {name}
+                {displayName(entry)}
               </span>
               <span className="text-base font-bold tabular-nums sm:text-lg">
                 {entry.points} pts
@@ -210,7 +230,7 @@ function RankingRow({
         </Avatar>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-2 truncate font-medium text-foreground">
-            {entry.name ?? entry.nickname}
+            {displayName(entry)}
             {isCurrentUser && (
               <Badge className="bg-primary text-primary-foreground">Você</Badge>
             )}
