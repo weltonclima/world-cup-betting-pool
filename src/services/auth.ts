@@ -225,9 +225,10 @@ export async function signInWithBiometricToken(
  *
  * O cliente grava `role: "participant"` (canônico PRD-09; as Security Rules
  * aceitam tanto `participant` quanto o legado `user`) / `status: "pending"`. A
- * promoção a admin é feita por Cloud Function (TASK-05). O `groupId` (PRD-09,
- * TASK-07) referencia o pool ativo selecionado no cadastro — todo usuário novo
- * nasce associado a um grupo.
+ * promoção a admin é feita por Cloud Function (TASK-05). O `groupId` só é gravado
+ * quando presente: o cadastro comum (`/signup`) nasce SEM grupo; a associação a um
+ * pool ocorre apenas pelo fluxo de convite (`/invite/[code]`), que injeta o
+ * `groupId` travado.
  *
  * Atomicidade (R2): se a gravação do doc falhar, a conta de Auth recém-criada
  * é removida via `deleteUser` (rollback) para não deixar conta órfã. Se o
@@ -258,7 +259,9 @@ export async function signUp({
       email,
       role: "participant",
       status: "pending",
-      groupId,
+      // Só persiste o grupo quando veio de um convite: Firestore rejeita `undefined`
+      // e o cadastro comum nasce sem grupo (associação só via `/invite/[code]`).
+      ...(groupId ? { groupId } : {}),
       createdAt: new Date().toISOString(),
     });
   } catch (error) {

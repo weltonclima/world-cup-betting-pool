@@ -7,7 +7,6 @@ import { AtSign, Check, Lock, Mail, User } from "lucide-react";
 
 import { signupFormSchema, type SignupFormValues } from "@/features/auth/schemas";
 import { mapAuthError } from "@/features/auth/errors";
-import { GroupSelectField } from "@/features/groups/components/GroupSelectField";
 import { signUp } from "@/services/auth";
 import { redeemInvite } from "@/services/invites";
 import { PasswordInput } from "@/components/auth/PasswordInput";
@@ -189,6 +188,8 @@ export function SignupForm({ presetGroup, inviteCode }: SignupFormProps = {}) {
 
         {presetGroup ? (
           // Fluxo de convite: grupo fixado — confirmação read-only (sem busca).
+          // No cadastro comum o grupo não é escolhido: a associação a um pool só
+          // ocorre via convite (`/invite/[code]`).
           <FormItem>
             <FormLabel>Seu grupo</FormLabel>
             <p className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
@@ -198,25 +199,7 @@ export function SignupForm({ presetGroup, inviteCode }: SignupFormProps = {}) {
               </span>
             </p>
           </FormItem>
-        ) : (
-          <FormField
-            control={form.control}
-            name="groupId"
-            render={({ field, fieldState }) => (
-              <FormItem>
-                <FormLabel>Qual é o seu grupo?</FormLabel>
-                {/* GroupSelectField não é um input DOM (gerencia busca + lista),
-                    por isso não usa FormControl (que injeta props de <input>). */}
-                <GroupSelectField
-                  value={field.value}
-                  onChange={field.onChange}
-                  invalid={Boolean(fieldState.error)}
-                />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
+        ) : null}
 
         <FormField
           control={form.control}
