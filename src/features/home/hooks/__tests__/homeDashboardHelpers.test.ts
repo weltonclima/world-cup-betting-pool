@@ -7,8 +7,6 @@ import { describe, expect, it } from "vitest";
 
 import type { Match } from "@/types";
 import type { Prediction } from "@/types";
-import type { Ranking } from "@/types";
-import type { Statistics } from "@/types";
 import type { SystemSettings } from "@/types";
 import type { Team } from "@/types";
 
@@ -20,11 +18,8 @@ import {
   buildPredictionsHref,
   buildTeamMap,
   computeIsCorrect,
-  deriveCurrentStage,
   deriveNotices,
-  derivePerformanceSummary,
   derivePredictionStatus,
-  deriveRankingSummary,
   resolveTeam,
 } from "@/features/home/lib/homeDashboardHelpers";
 
@@ -86,30 +81,6 @@ function makeTeam(id: string, overrides: Partial<TeamWithId> = {}): TeamWithId {
     name: `Seleção ${id}`,
     code: "BRA",
     flagUrl: `https://flags.example.com/${id}.png`,
-    ...overrides,
-  };
-}
-
-function makeRanking(
-  entries: Ranking["entries"] = [],
-): Ranking {
-  return {
-    scope: "geral",
-    updatedAt: "2026-06-15T00:00:00.000Z",
-    entries,
-  };
-}
-
-function makeStatistics(
-  overrides: Partial<Statistics> = {},
-): Statistics {
-  return {
-    uid: "user-01",
-    totalCorrect: 5,
-    accuracy: 62.5,
-    longestStreak: 3,
-    correctByStage: { grupos: 5 },
-    positionHistory: [],
     ...overrides,
   };
 }
@@ -280,176 +251,16 @@ describe("buildPredictionsHref", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. deriveRankingSummary
-// ---------------------------------------------------------------------------
-
-describe("deriveRankingSummary", () => {
-  it("uid presente nas entries → retorna { position, totalParticipants, points }", () => {
-    const ranking = makeRanking([
-      { uid: "user-01", nickname: "user1", position: 1, points: 10 },
-      { uid: "user-02", nickname: "user2", position: 2, points: 8 },
-    ]);
-    const result = deriveRankingSummary(ranking, "user-01");
-    expect(result).toEqual({
-      position: 1,
-      totalParticipants: 2,
-      points: 10,
-    });
-  });
-
-  it("uid não está nas entries → null", () => {
-    const ranking = makeRanking([
-      { uid: "user-02", nickname: "user2", position: 1, points: 10 },
-    ]);
-    expect(deriveRankingSummary(ranking, "user-01")).toBeNull();
-  });
-
-  it("ranking null → null", () => {
-    expect(deriveRankingSummary(null, "user-01")).toBeNull();
-  });
-
-  it("ranking undefined → null", () => {
-    expect(deriveRankingSummary(undefined, "user-01")).toBeNull();
-  });
-
-  it("entries vazias → null (uid não pode estar em lista vazia)", () => {
-    const ranking = makeRanking([]);
-    expect(deriveRankingSummary(ranking, "user-01")).toBeNull();
-  });
-
-  it("totalParticipants reflete entries.length (A1)", () => {
-    const ranking = makeRanking([
-      { uid: "u1", nickname: "n1", position: 1, points: 5 },
-      { uid: "u2", nickname: "n2", position: 2, points: 4 },
-      { uid: "u3", nickname: "n3", position: 3, points: 3 },
-    ]);
-    const result = deriveRankingSummary(ranking, "u2");
-    expect(result?.totalParticipants).toBe(3);
-    expect(result?.position).toBe(2);
-    expect(result?.points).toBe(4);
-  });
-});
+// NOTE: deriveRankingSummary removido (TASK-04 home-revamp) — o trio
+// Ranking/Acertos/Aproveitamento foi substituído pelo Hero (deriveHeroSummary,
+// testado em deriveHeroSummary.test.ts).
+// NOTE: derivePerformanceSummary removido (TASK-03 home-revamp) — substituído
+// por derivePredictionBreakdown, testado em derivePredictionBreakdown.test.ts.
+// NOTE: deriveCurrentStage removido (TASK-04 home-revamp) — CurrentStageCard
+// eliminado na TASK-02 (substituído por OpenMatchesCard).
 
 // ---------------------------------------------------------------------------
-// 6. derivePerformanceSummary
-// ---------------------------------------------------------------------------
-
-describe("derivePerformanceSummary", () => {
-  it("statistics com dados → retorna totalCorrect, accuracy e longestStreak corretos", () => {
-    const stats = makeStatistics({ totalCorrect: 7, accuracy: 70, longestStreak: 3 });
-    const result = derivePerformanceSummary(stats);
-    expect(result.totalCorrect).toBe(7);
-    expect(result.accuracy).toBe(70);
-    expect(result.longestStreak).toBe(3);
-  });
-
-  it("gamesPredicted derivado de totalCorrect / (accuracy / 100) (D1)", () => {
-    // 7 acertos com 70% de aproveitamento → 10 palpites
-    const stats = makeStatistics({ totalCorrect: 7, accuracy: 70 });
-    const result = derivePerformanceSummary(stats);
-    expect(result.gamesPredicted).toBe(10);
-  });
-
-  it("gamesPredicted = 0 quando accuracy é 0 (evita divisão por zero)", () => {
-    const stats = makeStatistics({ totalCorrect: 0, accuracy: 0 });
-    const result = derivePerformanceSummary(stats);
-    expect(result.gamesPredicted).toBe(0);
-  });
-
-  it("statistics null → zeros", () => {
-    const result = derivePerformanceSummary(null);
-    expect(result.totalCorrect).toBe(0);
-    expect(result.accuracy).toBe(0);
-    expect(result.longestStreak).toBe(0);
-    expect(result.gamesPredicted).toBe(0);
-  });
-
-  it("statistics undefined → zeros", () => {
-    const result = derivePerformanceSummary(undefined);
-    expect(result.totalCorrect).toBe(0);
-    expect(result.accuracy).toBe(0);
-    expect(result.longestStreak).toBe(0);
-    expect(result.gamesPredicted).toBe(0);
-  });
-
-  it("longestStreak reflete statistics.longestStreak", () => {
-    const stats = makeStatistics({ longestStreak: 5 });
-    const result = derivePerformanceSummary(stats);
-    expect(result.longestStreak).toBe(5);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. deriveCurrentStage
-// ---------------------------------------------------------------------------
-
-describe("deriveCurrentStage", () => {
-  it("stage presente + round presente → label 'Rodada X de Y'", () => {
-    const settings = makeSettings({ currentStage: "grupos" });
-    const nextMatch = makeScheduledMatch({ round: 1 });
-    const result = deriveCurrentStage(settings, nextMatch, []);
-    expect(result.stage).toBe("grupos");
-    expect(result.roundLabel).toBe("Rodada 1 de 3");
-  });
-
-  it("stage 'grupos' + round 2 → 'Rodada 2 de 3'", () => {
-    const settings = makeSettings({ currentStage: "grupos" });
-    const nextMatch = makeScheduledMatch({ round: 2 });
-    const result = deriveCurrentStage(settings, nextMatch, []);
-    expect(result.roundLabel).toBe("Rodada 2 de 3");
-  });
-
-  it("stage 'final' + round null → roundLabel null", () => {
-    const settings = makeSettings({ currentStage: "final" });
-    const nextMatch = makeScheduledMatch({ round: null, stage: "final" });
-    const result = deriveCurrentStage(settings, nextMatch, []);
-    expect(result.stage).toBe("final");
-    expect(result.roundLabel).toBeNull();
-  });
-
-  it("stage presente + round null → roundLabel null", () => {
-    const settings = makeSettings({ currentStage: "oitavas" });
-    const nextMatch = makeScheduledMatch({ round: null });
-    const result = deriveCurrentStage(settings, nextMatch, []);
-    expect(result.roundLabel).toBeNull();
-  });
-
-  it("settings null → { stage: null, roundLabel: null }", () => {
-    const result = deriveCurrentStage(null, null, []);
-    expect(result.stage).toBeNull();
-    expect(result.roundLabel).toBeNull();
-  });
-
-  it("settings undefined → { stage: null, roundLabel: null }", () => {
-    const result = deriveCurrentStage(undefined, null, []);
-    expect(result.stage).toBeNull();
-    expect(result.roundLabel).toBeNull();
-  });
-
-  it("sem nextMatch → usa recentResults[0].round para roundLabel", () => {
-    const settings = makeSettings({ currentStage: "grupos" });
-    const recentMatch = makeFinishedMatch({ round: 3 });
-    const result = deriveCurrentStage(settings, null, [recentMatch]);
-    expect(result.roundLabel).toBe("Rodada 3 de 3");
-  });
-
-  it("sem nextMatch e sem recentResults → roundLabel null", () => {
-    const settings = makeSettings({ currentStage: "grupos" });
-    const result = deriveCurrentStage(settings, null, []);
-    expect(result.roundLabel).toBeNull();
-  });
-
-  it("oitavas: sempre 1 rodada", () => {
-    const settings = makeSettings({ currentStage: "oitavas" });
-    const nextMatch = makeScheduledMatch({ round: 1, stage: "oitavas" });
-    const result = deriveCurrentStage(settings, nextMatch, []);
-    expect(result.roundLabel).toBe("Rodada 1 de 1");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. deriveNotices
+// 6. deriveNotices
 // ---------------------------------------------------------------------------
 
 describe("deriveNotices", () => {

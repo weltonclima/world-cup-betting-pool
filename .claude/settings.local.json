@@ -17,5 +17,8 @@
       "mcp__plugin_expo_expo__testflight_crashes",
       "mcp__plugin_expo_expo__testflight_feedback"
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1"
   }
 }

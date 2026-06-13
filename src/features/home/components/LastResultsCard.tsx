@@ -26,39 +26,43 @@ export interface LastResultsCardProps {
 // ---------------------------------------------------------------------------
 
 /**
- * Badge de resultado do palpite do usuário.
+ * Badge de pontos do palpite do usuário (regra ponderada — 10/5/0).
  * Usa <span> com classes diretas — Badge Shadcn não tem variante win/loss (§3.6).
+ * Cores alinhadas à Lista de Palpites (PREDICTION_DISPLAY_STATUS_COLOR):
  *
- * - isCorrect=true → "Acertou" (bg-win-bg text-win)
- * - isCorrect=false + userPredicted=true → "Errou" (bg-loss-bg text-loss)
  * - userPredicted=false → "Sem palpite" (bg-muted text-muted-foreground)
+ * - 10 pts (placar exato)    → "+10 pts" (bg-win-bg text-win)
+ * - 5 pts (acertou vencedor) → "+5 pts"  (lime — "quase vitória")
+ * - 0 pts (errou)            → "0 pts"   (bg-loss-bg text-loss)
  */
 function ResultBadge({
-  isCorrect,
+  points,
   userPredicted,
 }: {
-  isCorrect: boolean;
+  points: 0 | 5 | 10;
   userPredicted: boolean;
 }) {
-  if (isCorrect) {
+  if (!userPredicted) {
     return (
-      <span className="bg-win-bg text-win text-xs font-medium px-2 py-0.5 rounded-sm shrink-0">
-        Acertou
+      <span className="bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-sm shrink-0">
+        Sem palpite
       </span>
     );
   }
 
-  if (userPredicted) {
-    return (
-      <span className="bg-loss-bg text-loss text-xs font-medium px-2 py-0.5 rounded-sm shrink-0">
-        Errou
-      </span>
-    );
-  }
+  const color =
+    points === 10
+      ? "bg-win-bg text-win"
+      : points === 5
+        ? "bg-lime-500/20 text-lime-700 dark:text-lime-400"
+        : "bg-loss-bg text-loss";
+  const label = points > 0 ? `+${points} pts` : "0 pts";
 
   return (
-    <span className="bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-sm shrink-0">
-      Sem palpite
+    <span
+      className={`${color} text-xs font-medium px-2 py-0.5 rounded-sm shrink-0 tabular-nums`}
+    >
+      {label}
     </span>
   );
 }
@@ -101,7 +105,7 @@ export function LastResultsCardSkeleton() {
 /**
  * Card "Últimos Resultados" — lista até 5 jogos finalizados com:
  * - placar "Brasil 2 x 1 França",
- * - badge "Acertou" / "Errou" / "Sem palpite" usando tokens win/loss.
+ * - badge de pontos do palpite ("+10 pts" / "+5 pts" / "0 pts") ou "Sem palpite".
  *
  * Estado empty: quando results.length === 0.
  * Estado loading: quando isLoading é true.
@@ -154,9 +158,9 @@ export function LastResultsCard({ results, isLoading = false }: LastResultsCardP
                   </span>
                 </div>
 
-                {/* Badge de resultado */}
+                {/* Badge de pontos do palpite */}
                 <ResultBadge
-                  isCorrect={result.isCorrect}
+                  points={result.points}
                   userPredicted={userPredicted}
                 />
               </li>

@@ -8,19 +8,27 @@
 Config in `firebase.json` → `firestore.rules`, `firestore.indexes.json`.
 
 ### Collections & access model (`firestore.rules`)
-Two axes: **status** (`pending|approved|blocked`) + **role** (`user|admin`). Deny-by-default.
+Two axes: **status** (`pending|approved|blocked`) + **role** (`participant|group_admin|super_admin`, legacy `user`/`admin` dual-compat). `isAdmin()` in rules = super_admin. Deny-by-default. **Rule of thumb:** anything write-`if false` = Admin SDK via Route Handler only.
 | Collection | Read | Write |
 |---|---|---|
-| `users/{uid}` | owner or admin | self create forced pending/user; self update can't change role/status; only admin changes role/status. |
-| `predictions` | approved owner or admin | **`if false`** — Admin SDK via Route Handler only. |
+| `users/{uid}` | owner or super_admin | self create forced pending/participant; self update can't change role/status; only super_admin changes role/status. |
+| `predictions` | approved owner or admin | **`if false`** — Admin SDK (lock enforced server-side). |
 | `bonus_predictions` | approved | approved owner CRUD. |
-| `teams`,`groups`,`matches`,`system_settings` | approved | admin. |
-| `rankings`,`statistics`,`pool_stats` | approved | **`if false`** — only `/api/rankings/recalc` (Admin SDK). |
-| `system_logs` | admin | admin create; append-only (no update/delete). |
+| `teams`,`groups`,`system_settings` | approved | super_admin. |
+| `matches` | approved | **`if false`** — openfootball sync + manual edit via Admin SDK (PRD-11). |
+| `pools/{poolId}` | approved AND `status=="active"` | **`if false`** — create(pending)/approve/block via Admin SDK (PRD-09). |
+| `invites/{id}` | approved + active + own `groupId` claim | **`if false`** — Admin SDK (PRD-10). |
+| `rankings/{scope}` | approved **only `grupo-*`** | **`if false`**. `geral`/phase/`pool-*` served via Route Handler (CR-04 closure). |
+| `statistics`,`pool_stats` | approved | **`if false`** — only recalc Route Handlers. |
+| `worldcup_cache` | **`if false`** | **`if false`** — server-side cache, client never touches. |
+| `system_logs` | super_admin | super_admin create; append-only. |
+| `sync_logs` | super_admin | **`if false`** — Admin SDK sync summary, append-only (PRD-11). |
 | `notifications` | owner or admin | admin or owner create; immutable `userId`; no delete. |
 | `notificationPreferences/{uid}` | owner | owner; no delete. |
+| `webauthn_credentials/{id}` | approved owner or admin | **`if false`** — Admin SDK. |
+| `webauthn_challenge_jti/{jti}` | **`if false`** | **`if false`** — server-side single-use store. |
 
-> Rules are last line of defense — frontend never trusted. Admin SDK (Route Handlers / Functions) bypasses Rules by design.
+> Rules are last line of defense — frontend never trusted. Admin SDK (Route Handlers / Functions) bypasses Rules by design. `pools`≠`groups`: `pools`=betting groups (multi-tenant), `groups`=Copa tournament groups A–L.
 
 ## Cloud Functions (`functions/`)
 Separate package (own `package.json`, `tsconfig`, `vitest`). Triggers:

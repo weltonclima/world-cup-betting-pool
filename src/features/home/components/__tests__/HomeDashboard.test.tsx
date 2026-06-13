@@ -65,12 +65,42 @@ const baseAuth: AuthContextValue = {
  * HomeDashboardData mínimo para o estado de sucesso.
  * Todos os campos opcionais são nulos/vazios — os cards tratam seus próprios empty states.
  */
+/** Hero consolidado para o estado de sucesso (TASK-01 home-revamp). */
+const baseHero: HomeDashboardData["heroSummary"] = {
+  position: 3,
+  totalParticipants: 20,
+  points: 8,
+  trend: null,
+  accuracy: 25,
+  totalCorrect: 4,
+  denominator: 16,
+  longestStreak: 0,
+  sparkline: null,
+  ruler: null,
+  isEmpty: false,
+};
+
+/** Hero vazio (conta nova / pré-torneio). */
+const emptyHero: HomeDashboardData["heroSummary"] = {
+  position: null,
+  totalParticipants: null,
+  points: null,
+  trend: null,
+  accuracy: 0,
+  totalCorrect: 0,
+  denominator: null,
+  longestStreak: 0,
+  sparkline: null,
+  ruler: null,
+  isEmpty: true,
+};
+
 const baseDashboardSuccess: HomeDashboardData = {
-  ranking: { position: 3, totalParticipants: 20, points: 8 },
-  performance: { totalCorrect: 4, accuracy: 25, longestStreak: 0, gamesPredicted: 16 },
+  heroSummary: baseHero,
+  predictionBreakdown: { correct: 2, partial: 1, wrong: 1, total: 4, isEmpty: false },
   nextMatch: null,
   recentResults: [],
-  currentStage: { stage: null, roundLabel: null },
+  openMatches: { items: [], totalOpen: 0 },
   notices: [],
   isLoading: false,
   isError: false,
@@ -80,8 +110,7 @@ const baseDashboardSuccess: HomeDashboardData = {
 /** Estado de loading: isLoading=true, tudo else padrão. */
 const dashboardLoading: HomeDashboardData = {
   ...baseDashboardSuccess,
-  ranking: null,
-  performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
+  predictionBreakdown: { correct: 0, partial: 0, wrong: 0, total: 0, isEmpty: true },
   isLoading: true,
   isError: false,
 };
@@ -89,8 +118,7 @@ const dashboardLoading: HomeDashboardData = {
 /** Estado de erro: isError=true, isLoading=false. */
 const dashboardError: HomeDashboardData = {
   ...baseDashboardSuccess,
-  ranking: null,
-  performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
+  predictionBreakdown: { correct: 0, partial: 0, wrong: 0, total: 0, isEmpty: true },
   isLoading: false,
   isError: true,
 };
@@ -209,21 +237,19 @@ describe("HomeDashboard — estado de sucesso", () => {
     expect(screen.queryByText("Erro ao carregar dashboard")).toBeNull();
   });
 
-  it("T15: exibe RankingCard com dados (posição #3)", () => {
+  it("T15: exibe o HeroCard com a posição (#3)", () => {
     render(<HomeDashboard />);
     expect(screen.getByText("#3")).toBeTruthy();
   });
 
-  it("T16: exibe CorrectScoresCard com totalCorrect", () => {
+  it("T16: HeroCard exibe denominador de palpites (4 de 16)", () => {
     render(<HomeDashboard />);
-    // CorrectScoresCard exibe "4" (totalCorrect do baseDashboardSuccess)
-    // Pode haver múltiplos "4" — apenas verificar que existe
-    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
+    expect(screen.getByText(/4 de 16 palpites/)).toBeTruthy();
   });
 
-  it("T17: exibe AccuracyCard com percentual de aproveitamento", () => {
+  it("T17: HeroCard exibe percentual de aproveitamento", () => {
     render(<HomeDashboard />);
-    // AccuracyCard e PerformanceCard ambos exibem "25%" — usar getAllByText
+    // HeroCard exibe "25%" (aproveitamento do hero summary)
     const percentElements = screen.getAllByText("25%");
     expect(percentElements.length).toBeGreaterThan(0);
   });
@@ -233,14 +259,17 @@ describe("HomeDashboard — estado de sucesso", () => {
     expect(screen.getByRole("article", { name: "Últimos Resultados" })).toBeTruthy();
   });
 
-  it("T19: exibe card Meu Desempenho", () => {
+  it("T19: exibe card Raio-X dos Palpites", () => {
     render(<HomeDashboard />);
-    expect(screen.getByRole("article", { name: "Meu Desempenho" })).toBeTruthy();
+    expect(screen.getByRole("article", { name: "Raio-X dos Palpites" })).toBeTruthy();
   });
 
-  it("T20: exibe card Avisos (empty state quando notices vazio)", () => {
+  it("T20: exibe card Jogos abertos (empty state quando não há jogos abertos)", () => {
     render(<HomeDashboard />);
-    expect(screen.getByRole("region", { name: "Avisos do sistema" })).toBeTruthy();
+    expect(
+      screen.getByRole("article", { name: "Jogos abertos para palpitar" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Você está em dia!")).toBeTruthy();
   });
 });
 
@@ -248,15 +277,16 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
   beforeEach(() => {
     mockUseDashboard.mockReturnValue({
       ...baseDashboardSuccess,
-      ranking: null,
-      performance: { totalCorrect: 0, accuracy: 0, longestStreak: 0, gamesPredicted: 0 },
+      heroSummary: emptyHero,
+      predictionBreakdown: { correct: 0, partial: 0, wrong: 0, total: 0, isEmpty: true },
     });
   });
 
-  it("T21: renderiza sem crash quando ranking é null", () => {
+  it("T21: HeroCard exibe empty-state quando não há dados", () => {
     render(<HomeDashboard />);
-    // RankingCard exibe "--" quando summary é null
-    expect(screen.getAllByText("--").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Seu desempenho aparece aqui após o primeiro jogo."),
+    ).toBeTruthy();
   });
 
   it("T22: HomeHeader exibe fallback quando profile.name não é fornecido pelo auth", () => {
@@ -278,24 +308,17 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
     expect(screen.getByText("Nenhum resultado disponível")).toBeTruthy();
   });
 
-  it("T25: exibe empty-state de CurrentStageCard ('Fase não definida') quando stage é null", () => {
+  it("T25: exibe empty-state de OpenMatchesCard ('Você está em dia!') quando não há jogos abertos", () => {
     render(<HomeDashboard />);
-    // currentStage.stage is null in baseDashboardSuccess
-    expect(screen.getByText("Fase não definida")).toBeTruthy();
+    // openMatches.items é [] em baseDashboardSuccess
+    expect(screen.getByText("Você está em dia!")).toBeTruthy();
   });
 
-  it("T26: exibe empty-state de NoticesCard ('Nenhum aviso no momento') quando notices é vazio", () => {
-    render(<HomeDashboard />);
-    // notices is [] in baseDashboardSuccess
-    expect(screen.getByText("Nenhum aviso no momento")).toBeTruthy();
-  });
-
-  it("T27: renderiza os 4 card empty-states simultâneamente sem crash (cobertura integrada)", () => {
+  it("T27: renderiza os 3 card empty-states simultâneamente sem crash (cobertura integrada)", () => {
     render(<HomeDashboard />);
     expect(screen.getByText("Nenhum jogo agendado")).toBeTruthy();
     expect(screen.getByText("Nenhum resultado disponível")).toBeTruthy();
-    expect(screen.getByText("Fase não definida")).toBeTruthy();
-    expect(screen.getByText("Nenhum aviso no momento")).toBeTruthy();
+    expect(screen.getByText("Você está em dia!")).toBeTruthy();
   });
 
   // Regressão (RC5): o CTA "Enviar Palpite" era um botão inerte — HomeDashboard

@@ -1,6 +1,5 @@
 // Barrel da feature home — hooks e tipos (TASK-05).
 export { homeKeys } from "./homeKeys";
-export { useGeneralRanking } from "./useGeneralRanking";
 export { useStatistics } from "./useStatistics";
 export { useNextMatch } from "./useNextMatch";
 export { useRecentResults } from "./useRecentResults";
@@ -13,9 +12,7 @@ export type {
   HomePredictionStatus,
   NextMatchSummary,
   RecentResult,
-  RankingSummary,
   ResolvedTeam,
-  PerformanceSummary,
-  CurrentStageSummary,
+  PredictionBreakdown,
   SystemNotice,
 } from "./useHomeDashboard";
