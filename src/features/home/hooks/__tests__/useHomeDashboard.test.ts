@@ -19,7 +19,7 @@ import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { MatchWithId, Prediction, Ranking, Statistics, SystemSettings, TeamWithId } from "@/types";
+import type { MatchWithId, PoolStats, Prediction, Ranking, Statistics, SystemSettings, TeamWithId } from "@/types";
 
 // ── mocks declarados antes dos imports do módulo ────────────────────────────
 
@@ -31,6 +31,8 @@ vi.mock("@/firebase", () => ({
 
 vi.mock("@/hooks/useAuth");
 vi.mock("@/features/rankings/hooks/usePoolRanking");
+vi.mock("@/features/rankings/hooks/usePoolStats");
+vi.mock("@/features/matches/hooks/useMatchesList");
 vi.mock("../useStatistics");
 vi.mock("../useNextMatch");
 vi.mock("../useRecentResults");
@@ -42,6 +44,9 @@ vi.mock("../useSystemSettings");
 
 import { useAuth } from "@/hooks/useAuth";
 import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
+import { usePoolStats } from "@/features/rankings/hooks/usePoolStats";
+import { useMatchesList } from "@/features/matches/hooks/useMatchesList";
+import type { MatchListItem } from "@/features/matches/hooks/useMatchesList";
 import { useStatistics } from "../useStatistics";
 import { useNextMatch } from "../useNextMatch";
 import { useRecentResults } from "../useRecentResults";
@@ -55,12 +60,35 @@ import { useHomeDashboard } from "../useHomeDashboard";
 
 const mockUseAuth      = vi.mocked(useAuth);
 const mockRanking      = vi.mocked(usePoolRanking);
+const mockPoolStats    = vi.mocked(usePoolStats);
 const mockStatistics   = vi.mocked(useStatistics);
 const mockNextMatch    = vi.mocked(useNextMatch);
 const mockRecentResults = vi.mocked(useRecentResults);
 const mockTeams        = vi.mocked(useTeams);
 const mockPredictions  = vi.mocked(usePredictions);
 const mockSettings     = vi.mocked(useSystemSettings);
+const mockMatchesList  = vi.mocked(useMatchesList);
+
+/** Item de jogo aberto para palpitar (flatList do useMatchesList). */
+function makeOpenItem(id: string, overrides: Partial<MatchListItem> = {}): MatchListItem {
+  return {
+    id,
+    kickoffAt: "2026-06-20T18:00:00.000Z",
+    stage: "grupos",
+    round: 2,
+    groupId: "group-a",
+    venue: null,
+    status: "scheduled",
+    homeScore: null,
+    awayScore: null,
+    homeTeamId: "team-bra",
+    awayTeamId: "team-arg",
+    homeTeam: { name: "Brasil", flagUrl: undefined },
+    awayTeam: { name: "Argentina", flagUrl: undefined },
+    predictionStatus: "pendente",
+    ...overrides,
+  };
+}
 
 // ── factory de UseQueryResult falso ──────────────────────────────────────────
 
@@ -176,18 +204,32 @@ function makeSettings(overrides: Partial<SystemSettings> = {}): SystemSettings {
   };
 }
 
+function makePoolStats(): PoolStats {
+  return {
+    updatedAt: "2026-06-15T00:00:00.000Z",
+    totalParticipants: 24,
+    highestPoints: 210,
+    lowestPoints: 12,
+    averagePoints: 96,
+    totalCorrect: 300,
+    distribution: [],
+  };
+}
+
 // ── helper para configurar todos os mocks de uma vez ─────────────────────────
 
 function setupMocks({
   uid = "user-01",
   rankingData = makeRanking("user-01", 1, 10),
   statisticsData = makeStatistics(5, 50),
+  poolStatsData = makePoolStats() as PoolStats | null,
   nextMatchData = makeScheduledMatch("match-next"),
   recentData = [] as MatchWithId[],
   teamsData = [makeTeam("team-bra"), makeTeam("team-arg")] as TeamWithId[],
   predictionsData = [] as Prediction[],
   settingsData = makeSettings(),
   rankingLoading = false,
+  poolStatsLoading = false,
   statisticsLoading = false,
   nextMatchLoading = false,
   recentLoading = false,
@@ -195,6 +237,7 @@ function setupMocks({
   predictionsLoading = false,
   settingsLoading = false,
   rankingError = false,
+  poolStatsError = false,
   statisticsError = false,
   nextMatchError = false,
   recentError = false,
@@ -202,15 +245,21 @@ function setupMocks({
   predictionsError = false,
   settingsError = false,
   rankingRefetch = vi.fn() as () => Promise<unknown>,
+  poolStatsRefetch = vi.fn() as () => Promise<unknown>,
   statisticsRefetch = vi.fn() as () => Promise<unknown>,
   nextMatchRefetch = vi.fn() as () => Promise<unknown>,
   recentRefetch = vi.fn() as () => Promise<unknown>,
   teamsRefetch = vi.fn() as () => Promise<unknown>,
   predictionsRefetch = vi.fn() as () => Promise<unknown>,
   settingsRefetch = vi.fn() as () => Promise<unknown>,
+  matchesListFlat = [] as MatchListItem[],
+  matchesListLoading = false,
+  matchesListError = false,
+  matchesListRefetch = vi.fn() as () => void,
 }: {
   uid?: string | null;
   rankingData?: Ranking | null;
+  poolStatsData?: PoolStats | null;
   statisticsData?: Statistics | null;
   nextMatchData?: MatchWithId | null;
   recentData?: MatchWithId[];
@@ -218,6 +267,7 @@ function setupMocks({
   predictionsData?: Prediction[];
   settingsData?: SystemSettings | null;
   rankingLoading?: boolean;
+  poolStatsLoading?: boolean;
   statisticsLoading?: boolean;
   nextMatchLoading?: boolean;
   recentLoading?: boolean;
@@ -225,6 +275,7 @@ function setupMocks({
   predictionsLoading?: boolean;
   settingsLoading?: boolean;
   rankingError?: boolean;
+  poolStatsError?: boolean;
   statisticsError?: boolean;
   nextMatchError?: boolean;
   recentError?: boolean;
@@ -232,12 +283,17 @@ function setupMocks({
   predictionsError?: boolean;
   settingsError?: boolean;
   rankingRefetch?: () => Promise<unknown>;
+  poolStatsRefetch?: () => Promise<unknown>;
   statisticsRefetch?: () => Promise<unknown>;
   nextMatchRefetch?: () => Promise<unknown>;
   recentRefetch?: () => Promise<unknown>;
   teamsRefetch?: () => Promise<unknown>;
   predictionsRefetch?: () => Promise<unknown>;
   settingsRefetch?: () => Promise<unknown>;
+  matchesListFlat?: MatchListItem[];
+  matchesListLoading?: boolean;
+  matchesListError?: boolean;
+  matchesListRefetch?: () => void;
 } = {}) {
   mockUseAuth.mockReturnValue({
     firebaseUser: uid ? ({ uid } as import("firebase/auth").User) : null,
@@ -250,12 +306,20 @@ function setupMocks({
   });
 
   mockRanking.mockReturnValue(fakeQuery({ data: rankingData, isLoading: rankingLoading, isError: rankingError, refetch: rankingRefetch }));
+  mockPoolStats.mockReturnValue(fakeQuery({ data: poolStatsData, isLoading: poolStatsLoading, isError: poolStatsError, refetch: poolStatsRefetch }));
   mockStatistics.mockReturnValue(fakeQuery({ data: statisticsData, isLoading: statisticsLoading, isError: statisticsError, refetch: statisticsRefetch }));
   mockNextMatch.mockReturnValue(fakeQuery({ data: nextMatchData, isLoading: nextMatchLoading, isError: nextMatchError, refetch: nextMatchRefetch }));
   mockRecentResults.mockReturnValue(fakeQuery({ data: recentData, isLoading: recentLoading, isError: recentError, refetch: recentRefetch }));
   mockTeams.mockReturnValue(fakeQuery({ data: teamsData, isLoading: teamsLoading, isError: teamsError, refetch: teamsRefetch }));
   mockPredictions.mockReturnValue(fakeQuery({ data: predictionsData, isLoading: predictionsLoading, isError: predictionsError, refetch: predictionsRefetch }));
   mockSettings.mockReturnValue(fakeQuery({ data: settingsData, isLoading: settingsLoading, isError: settingsError, refetch: settingsRefetch }));
+  mockMatchesList.mockReturnValue({
+    groups: [],
+    flatList: matchesListFlat,
+    isLoading: matchesListLoading,
+    isError: matchesListError,
+    refetch: matchesListRefetch,
+  });
 }
 
 // ── testes ───────────────────────────────────────────────────────────────────
@@ -270,16 +334,16 @@ describe("useHomeDashboard — estado neutro (uid=null)", () => {
 
     const { result } = renderHook(() => useHomeDashboard());
 
-    expect(result.current.ranking).toBeNull();
     expect(result.current.nextMatch).toBeNull();
     expect(result.current.recentResults).toEqual([]);
     expect(result.current.notices).toEqual([]);
-    expect(result.current.currentStage).toEqual({ stage: null, roundLabel: null });
-    expect(result.current.performance).toEqual({
-      totalCorrect: 0,
-      accuracy: 0,
-      longestStreak: 0,
-      gamesPredicted: 0,
+    expect(result.current.openMatches).toEqual({ items: [], totalOpen: 0 });
+    expect(result.current.predictionBreakdown).toEqual({
+      correct: 0,
+      partial: 0,
+      wrong: 0,
+      total: 0,
+      isEmpty: true,
     });
   });
 
@@ -315,6 +379,12 @@ describe("useHomeDashboard — isLoading", () => {
     expect(result.current.isLoading).toBe(true);
   });
 
+  it("isLoading true quando useMatchesList está carregando", () => {
+    setupMocks({ matchesListLoading: true });
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.isLoading).toBe(true);
+  });
+
   it("isLoading false quando nenhuma query carrega", () => {
     setupMocks();
     const { result } = renderHook(() => useHomeDashboard());
@@ -337,6 +407,12 @@ describe("useHomeDashboard — isError", () => {
 
   it("isError true quando settingsQuery falha", () => {
     setupMocks({ settingsError: true });
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.isError).toBe(true);
+  });
+
+  it("isError true quando useMatchesList falha", () => {
+    setupMocks({ matchesListError: true });
     const { result } = renderHook(() => useHomeDashboard());
     expect(result.current.isError).toBe(true);
   });
@@ -379,28 +455,53 @@ describe("useHomeDashboard — refetch", () => {
     expect(rfPredictions).toHaveBeenCalledOnce();
     expect(rfSettings).toHaveBeenCalledOnce();
   });
+
+  it("refetch chama useMatchesList.refetch", () => {
+    const rfMatchesList = vi.fn() as () => void;
+    setupMocks({ matchesListRefetch: rfMatchesList });
+
+    const { result } = renderHook(() => useHomeDashboard());
+    result.current.refetch();
+
+    expect(rfMatchesList).toHaveBeenCalledOnce();
+  });
 });
 
-describe("useHomeDashboard — ranking summary", () => {
-  it("rankingSummary preenchido quando uid está nas entries", () => {
+describe("useHomeDashboard — openMatches", () => {
+  it("deriva apenas jogos pendentes do flatList, ordenados por kickoff", () => {
     setupMocks({
-      rankingData: makeRanking("user-01", 2, 8),
+      matchesListFlat: [
+        makeOpenItem("m-enviado", { predictionStatus: "enviado" }),
+        makeOpenItem("m-tarde", { kickoffAt: "2026-06-21T18:00:00.000Z" }),
+        makeOpenItem("m-cedo", { kickoffAt: "2026-06-20T18:00:00.000Z" }),
+      ],
     });
 
     const { result } = renderHook(() => useHomeDashboard());
-    expect(result.current.ranking).toEqual({
-      position: 2,
-      totalParticipants: 2,
-      points: 8,
-    });
+
+    expect(result.current.openMatches.totalOpen).toBe(2);
+    expect(result.current.openMatches.items.map((i) => i.matchId)).toEqual([
+      "m-cedo",
+      "m-tarde",
+    ]);
+    expect(result.current.openMatches.items[0]?.predictHref).toBe(
+      "/matches/m-cedo/predict",
+    );
   });
 
-  it("rankingSummary null quando ranking é null", () => {
-    setupMocks({ rankingData: null });
+  it("openMatches vazio quando nenhum jogo está pendente", () => {
+    setupMocks({
+      matchesListFlat: [makeOpenItem("m-1", { predictionStatus: "bloqueado" })],
+    });
+
     const { result } = renderHook(() => useHomeDashboard());
-    expect(result.current.ranking).toBeNull();
+    expect(result.current.openMatches).toEqual({ items: [], totalOpen: 0 });
   });
 });
+
+// NOTE: bloco "ranking summary" removido (TASK-04 home-revamp) — o campo
+// `ranking` deixou de existir no compositor; os dados de ranking alimentam
+// agora o `heroSummary` (coberto por deriveHeroSummary.test.ts).
 
 describe("useHomeDashboard — team fallback", () => {
   it("teams vazio → nextMatch.homeTeam.name usa teamId raw como fallback", () => {

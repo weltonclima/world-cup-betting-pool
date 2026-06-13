@@ -6,5 +6,3 @@ export { useGroupRanking } from "./useGroupRanking";
 export { useMyRanking } from "./useMyRanking";
 export { useParticipantProfile } from "./useParticipantProfile";
 export { usePoolStats } from "./usePoolStats";
-// Reusa o hook (e a query-key) da Home para o ranking geral — sem cache duplicado.
-export { useGeneralRanking } from "@/features/home/hooks/useGeneralRanking";

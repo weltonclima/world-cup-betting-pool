@@ -4,8 +4,11 @@
  * Toda a lógica de derivação/join fica aqui; o compositor useHomeDashboard orquestra.
  */
 
+import { scorePrediction } from "@/features/predictions/lib";
+import type { MatchListItem } from "@/features/matches/hooks/useMatchesList";
 import type {
   MatchWithId,
+  PoolStats,
   Prediction,
   Ranking,
   Statistics,
@@ -16,13 +19,6 @@ import type {
 // ---------------------------------------------------------------------------
 // Tipos de saída (reexportados pelo barrel para uso no compositor e na UI)
 // ---------------------------------------------------------------------------
-
-/** Posição do usuário no ranking geral. */
-export interface RankingSummary {
-  position: number;          // posição do usuário (1-based)
-  totalParticipants: number; // entries.length (A1 — fonte única: ranking calculado)
-  points: number;            // pontos do usuário
-}
 
 /** Informações de uma seleção resolvida a partir do cache de teams. */
 export interface ResolvedTeam {
@@ -61,25 +57,13 @@ export interface RecentResult {
   points: 0 | 5 | 10;
 }
 
-/** Resumo de estatísticas do usuário. */
-export interface PerformanceSummary {
-  totalCorrect: number;        // statistics.totalCorrect (0 se sem dados)
-  accuracy: number;            // statistics.accuracy 0–100 (0 se sem dados)
-  /** Maior sequência de acertos (statistics.longestStreak; 0 se sem dados). */
-  longestStreak: number;
-  /**
-   * Total de palpites enviados — derivado de totalCorrect / (accuracy / 100) (D1).
-   * 0 quando accuracy é 0 (evita divisão por zero).
-   */
-  gamesPredicted: number;
-}
-
-/** Informação de fase atual. */
-export interface CurrentStageSummary {
-  /** null se system_settings não existir ou currentStage não for informado. */
-  stage: import("@/types").Stage | null;
-  /** "Rodada X de Y" — derivado de matches.round se disponível, senão null. */
-  roundLabel: string | null;
+/** Raio-X dos palpites do usuário em jogos finalizados (TASK-03 home-revamp). */
+export interface PredictionBreakdown {
+  correct: number;   // placar exato (10 pts)
+  partial: number;   // só vencedor (5 pts)
+  wrong: number;     // errou (0 pts)
+  total: number;     // correct + partial + wrong (palpites em jogos finished)
+  isEmpty: boolean;  // true quando total === 0
 }
 
 /** Aviso do sistema para exibição no card Avisos. */
@@ -89,13 +73,71 @@ export interface SystemNotice {
   severity: "info" | "warning";
 }
 
+/** Jogo aberto para palpitar (TASK-02 home-revamp). */
+export interface OpenMatchSummary {
+  matchId: string;
+  kickoffAt: string;           // ISO 8601
+  homeTeam: ResolvedTeam;      // já resolvido via MatchListItem
+  awayTeam: ResolvedTeam;
+  deadlineLabel: string;       // ex.: "Fecha em 1h 30m" | "Fecha em 45m"
+  /** true quando faltam < 60min para o kickoff (urgência na UI; não re-parsear label). */
+  isUrgent: boolean;
+  predictHref: string;         // "/matches/{matchId}/predict"
+}
+
+/** Resultado de deriveOpenMatches. */
+export interface OpenMatchesResult {
+  items: OpenMatchSummary[];   // ≤ limit
+  totalOpen: number;           // total antes do corte (para "+ N outros")
+}
+
+/** Direção da tendência de posição no ranking. */
+export type HeroTrendDirection = "up" | "down" | "stable";
+
+/** Resumo consolidado do Hero da Home (TASK-01 home-revamp). */
+export interface HeroSummary {
+  /** Posição no ranking do pool (null sem ranking ou usuário fora das entries). */
+  position: number | null;
+  totalParticipants: number | null;
+  /** Pontos ponderados do usuário (null sem entry). */
+  points: number | null;
+  /** Tendência de posição; null quando há <2 snapshots em positionHistory. */
+  trend: {
+    direction: HeroTrendDirection;
+    delta: number;            // variação absoluta de posição (>=0)
+    roundLabel: string | null; // "R{round}" da última entrada, se houver
+  } | null;
+  accuracy: number;           // 0–100 (0 sem statistics)
+  totalCorrect: number;       // 0 sem statistics
+  /** totalCorrect + totalWrong; null quando totalWrong ausente. */
+  denominator: number | null;
+  longestStreak: number;      // 0 sem statistics
+  /** Posições por `at` (asc); null com <2 pontos. */
+  sparkline: number[] | null;
+  /** Régua de percentil (bullet); null sem poolStats ou sem pontos do usuário. */
+  ruler: {
+    lowest: number;
+    average: number;
+    highest: number;
+    userPoints: number;
+    fraction: number;         // 0–1 na escala [lowest, highest] (posição do usuário)
+    averageFraction: number;  // 0–1 na escala [lowest, highest] (posição da média)
+    label: "acima da média" | "na média" | "abaixo da média";
+  } | null;
+  /** true quando não há nada relevante a exibir (conta nova / pré-torneio). */
+  isEmpty: boolean;
+}
+
 /** Saída completa do compositor useHomeDashboard. */
 export interface HomeDashboardData {
-  ranking: RankingSummary | null;
-  performance: PerformanceSummary;
+  /** Hero consolidado (TASK-01 home-revamp). */
+  heroSummary: HeroSummary;
+  /** Raio-X dos palpites (TASK-03 home-revamp). */
+  predictionBreakdown: PredictionBreakdown;
   nextMatch: NextMatchSummary | null;
   recentResults: RecentResult[];        // até 5
-  currentStage: CurrentStageSummary;
+  /** Jogos ainda abertos para palpitar (TASK-02 home-revamp). */
+  openMatches: OpenMatchesResult;
   notices: SystemNotice[];
   /** true se qualquer query obrigatória ainda estiver carregando. */
   isLoading: boolean;
@@ -203,90 +245,51 @@ export function buildPredictionsHref(
 }
 
 // ---------------------------------------------------------------------------
-// 5. deriveRankingSummary
+// 5. derivePredictionBreakdown (TASK-03 home-revamp)
 // ---------------------------------------------------------------------------
 
 /**
- * Extrai posição, pontos e total de participantes do ranking geral para o usuário.
- * Retorna null se o ranking não existir ou o usuário não estiver nas entries.
- */
-export function deriveRankingSummary(
-  ranking: Ranking | null | undefined,
-  uid: string,
-): RankingSummary | null {
-  if (!ranking) return null;
-  const entry = ranking.entries.find((e) => e.uid === uid);
-  if (!entry) return null;
-  return {
-    position: entry.position,
-    totalParticipants: ranking.entries.length,  // A1: fonte única é o ranking calculado
-    points: entry.points,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// 6. derivePerformanceSummary
-// ---------------------------------------------------------------------------
-
-/**
- * Extrai totalCorrect, accuracy e longestStreak de statistics.
- * gamesPredicted é derivado de totalCorrect / (accuracy / 100) (D1 — campo não existe no schema).
- * Quando statistics é null/undefined (usuário sem dados agregados ainda), retorna zeros.
- */
-export function derivePerformanceSummary(
-  statistics: Statistics | null | undefined,
-): PerformanceSummary {
-  const totalCorrect = statistics?.totalCorrect ?? 0;
-  const accuracy = statistics?.accuracy ?? 0;
-  const longestStreak = statistics?.longestStreak ?? 0;
-  // Derivação D1: palpites = acertos / (aproveitamento / 100); evita divisão por zero.
-  const gamesPredicted =
-    accuracy > 0 ? Math.round(totalCorrect / (accuracy / 100)) : 0;
-  return { totalCorrect, accuracy, longestStreak, gamesPredicted };
-}
-
-// ---------------------------------------------------------------------------
-// 7. deriveCurrentStage
-// ---------------------------------------------------------------------------
-
-/**
- * Tabela de rodadas totais por fase do torneio (Copa 2026 — imutável).
- * Fonte estrutural do torneio, não hardcode de dados dinâmicos.
- */
-const ROUNDS_PER_STAGE: Record<string, number> = {
-  grupos: 3,
-  oitavas: 1,
-  quartas: 1,
-  semifinal: 1,
-  terceiro: 1,
-  final: 1,
-};
-
-/**
- * Extrai fase atual de systemSettings e monta o rótulo "Rodada X de Y".
+ * Tabula os palpites do usuário sobre jogos `finished` em 3 categorias via
+ * `scorePrediction`: correct (placar exato, 10) / partial (só vencedor, 5) /
+ * wrong (errou, 0). Resolve no cliente o gap "partial não persistido" — sem
+ * rede extra, sem tocar recalc.
  *
- * Fonte do round: nextMatch → recentResults[0] → null.
- * Rodada disponível apenas com stage + round não-null.
+ * Regras (spec §6):
+ * - Só jogos `status === "finished"` (R1).
+ * - Jogo finished sem palpite do usuário é ignorado — não conta como wrong (R2).
+ * - `scorePrediction` recebe MatchWithId; MatchListItem carrega os campos usados
+ *   (status/homeScore/awayScore) — cast estreito local (R4).
+ * - `pending` não deve ocorrer (filtro R1), mas se ocorrer é ignorado (R3).
+ *
+ * Função pura: sem `new Date()` interno; o status do jogo já define elegibilidade.
  */
-export function deriveCurrentStage(
-  settings: SystemSettings | null | undefined,
-  nextMatch: MatchWithId | null | undefined,
-  recentResults: MatchWithId[],
-): CurrentStageSummary {
-  const stage = settings?.currentStage ?? null;
-  const roundSource = nextMatch ?? recentResults[0] ?? null;
-  const round = roundSource?.round ?? null;
+export function derivePredictionBreakdown(
+  matches: MatchListItem[],
+  predictions: Prediction[],
+): PredictionBreakdown {
+  let correct = 0;
+  let partial = 0;
+  let wrong = 0;
 
-  const roundLabel =
-    stage && round != null
-      ? `Rodada ${round} de ${ROUNDS_PER_STAGE[stage] ?? "?"}`
-      : null;
+  for (const match of matches) {
+    if (match.status !== "finished") continue; // R1
+    const pred = predictions.find((p) => p.matchId === match.id);
+    if (!pred) continue; // R2 — sem palpite → ignora
 
-  return { stage, roundLabel };
+    // R4: MatchListItem tem status/homeScore/awayScore que scorePrediction usa.
+    const { status } = scorePrediction(pred, match as unknown as MatchWithId);
+    if (status === "correct") correct++;
+    else if (status === "partial") partial++;
+    else if (status === "wrong") wrong++;
+    // status === "pending" não deve ocorrer (R3) → ignora
+  }
+
+  const total = correct + partial + wrong;
+  return { correct, partial, wrong, total, isEmpty: total === 0 };
 }
 
 // ---------------------------------------------------------------------------
-// 8. deriveNotices
+// 6. deriveNotices
 // ---------------------------------------------------------------------------
 
 /**
@@ -343,4 +346,159 @@ export function deriveNotices(
   }
 
   return notices;
+}
+
+// ---------------------------------------------------------------------------
+// 7. deriveHeroSummary (TASK-01 home-revamp)
+// ---------------------------------------------------------------------------
+
+/**
+ * Consolida o Hero da Home a partir de dados já agregados (sem rede extra):
+ * posição/tendência do ranking, aproveitamento com denominador, streak,
+ * sparkline de evolução e régua de percentil vs `pool_stats`.
+ *
+ * Funções puras: sem `new Date()` interno; ordenação por `at` (ISO 8601).
+ * Regras de borda em ai/spec/task-home-revamp-01.md §6.
+ */
+export function deriveHeroSummary(
+  ranking: Ranking | null | undefined,
+  statistics: Statistics | null | undefined,
+  poolStats: PoolStats | null | undefined,
+  uid: string,
+): HeroSummary {
+  // Posição / pontos / total de participantes do ranking do pool.
+  const entry = ranking?.entries.find((e) => e.uid === uid) ?? null;
+  const position = entry?.position ?? null;
+  const points = entry?.points ?? null;
+  const totalParticipants = ranking ? ranking.entries.length : null;
+
+  // Tendência: comparar os 2 últimos snapshots por `at` (>=2 obrigatório).
+  // Filtra escopo "geral" (§6.2) — alinhado a geralHistory() em myRankingDerivations;
+  // hoje recalc só grava geral, mas blinda contra positionHistory multi-escopo.
+  const history = (statistics?.positionHistory ?? []).filter(
+    (h) => h.scope === "geral",
+  );
+  const sorted = [...history].sort((a, b) => a.at.localeCompare(b.at));
+  let trend: HeroSummary["trend"] = null;
+  let sparkline: number[] | null = null;
+  const last = sorted.at(-1);
+  const prev = sorted.at(-2);
+  if (last && prev) {
+    const diff = prev.position - last.position; // >0 = subiu (posição menor é melhor)
+    const direction: HeroTrendDirection =
+      diff > 0 ? "up" : diff < 0 ? "down" : "stable";
+    trend = {
+      direction,
+      delta: Math.abs(diff),
+      roundLabel: last.round != null ? `R${last.round}` : null,
+    };
+    sparkline = sorted.map((s) => s.position);
+  }
+
+  // Aproveitamento + denominador.
+  const accuracy = statistics?.accuracy ?? 0;
+  const totalCorrect = statistics?.totalCorrect ?? 0;
+  const longestStreak = statistics?.longestStreak ?? 0;
+  const denominator =
+    statistics?.totalWrong != null ? totalCorrect + statistics.totalWrong : null;
+
+  // Régua de percentil (bullet): só com poolStats e pontos do usuário.
+  let ruler: HeroSummary["ruler"] = null;
+  if (poolStats && points != null) {
+    const { lowestPoints, highestPoints, averagePoints } = poolStats;
+    const span = highestPoints - lowestPoints;
+    const toFraction = (v: number) =>
+      span <= 0 ? 1 : Math.min(1, Math.max(0, (v - lowestPoints) / span));
+    const fraction = toFraction(points);
+    const averageFraction = toFraction(averagePoints);
+    const label =
+      points > averagePoints
+        ? "acima da média"
+        : points < averagePoints
+          ? "abaixo da média"
+          : "na média";
+    ruler = {
+      lowest: lowestPoints,
+      average: averagePoints,
+      highest: highestPoints,
+      userPoints: points,
+      fraction,
+      averageFraction,
+      label,
+    };
+  }
+
+  const isEmpty = position === null && statistics == null && poolStats == null;
+
+  return {
+    position,
+    totalParticipants,
+    points,
+    trend,
+    accuracy,
+    totalCorrect,
+    denominator,
+    longestStreak,
+    sparkline,
+    ruler,
+    isEmpty,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 8. deriveOpenMatches (TASK-02 home-revamp)
+// ---------------------------------------------------------------------------
+
+/** 60 minutos em ms — limiar de urgência e de troca do formato do rótulo. */
+const SIXTY_MINUTES_MS = 60 * 60 * 1000;
+
+/**
+ * Monta o rótulo de deadline a partir do tempo restante.
+ * < 60min → "Fecha em Ym"; ≥ 60min → "Fecha em Xh Ym" (horas inteiras + minutos).
+ */
+function buildDeadlineLabel(msUntilKickoff: number): string {
+  const totalMinutes = Math.floor(msUntilKickoff / 60_000);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return h > 0 ? `Fecha em ${h}h ${m}m` : `Fecha em ${m}m`;
+}
+
+/**
+ * Deriva os jogos ainda abertos para palpitar a partir do flatList de useMatchesList.
+ *
+ * Elegibilidade: `predictionStatus === "pendente"` já encapsula status scheduled +
+ * kickoff futuro + sem lock + sem palpite (deriveMatchPredictionStatus). Não
+ * re-implementa lock aqui.
+ *
+ * Ordena por kickoff ascendente, corta em `limit` (padrão 3) e reporta `totalOpen`
+ * (total antes do corte) para o rodapé "+ N outros".
+ *
+ * `now` é injetado (nunca `new Date()` interno) para testabilidade.
+ */
+export function deriveOpenMatches(
+  matches: MatchListItem[],
+  now: Date,
+  limit = 3,
+): OpenMatchesResult {
+  const open = matches
+    .filter((m) => m.predictionStatus === "pendente")
+    .sort(
+      (a, b) =>
+        new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime(),
+    );
+
+  const items: OpenMatchSummary[] = open.slice(0, limit).map((m) => {
+    const msUntilKickoff = new Date(m.kickoffAt).getTime() - now.getTime();
+    return {
+      matchId: m.id,
+      kickoffAt: m.kickoffAt,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      deadlineLabel: buildDeadlineLabel(msUntilKickoff),
+      isUrgent: msUntilKickoff < SIXTY_MINUTES_MS,
+      predictHref: `/matches/${m.id}/predict`,
+    };
+  });
+
+  return { items, totalOpen: open.length };
 }

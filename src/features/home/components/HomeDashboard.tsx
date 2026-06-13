@@ -22,15 +22,12 @@ import { useAuth } from "@/hooks/useAuth";
 
 import { useHomeDashboard } from "@/features/home/hooks/useHomeDashboard";
 
-import { AccuracyCard, AccuracyCardSkeleton } from "./AccuracyCard";
-import { CorrectScoresCard, CorrectScoresCardSkeleton } from "./CorrectScoresCard";
-import { CurrentStageCard, CurrentStageCardSkeleton } from "./CurrentStageCard";
+import { HeroCard, HeroCardSkeleton } from "./HeroCard";
 import { HomeHeader } from "./HomeHeader";
 import { LastResultsCard, LastResultsCardSkeleton } from "./LastResultsCard";
 import { NextMatchCard, NextMatchCardSkeleton } from "./NextMatchCard";
-import { NoticesCard, NoticesCardSkeleton } from "./NoticesCard";
-import { PerformanceCard, PerformanceCardSkeleton } from "./PerformanceCard";
-import { RankingCard, RankingCardSkeleton } from "./RankingCard";
+import { OpenMatchesCard, OpenMatchesCardSkeleton } from "./OpenMatchesCard";
+import { RaioXCard, RaioXCardSkeleton } from "./RaioXCard";
 
 // ---------------------------------------------------------------------------
 // Subcomponente interno: estado de erro de página
@@ -115,11 +112,11 @@ export function HomeDashboard() {
 
   // Dados e estado agregado do compositor
   const {
-    ranking,
-    performance,
+    heroSummary,
+    predictionBreakdown,
     nextMatch,
     recentResults,
-    currentStage,
+    openMatches,
     notices,
     isLoading,
     isError,
@@ -148,24 +145,12 @@ export function HomeDashboard() {
         />
       )}
 
-      {/* Fila de métricas compactas — grade 3 colunas em todos os breakpoints */}
-      <div className="grid grid-cols-3 gap-3">
-        {isLoading ? (
-          <RankingCardSkeleton />
-        ) : (
-          <RankingCard summary={ranking} />
-        )}
-        {isLoading ? (
-          <CorrectScoresCardSkeleton />
-        ) : (
-          <CorrectScoresCard totalCorrect={performance.totalCorrect} />
-        )}
-        {isLoading ? (
-          <AccuracyCardSkeleton />
-        ) : (
-          <AccuracyCard accuracy={performance.accuracy} />
-        )}
-      </div>
+      {/* Hero — posição + tendência + aproveitamento + sparkline + régua (TASK-01 home-revamp) */}
+      {isLoading ? (
+        <HeroCardSkeleton />
+      ) : (
+        <HeroCard summary={heroSummary} />
+      )}
 
       {/* Próximo Jogo — card full-width */}
       {isLoading ? (
@@ -177,11 +162,11 @@ export function HomeDashboard() {
         />
       )}
 
-      {/* Fase Atual — card full-width */}
+      {/* Jogos abertos pra palpitar — card full-width (lista + faixa de avisos) */}
       {isLoading ? (
-        <CurrentStageCardSkeleton />
+        <OpenMatchesCardSkeleton />
       ) : (
-        <CurrentStageCard currentStage={currentStage} />
+        <OpenMatchesCard openMatches={openMatches} notices={notices} />
       )}
 
       {/* Últimos Resultados — card full-width (lista até 5 itens) */}
@@ -191,18 +176,11 @@ export function HomeDashboard() {
         <LastResultsCard results={recentResults} />
       )}
 
-      {/* Meu Desempenho — card full-width (4 sub-métricas) */}
+      {/* Raio-X dos Palpites — card full-width (donut exato/vencedor/erro) */}
       {isLoading ? (
-        <PerformanceCardSkeleton />
+        <RaioXCardSkeleton />
       ) : (
-        <PerformanceCard summary={performance} />
-      )}
-
-      {/* Avisos — card full-width (comunicados do sistema) */}
-      {isLoading ? (
-        <NoticesCardSkeleton />
-      ) : (
-        <NoticesCard notices={notices} />
+        <RaioXCard breakdown={predictionBreakdown} />
       )}
 
     </div>
