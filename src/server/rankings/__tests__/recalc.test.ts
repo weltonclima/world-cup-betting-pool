@@ -1,8 +1,9 @@
 /**
- * Testes de `ensureRankingsFresh` (cold start: popula-se-ausente) e
- * `recalcRankingsBestEffort` (encadeado no save do resultado, nunca lança).
+ * Testes de `ensureRankingsFresh` (dirty-by-finish: recomputa quando a assinatura
+ * dos finalizados muda) e `recalcRankingsBestEffort` (encadeado no save do
+ * resultado, nunca lança).
  *
- * `recalcRankings` roda de verdade com `getEffectiveMatches` mockado → []. Sinal de
+ * `recalcRankings` roda de verdade com `getEffectiveMatches` mockado. Sinal de
  * "recalc rodou" = houve `set` em `rankings/geral` (capturado em `writes`).
  */
 
@@ -18,19 +19,28 @@ vi.mock("@/server/copaData/matchSource", () => ({
 
 vi.mock("server-only", () => ({}));
 
-import { ensureRankingsFresh, recalcRankingsBestEffort } from "@/server/rankings/recalc";
+import {
+  computeFinishedSignature,
+  ensureRankingsFresh,
+  recalcRankingsBestEffort,
+} from "@/server/rankings/recalc";
 
-function makeDb(opts: { geral: { exists: boolean; data?: () => unknown } }) {
+/**
+ * `fresh` controla o doc-sentinela `rankings/_freshness` lido pelo dirty-by-finish;
+ * os demais docs retornam ausentes (suficiente para os cenários do guard).
+ */
+function makeDb(opts: { fresh?: { exists: boolean; data?: () => unknown } } = {}) {
   const writes: string[] = [];
   const docRef = (coll: string, id: string) => ({
     get: vi.fn().mockResolvedValue(
-      coll === "rankings" && id === "geral"
-        ? opts.geral
+      coll === "rankings" && id === "_freshness"
+        ? (opts.fresh ?? { exists: false, data: () => undefined })
         : { exists: false, data: () => undefined },
     ),
     set: vi.fn(async () => {
       writes.push(`${coll}/${id}`);
     }),
+    ref: { delete: vi.fn() },
   });
   const collection = vi.fn((name: string) => ({
     get: vi.fn().mockResolvedValue({ docs: [] }),
@@ -41,6 +51,7 @@ function makeDb(opts: { geral: { exists: boolean; data?: () => unknown } }) {
 }
 
 const recalcRan = (writes: string[]) => writes.includes("rankings/geral");
+const EMPTY_SIG = computeFinishedSignature([]); // assinatura de "[] finalizados"
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,38 +59,89 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("ensureRankingsFresh (cold start)", () => {
-  it("doc já existe → no-op (o save do resultado mantém fresco)", async () => {
-    const { db, writes } = makeDb({ geral: { exists: true, data: () => ({}) } });
+describe("ensureRankingsFresh (dirty-by-finish)", () => {
+  it("assinatura bate → no-op (nada mudou desde o último recalc)", async () => {
+    const { db, writes } = makeDb({
+      fresh: { exists: true, data: () => ({ signature: EMPTY_SIG }) },
+    });
     await ensureRankingsFresh(db);
-    expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
+    expect(getEffectiveMatchesMock).toHaveBeenCalledTimes(1); // só p/ a assinatura
     expect(recalcRan(writes)).toBe(false);
   });
 
-  it("doc ausente → popula (recalc bloqueante)", async () => {
-    const { db, writes } = makeDb({ geral: { exists: false } });
+  it("doc de frescor ausente → recalc (cold start)", async () => {
+    const { db, writes } = makeDb({ fresh: { exists: false } });
     await ensureRankingsFresh(db);
-    expect(getEffectiveMatchesMock).toHaveBeenCalledTimes(1);
+    expect(getEffectiveMatchesMock).toHaveBeenCalled();
     expect(recalcRan(writes)).toBe(true);
   });
 
-  it("falha de recálculo no cold start não lança", async () => {
+  it("assinatura diverge (placar novo) → recalc", async () => {
+    const { db, writes } = makeDb({
+      fresh: { exists: true, data: () => ({ signature: "stale-signature" }) },
+    });
+    await ensureRankingsFresh(db);
+    expect(recalcRan(writes)).toBe(true);
+  });
+
+  it("falha lendo partidas efetivas não lança nem recalcula", async () => {
     getEffectiveMatchesMock.mockRejectedValueOnce(new Error("fonte fora"));
-    const { db } = makeDb({ geral: { exists: false } });
+    const { db, writes } = makeDb({ fresh: { exists: true, data: () => ({ signature: EMPTY_SIG }) } });
     await expect(ensureRankingsFresh(db)).resolves.toBeUndefined();
+    expect(recalcRan(writes)).toBe(false);
+  });
+
+  it("falha no recálculo (cold start) não lança", async () => {
+    getEffectiveMatchesMock
+      .mockResolvedValueOnce([]) // assinatura calcula ok
+      .mockRejectedValueOnce(new Error("fonte fora")); // recalc re-busca e falha
+    const { db } = makeDb({ fresh: { exists: false } });
+    await expect(ensureRankingsFresh(db)).resolves.toBeUndefined();
+  });
+});
+
+describe("computeFinishedSignature", () => {
+  const m = (over: Record<string, unknown>) => ({
+    id: "m1",
+    status: "finished",
+    homeScore: 1,
+    awayScore: 0,
+    ...over,
+  }) as never;
+
+  it("ignora não-finalizados", () => {
+    expect(computeFinishedSignature([m({ id: "x", status: "scheduled" })])).toBe(EMPTY_SIG);
+  });
+
+  it("muda quando um jogo novo finaliza", () => {
+    const a = computeFinishedSignature([m({ id: "m1" })]);
+    const b = computeFinishedSignature([m({ id: "m1" }), m({ id: "m2" })]);
+    expect(a).not.toBe(b);
+  });
+
+  it("muda quando um placar finalizado é corrigido", () => {
+    const a = computeFinishedSignature([m({ id: "m1", homeScore: 1, awayScore: 0 })]);
+    const b = computeFinishedSignature([m({ id: "m1", homeScore: 2, awayScore: 0 })]);
+    expect(a).not.toBe(b);
+  });
+
+  it("é estável independente da ordem de entrada", () => {
+    const a = computeFinishedSignature([m({ id: "m1" }), m({ id: "m2" })]);
+    const b = computeFinishedSignature([m({ id: "m2" }), m({ id: "m1" })]);
+    expect(a).toBe(b);
   });
 });
 
 describe("recalcRankingsBestEffort", () => {
   it("recalcula (grava rankings/geral)", async () => {
-    const { db, writes } = makeDb({ geral: { exists: true, data: () => ({}) } });
+    const { db, writes } = makeDb();
     await recalcRankingsBestEffort(db);
     expect(recalcRan(writes)).toBe(true);
   });
 
   it("nunca lança quando o recálculo falha", async () => {
     getEffectiveMatchesMock.mockRejectedValueOnce(new Error("boom"));
-    const { db, writes } = makeDb({ geral: { exists: true, data: () => ({}) } });
+    const { db, writes } = makeDb();
     await expect(recalcRankingsBestEffort(db)).resolves.toBeUndefined();
     expect(recalcRan(writes)).toBe(false);
   });
@@ -146,5 +208,28 @@ describe("recalc — avatarUrl nas entries (TASK-05)", () => {
     const entry = geral.entries.find((e) => e["uid"] === "semFoto");
     expect(entry).toBeDefined();
     expect("avatarUrl" in entry!).toBe(false);
+  });
+});
+
+describe("recalc — doc de frescor (dirty-by-finish)", () => {
+  it("grava rankings/_freshness com a assinatura dos finalizados", async () => {
+    const finished = [
+      {
+        id: "m1",
+        status: "finished",
+        homeScore: 2,
+        awayScore: 1,
+        stage: "grupos",
+        groupId: "A",
+        kickoffAt: "2026-06-11T13:00:00-06:00",
+      },
+    ];
+    getEffectiveMatchesMock.mockResolvedValue(finished);
+    const { db, setPayloads } = makeUsersDb([baseUser({ uid: "u1" })]);
+    await recalcRankingsBestEffort(db);
+    const fresh = setPayloads.get("rankings/_freshness") as { signature: string } | undefined;
+    expect(fresh).toBeDefined();
+    // Persistido === o que o guard recomputa ao ler → no-op enquanto nada mudar.
+    expect(fresh!.signature).toBe(computeFinishedSignature(finished as never));
   });
 });

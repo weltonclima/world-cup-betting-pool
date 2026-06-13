@@ -13,20 +13,52 @@ import {
 } from "@/features/rankings/lib";
 import { predictionSchema, userSchema } from "@/schemas";
 import type { Match, RankingEntry } from "@/types";
+import type { MatchWithId } from "@/types/matches";
 
 /**
  * Núcleo de recálculo de rankings/estatísticas (PRD-05, TASK-03) extraído do
  * Route Handler para ser reutilizável in-process.
  *
- * Gatilho real (PRD-11): o placar entra SÓ por edição manual do super_admin
- * (`PUT /api/admin/matches/[id]`) — o openfootball não envia placares. Por isso o
- * recalc é encadeado nesse save (best-effort, `recalcRankingsBestEffort`). O
- * `ensureRankingsFresh` cobre só o cold start (popula o doc se ainda não existe).
+ * Gatilhos do recalc:
+ *  1. Edição manual do super_admin (`PUT /api/admin/matches/[id]`) → encadeado
+ *     best-effort (`recalcRankingsBestEffort`).
+ *  2. On-read dirty-by-finish (`ensureRankingsFresh`): o openfootball PUBLICA
+ *     placares (`score.ft` presente → `status: "finished"`, ver mapper). Logo um
+ *     jogo finaliza SEM edição manual; o guard de frescor detecta isso comparando
+ *     a assinatura dos finalizados (`computeFinishedSignature`) com a do último
+ *     recalc (doc `rankings/_freshness`) e recomputa quando diverge.
  *
  * `recalcRankings` recomputa tudo do zero (idempotente): lê palpites crus +
  * partidas efetivas e pontua internamente via `scorePrediction` — NÃO depende dos
  * campos `status/points` persistidos nos palpites.
  */
+
+/**
+ * Doc-sentinela de frescor (id fora do conjunto de scopes válidos e da regex de
+ * órfãos `pool-*-geral`, então nunca é lido como ranking nem removido na limpeza).
+ * Guarda a assinatura dos finalizados do último recalc para o dirty-by-finish.
+ */
+const FRESHNESS_DOC_ID = "_freshness";
+
+/**
+ * Assinatura determinística do conjunto de partidas FINALIZADAS, incluindo o
+ * placar de cada uma. Muda quando um jogo novo finaliza (openfootball publica
+ * `score.ft`) E também quando um placar já finalizado é corrigido (edição manual).
+ * Formato: "{count}:{hash FNV-1a 32-bit hex}" — pequeno o bastante p/ o doc meta.
+ */
+export function computeFinishedSignature(matches: MatchWithId[]): string {
+  const parts = matches
+    .filter((m) => m.status === "finished")
+    .map((m) => `${m.id}:${m.homeScore}-${m.awayScore}`)
+    .sort();
+  let h = 0x811c9dc5;
+  const str = parts.join("|");
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${parts.length}:${(h >>> 0).toString(16)}`;
+}
 
 /** Fases que possuem ranking próprio (PRD-05). Exclui dezesseis-avos e terceiro. */
 const RANKING_STAGE_SCOPES = [
@@ -106,6 +138,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
 
   const finished = matches.filter((m) => m.status === "finished");
   const matchById = new Map(finished.map((m) => [m.id, m]));
+  // Assinatura dos finalizados deste recalc — gravada no doc de frescor para o
+  // dirty-by-finish (`ensureRankingsFresh`) detectar mudanças em leituras futuras.
+  const finishedSignature = computeFinishedSignature(matches);
 
   // Denominadores de aproveitamento (partidas finalizadas elegíveis ao escopo).
   const finishedGeral = finished.length;
@@ -406,6 +441,16 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   };
   writes.push(db.collection("pool_stats").doc("current").set(poolStats));
 
+  // ─── 10. Doc de frescor (dirty-by-finish) ──────────────────────────────────
+  // Última coisa a entrar no lote: assinatura dos finalizados + timestamp deste
+  // recalc. `ensureRankingsFresh` compara contra isto para decidir recomputar.
+  writes.push(
+    db.collection("rankings").doc(FRESHNESS_DOC_ID).set({
+      signature: finishedSignature,
+      updatedAt: nowIso,
+    }),
+  );
+
   await Promise.all(writes);
 
   return {
@@ -554,25 +599,46 @@ export async function recalcRankingsBestEffort(db: Firestore): Promise<void> {
 }
 
 /**
- * Cold start (recalc-on-read): popula os docs de ranking SE ainda não existem.
- * A frescura corrente é mantida pelo encadeamento no save do resultado
- * (`recalcRankingsBestEffort`), não aqui — se `rankings/geral` já existe, no-op.
- * Best-effort: nunca lança.
+ * Recalc-on-read DIRTY-BY-FINISH: recomputa quando o conjunto de partidas
+ * finalizadas mudou desde o último recalc — cobre o caso em que o openfootball
+ * publica um placar (`score.ft`) SEM edição manual (era o bug: o cold-start puro
+ * deixava o ranking congelado após a 1ª população).
+ *
+ * Compara a assinatura dos finalizados atuais (`computeFinishedSignature`) com a
+ * gravada no doc `rankings/_freshness` pelo último recalc:
+ *  - doc ausente (cold start) OU assinatura divergente → recomputa tudo;
+ *  - assinatura igual → no-op (pula a agregação cara; só pagou 1 fetch + 1 read).
+ *
+ * Best-effort: nunca lança. Falha lendo a fonte/Firestore → serve o que já existe.
  */
 export async function ensureRankingsFresh(db: Firestore): Promise<void> {
-  let snap;
+  let matches: MatchWithId[];
   try {
-    snap = await db.collection("rankings").doc("geral").get();
+    matches = await getEffectiveMatches();
   } catch (err) {
-    console.error("[rankings] falha lendo rankings/geral no ensureFresh:", err);
+    console.error("[rankings] falha lendo partidas efetivas no ensureFresh:", err);
+    return; // sem dados frescos não há como decidir — serve o doc existente
+  }
+
+  const currentSignature = computeFinishedSignature(matches);
+
+  let freshSnap;
+  try {
+    freshSnap = await db.collection("rankings").doc(FRESHNESS_DOC_ID).get();
+  } catch (err) {
+    console.error("[rankings] falha lendo doc de frescor no ensureFresh:", err);
     return;
   }
 
-  if (snap.exists) return; // já populado — o save do resultado mantém fresco
+  // Fresco só quando o doc existe E a assinatura bate — nada mudou desde o recalc.
+  if (freshSnap.exists && freshSnap.data()?.["signature"] === currentSignature) {
+    return;
+  }
 
+  // Cold start OU novo placar finalizado (openfootball/edição) → recomputa.
   try {
     await recalcRankings(db);
   } catch (err) {
-    console.error("[rankings] recalc inicial (cold start) falhou:", err);
+    console.error("[rankings] recalc (dirty-by-finish) falhou:", err);
   }
 }
