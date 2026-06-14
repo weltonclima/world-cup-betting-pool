@@ -33,3 +33,4 @@ vitest-*.json
 
 ai/spec/
 ai/ui-spec/
+.vscode/launch.json
