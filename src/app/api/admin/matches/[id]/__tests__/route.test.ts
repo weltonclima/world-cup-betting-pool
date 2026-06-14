@@ -27,15 +27,18 @@ const {
   writeAuditLogMock,
   getFirestoreMock,
   recalcBestEffortMock,
+  revalidatePathMock,
 } = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   getEffectiveMatchesMock: vi.fn(),
   writeAuditLogMock: vi.fn(),
   getFirestoreMock: vi.fn(),
   recalcBestEffortMock: vi.fn(),
+  revalidatePathMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
 vi.mock("@/app/api/admin/groups/_authorize", () => ({
   authorizeGroupAdmin: authorizeMock,
 }));
@@ -162,6 +165,9 @@ describe("PUT /api/admin/matches/[id]", () => {
     expect(saved["editedBy"]).toBe("admin-1");
     // Encadeia o recalc do ranking (placar manual é a única fonte de resultado).
     expect(recalcBestEffortMock).toHaveBeenCalledOnce();
+    // Invalida o cache das rotas públicas de jogos (lista + detalhe) — D2.
+    expect(revalidatePathMock).toHaveBeenCalledWith("/api/matches");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/api/matches/m1");
   });
 
   it("não dispara recalc quando a edição é rejeitada (422)", async () => {
@@ -201,6 +207,9 @@ describe("DELETE /api/admin/matches/[id] (un-protect)", () => {
     expect(body.cleared).toBe(true);
     // Remover override muda o resultado efetivo → recalcula.
     expect(recalcBestEffortMock).toHaveBeenCalledOnce();
+    // Invalida o cache das rotas públicas de jogos (lista + detalhe) — D2.
+    expect(revalidatePathMock).toHaveBeenCalledWith("/api/matches");
+    expect(revalidatePathMock).toHaveBeenCalledWith("/api/matches/m1");
   });
 
   it("não dispara recalc quando não há override a remover (404)", async () => {
