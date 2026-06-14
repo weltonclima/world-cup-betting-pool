@@ -10,6 +10,7 @@ export {
   useCreateAdminGroup,
   useUpdateAdminGroup,
   useCreateAdminGroupInvite,
+  useAdminGroupInvite,
   type UpdateGroupStatusVars,
   type ChangeGroupAdminVars,
   type UpdateAdminGroupVars,

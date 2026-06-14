@@ -38,9 +38,14 @@ vi.mock("@/server/admin/auditLog", () => ({ writeAuditLog: writeAuditLogMock }))
 
 import { NextResponse } from "next/server";
 
-import { POST } from "@/app/api/admin/groups/[id]/invites/route";
+import { GET, POST } from "@/app/api/admin/groups/[id]/invites/route";
 
 type PostReq = Parameters<typeof POST>[0];
+
+/** Request mínimo para o GET (o gate é mockado; o conteúdo é irrelevante). */
+function getReq(): Parameters<typeof GET>[0] {
+  return {} as unknown as Parameters<typeof GET>[0];
+}
 
 function makeReq(opts: { body?: unknown; badJson?: boolean }): PostReq {
   return {
@@ -254,5 +259,50 @@ describe("POST /api/admin/groups/[id]/invites", () => {
         actorUid: "super-1",
       }),
     );
+  });
+});
+
+describe("GET /api/admin/groups/[id]/invites", () => {
+  it("403 quando o gate barra (não toca no Firestore)", async () => {
+    authorizeMock.mockResolvedValue({
+      errorResponse: NextResponse.json({ error: "Acesso negado." }, { status: 403 }),
+    });
+    const res = await GET(getReq(), ctx());
+    expect(res.status).toBe(403);
+    expect(getFirestoreMock).not.toHaveBeenCalled();
+  });
+
+  it("200 com invite: null quando não há ativo", async () => {
+    mockDb({ activeInvites: [] });
+    const res = await GET(getReq(), ctx());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { invite: unknown };
+    expect(body.invite).toBeNull();
+  });
+
+  it("200 devolve o ativo MAIS RECENTE (maior createdAt) entre vários", async () => {
+    mockDb({
+      activeInvites: [
+        inviteDoc({ code: "OLD111", createdAt: "2020-01-01T00:00:00Z" }),
+        inviteDoc({ code: "NEW999", createdAt: "2026-06-01T00:00:00Z" }),
+      ],
+    });
+    const res = await GET(getReq(), ctx());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { invite: { code: string } };
+    expect(body.invite.code).toBe("NEW999");
+  });
+
+  it("200 ignora doc ilegível e devolve o válido", async () => {
+    const broken = {
+      id: "BROKEN",
+      ref: { id: "BROKEN" },
+      data: () => ({ id: "BROKEN", groupId: "pool-1" }), // shape inválido
+    };
+    mockDb({ activeInvites: [broken, inviteDoc({ code: "GOOD11" })] });
+    const res = await GET(getReq(), ctx());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { invite: { code: string } };
+    expect(body.invite.code).toBe("GOOD11");
   });
 });

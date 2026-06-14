@@ -8,6 +8,7 @@ import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
 import { writeAuditLog } from "@/server/admin/auditLog";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { inviteSchema, MAX_INVITE_MAX_USES, poolSchema } from "@/schemas";
+import type { Invite } from "@/types/invites";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,52 @@ function generateCode(): string {
     code += CODE_ALPHABET[bytes[i]! % CODE_ALPHABET.length];
   }
   return code;
+}
+
+/**
+ * GET /api/admin/groups/[id]/invites — super_admin lê o convite ATIVO atual de
+ * qualquer pool, identificado pelo `[id]` da URL (superadmin-invite-generator).
+ *
+ * Mesmo gate do POST (`authorizeGroupAdmin`: super_admin global/secret). Retorna
+ * `{ invite }` com o ativo mais recente do pool, ou `{ invite: null }` quando não
+ * há nenhum. A invariante do POST mantém ~1 ativo por pool; em empate raro de
+ * timestamp escolhe um deles de forma determinística (createdAt > vence). Docs
+ * ilegíveis são ignorados (não derrubam a leitura).
+ */
+export async function GET(
+  request: NextRequest,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const auth = await authorizeGroupAdmin(request);
+  if ("errorResponse" in auth) return auth.errorResponse;
+
+  const { id: groupId } = await ctx.params;
+  const db = getAdminFirestore();
+
+  try {
+    const snap = await db
+      .collection("invites")
+      .where("groupId", "==", groupId)
+      .where("isActive", "==", true)
+      .get();
+
+    let primary: Invite | null = null;
+    for (const doc of snap.docs) {
+      const parsed = inviteSchema.safeParse(doc.data());
+      if (!parsed.success) continue;
+      if (!primary || parsed.data.createdAt > primary.createdAt) {
+        primary = parsed.data;
+      }
+    }
+
+    return NextResponse.json({ invite: primary }, { status: 200 });
+  } catch (err) {
+    console.error("[admin/groups/invites GET] erro inesperado:", err);
+    return NextResponse.json(
+      { error: "Erro ao carregar o convite." },
+      { status: 500 },
+    );
+  }
 }
 
 /**

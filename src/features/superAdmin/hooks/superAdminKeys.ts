@@ -12,4 +12,5 @@ export const superAdminKeys = {
   matches: (filters: { group?: string; stage?: string; status?: string }) =>
     ["admin-matches", filters] as const,
   logs: (type?: SystemLogType) => ["admin-logs", type ?? "all"] as const,
+  groupInvite: (poolId: string) => ["admin-group-invite", poolId] as const,
 } as const;

@@ -14,6 +14,7 @@ import {
   changeGroupAdmin,
   createAdminGroup,
   createAdminGroupInvite,
+  getAdminGroupInvite,
   deleteGroup,
   listGroupsByStatus,
   removeGroupAdmin,
@@ -153,5 +154,19 @@ export function useCreateAdminGroupInvite(
 ): UseMutationResult<Invite, Error, CreateAdminGroupInviteInput> {
   return useMutation<Invite, Error, CreateAdminGroupInviteInput>({
     mutationFn: (input) => createAdminGroupInvite(poolId, input),
+  });
+}
+
+/**
+ * Lê o convite ativo atual de um pool (super_admin) p/ exibir nos detalhes do
+ * grupo. Desabilitado enquanto `poolId` for vazio. `null` = sem convite ativo.
+ */
+export function useAdminGroupInvite(
+  poolId: string,
+): UseQueryResult<Invite | null, Error> {
+  return useQuery<Invite | null, Error>({
+    queryKey: superAdminKeys.groupInvite(poolId),
+    queryFn: () => getAdminGroupInvite(poolId),
+    enabled: poolId.length > 0,
   });
 }

@@ -5,13 +5,18 @@ import {
   AlertCircle,
   CalendarDays,
   CircleCheck,
+  Hash,
+  LineChart,
   User,
   Users,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InviteValue, inviteUrl } from "@/components/invite/InviteValue";
 import { useGroupDetail } from "@/features/groups/hooks";
+import { useAdminGroupInvite } from "@/features/superAdmin/hooks";
+import type { Invite } from "@/types/invites";
 import type { Pool, PoolStatus } from "@/types/pools";
 
 import { GroupSubHeader } from "./GroupSubHeader";
@@ -25,6 +30,12 @@ const STATUS_META: Record<
   pending: { label: "Pendente", variant: "muted" },
   blocked: { label: "Bloqueado", variant: "destructive" },
 };
+
+/** Dias restantes (inteiro, mín. 0) até `expiresAt` de um convite. */
+function inviteValidityDays(invite: Invite): number {
+  const ms = new Date(invite.expiresAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 86_400_000));
+}
 
 /** Formata o ISO de criação em data pt-BR (dd/mm/aaaa), à prova de valor inválido. */
 function formatCreatedAt(iso: string): string {
@@ -144,6 +155,88 @@ function GroupDetailContent({
           last
         />
       </dl>
+
+      {/* Convite ativo do grupo (super_admin — a rota /groups é SuperAdminGuard). */}
+      <InviteSection poolId={pool.id} />
+    </div>
+  );
+}
+
+/**
+ * Seção do convite ATIVO do grupo: link copiável/compartilhável (reuso de
+ * `InviteValue`) + código, validade restante e usos. Lê via `useAdminGroupInvite`
+ * (gate super_admin no servidor). Estados: loading=skeleton, erro=retry,
+ * vazio=mensagem (geração fica na lista de Grupos Ativos, esta tela é só-leitura).
+ */
+function InviteSection({ poolId }: { poolId: string }): JSX.Element {
+  const { data: invite, isLoading, isError, refetch } =
+    useAdminGroupInvite(poolId);
+
+  if (isError) {
+    return (
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-semibold text-foreground">Convite</h3>
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-border p-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            Não foi possível carregar o convite.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void refetch()}
+            className="min-h-[44px]"
+          >
+            Tentar Novamente
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-semibold text-foreground">Convite</h3>
+        <div
+          aria-hidden="true"
+          className="h-28 rounded-xl border border-border bg-muted animate-pulse motion-reduce:animate-none"
+        />
+      </section>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <InviteValue
+        title="Link de convite"
+        description="Compartilhe o link abaixo para convidar novos participantes."
+        value={invite ? inviteUrl(invite.code) : ""}
+        shareLabel="Compartilhar link"
+        empty={!invite}
+        emptyMessage="Nenhum convite ativo neste grupo."
+      />
+
+      {invite ? (
+        <dl className="flex flex-col rounded-xl border border-border">
+          <DetailRow
+            icon={<Hash size={18} aria-hidden="true" />}
+            label="Código"
+            value={invite.code}
+          />
+          <DetailRow
+            icon={<CalendarDays size={18} aria-hidden="true" />}
+            label="Validade"
+            value={`${inviteValidityDays(invite)} dias`}
+          />
+          <DetailRow
+            icon={<LineChart size={18} aria-hidden="true" />}
+            label="Usos"
+            value={`${invite.usedCount}/${invite.maxUses}`}
+            last
+          />
+        </dl>
+      ) : null}
     </div>
   );
 }

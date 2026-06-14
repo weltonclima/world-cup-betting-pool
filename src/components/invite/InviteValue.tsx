@@ -23,12 +23,15 @@ export function InviteValue({
   value,
   shareLabel,
   empty,
+  emptyMessage = "Nenhum convite ativo. Gere um novo link abaixo.",
 }: {
   title: string;
   description: string;
   value: string;
   shareLabel: string;
   empty: boolean;
+  /** Texto do estado vazio. Default assume um gerador logo abaixo. */
+  emptyMessage?: string;
 }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -63,7 +66,7 @@ export function InviteValue({
 
       {empty ? (
         <p className="rounded-xl border border-border p-6 text-center text-sm text-muted-foreground">
-          Nenhum convite ativo. Gere um novo link abaixo.
+          {emptyMessage}
         </p>
       ) : (
         <>

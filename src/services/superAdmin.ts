@@ -227,6 +227,24 @@ export async function createAdminGroupInvite(
   return inviteSchema.parse(body.invite);
 }
 
+/**
+ * Lê o convite ATIVO atual de qualquer pool (super_admin), via
+ * `GET /api/admin/groups/[id]/invites`. Retorna `null` quando o pool não tem
+ * convite ativo (corpo `{ invite: null }`). Resposta validada com `inviteSchema`.
+ */
+export async function getAdminGroupInvite(
+  poolId: string,
+): Promise<Invite | null> {
+  const response = await fetch(
+    `/api/admin/groups/${encodeURIComponent(poolId)}/invites`,
+    { method: "GET", credentials: "same-origin" },
+  );
+  if (!response.ok) throw await toServiceError(response);
+  const body = (await response.json()) as { invite: unknown };
+  if (body.invite == null) return null;
+  return inviteSchema.parse(body.invite);
+}
+
 // ─── Membros de um pool (seletor de novo admin) ───────────────────────────────
 
 export const poolMemberSchema = z.object({

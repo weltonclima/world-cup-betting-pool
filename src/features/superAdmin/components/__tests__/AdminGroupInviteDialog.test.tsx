@@ -110,7 +110,7 @@ describe("AdminGroupInviteDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /^gerar$/i }));
 
     expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate.mock.calls[0][0]).toEqual({ validityDays: 7, maxUses: 5 });
+    expect(mutate.mock.calls[0]![0]).toEqual({ validityDays: 7, maxUses: 5 });
   });
 
   it("pós-geração exibe link e código do convite", () => {
