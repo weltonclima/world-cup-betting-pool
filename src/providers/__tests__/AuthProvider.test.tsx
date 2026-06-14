@@ -20,9 +20,12 @@ vi.mock("firebase/firestore", () => ({
   getDoc: vi.fn(),
 }));
 
+// `authPersistenceReady` precisa existir: o AuthProvider só subscreve
+// `onAuthStateChanged` APÓS essa promise resolver (gate anti ping-pong).
 vi.mock("@/firebase", () => ({
   firebaseAuth: {},
   firestore: {},
+  authPersistenceReady: Promise.resolve(),
 }));
 
 const onAuthStateChangedMock = vi.mocked(onAuthStateChanged);
@@ -85,12 +88,28 @@ function ContextProbe() {
   );
 }
 
-function renderProvider() {
+// Renderiza apenas (registro do listener acontece após authPersistenceReady).
+function renderProviderRaw() {
   return render(
     <AuthProvider>
       <ContextProbe />
     </AuthProvider>,
   );
+}
+
+// Esvazia a microfila para que `authPersistenceReady.then(...)` rode e o
+// `onAuthStateChanged` seja subscrito (capturando `authCallback`).
+async function flushPersistence() {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
+// Renderiza E aguarda o listener registrar — uso padrão na maioria dos testes.
+async function renderProvider() {
+  const result = renderProviderRaw();
+  await flushPersistence();
+  return result;
 }
 
 beforeEach(() => {
@@ -110,14 +129,27 @@ afterEach(() => {
 
 describe("AuthProvider", () => {
   it("estado inicial: loading=true, firebaseUser=null, profile=null", () => {
-    renderProvider();
+    renderProviderRaw();
     expect(screen.getByTestId("loading").textContent).toBe("true");
     expect(screen.getByTestId("firebaseUser").textContent).toBe("null");
     expect(screen.getByTestId("profile").textContent).toBe("null");
   });
 
+  it("gate anti ping-pong: não subscreve onAuthStateChanged antes de authPersistenceReady resolver", async () => {
+    renderProviderRaw();
+    // Antes da persistência resolver: listener NÃO registrado e loading=true.
+    // Isso impede o `null` transiente que disparava o redirect /login → /home.
+    expect(onAuthStateChangedMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("loading").textContent).toBe("true");
+
+    // Após a persistência resolver: o listener é subscrito exatamente uma vez.
+    await flushPersistence();
+    expect(onAuthStateChangedMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("loading").textContent).toBe("true");
+  });
+
   it("não autenticado: callback(null) → loading=false, sem perfil/erro", async () => {
-    renderProvider();
+    await renderProvider();
     authCallback(null);
 
     await waitFor(() => {
@@ -130,7 +162,7 @@ describe("AuthProvider", () => {
 
   it("autenticado + perfil OK: profile preenchido, status/role derivados", async () => {
     getDocMock.mockResolvedValue(makeSnapshot(true, validProfile));
-    renderProvider();
+    await renderProvider();
     authCallback(fakeUser);
 
     await waitFor(() => {
@@ -145,7 +177,7 @@ describe("AuthProvider", () => {
 
   it("autenticado sem doc: error='not-found', profile=null", async () => {
     getDocMock.mockResolvedValue(makeSnapshot(false, undefined));
-    renderProvider();
+    await renderProvider();
     authCallback(fakeUser);
 
     await waitFor(() => {
@@ -159,7 +191,7 @@ describe("AuthProvider", () => {
     getDocMock.mockResolvedValue(
       makeSnapshot(true, { uid: "uid-123", foo: "bar" }),
     );
-    renderProvider();
+    await renderProvider();
     authCallback(fakeUser);
 
     await waitFor(() => {
@@ -171,7 +203,7 @@ describe("AuthProvider", () => {
 
   it("erro de leitura: getDoc rejeita → error='fetch-error'", async () => {
     getDocMock.mockRejectedValue(new Error("network down"));
-    renderProvider();
+    await renderProvider();
     authCallback(fakeUser);
 
     await waitFor(() => {
@@ -181,8 +213,8 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("loading").textContent).toBe("false");
   });
 
-  it("unsubscribe é chamado ao desmontar", () => {
-    const { unmount } = renderProvider();
+  it("unsubscribe é chamado ao desmontar", async () => {
+    const { unmount } = await renderProvider();
     expect(unsubscribeSpy).not.toHaveBeenCalled();
     unmount();
     expect(unsubscribeSpy).toHaveBeenCalledTimes(1);
@@ -198,7 +230,7 @@ describe("AuthProvider", () => {
     );
     getDocMock.mockReturnValue(pendingSnapshot);
 
-    const { unmount } = renderProvider();
+    const { unmount } = await renderProvider();
 
     // Dispara resolveSession com um usuário autenticado; getDoc fica pendente.
     act(() => {
@@ -226,7 +258,7 @@ describe("AuthProvider.refreshProfile", () => {
   it("relê o perfil sob demanda: pending → approved", async () => {
     // Carga inicial: perfil pending.
     getDocMock.mockResolvedValue(makeSnapshot(true, pendingProfile));
-    renderProvider();
+    await renderProvider();
     await act(async () => {
       authCallback(fakeUser);
     });
@@ -251,7 +283,7 @@ describe("AuthProvider.refreshProfile", () => {
   });
 
   it("no-op quando deslogado: não chama getDoc nem altera estado", async () => {
-    renderProvider();
+    await renderProvider();
     await act(async () => {
       authCallback(null);
     });
@@ -276,7 +308,7 @@ describe("AuthProvider.refreshProfile", () => {
 
   it("define error='not-found' se o doc sumiu na releitura", async () => {
     getDocMock.mockResolvedValue(makeSnapshot(true, validProfile));
-    renderProvider();
+    await renderProvider();
     await act(async () => {
       authCallback(fakeUser);
     });

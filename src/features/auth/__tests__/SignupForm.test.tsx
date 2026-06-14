@@ -35,8 +35,11 @@ vi.mock("next/navigation", () => ({
 // `redeemInvite` (PRD-10, A2) importa `@/firebase` no nível de módulo, que valida
 // as envs NEXT_PUBLIC_FIREBASE_* ao carregar. Mockado para isolar o SignupForm
 // do cliente Firebase real (sem o mock, o import quebra a suíte na carga).
+const { redeemInviteMock } = vi.hoisted(() => ({
+  redeemInviteMock: vi.fn(async () => true),
+}));
 vi.mock("@/services/invites", () => ({
-  redeemInvite: vi.fn(async () => true),
+  redeemInvite: redeemInviteMock,
 }));
 
 // Helpers de seleção de campos por label/placeholder.
@@ -90,6 +93,8 @@ beforeEach(() => {
   toastSuccessMock.mockReset();
   toastErrorMock.mockReset();
   pushMock.mockReset();
+  redeemInviteMock.mockReset();
+  redeemInviteMock.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -178,5 +183,50 @@ describe("SignupForm", () => {
       );
     });
     expect(toastSuccessMock).not.toHaveBeenCalled();
+  });
+
+  // Regressão: o bloco read-only do grupo (fluxo convite) usava <FormLabel> fora
+  // de <FormField>, o que dispara "useFormField deve ser usado dentro de
+  // <FormField>" e quebra a página /invite/[code].
+  describe("fluxo de convite (presetGroup)", () => {
+    const presetGroup = { id: "pool-123", name: "Galera do Bar" };
+
+    it("renderiza o grupo travado sem quebrar (sem erro de useFormField)", () => {
+      expect(() =>
+        render(<SignupForm presetGroup={presetGroup} inviteCode="NKD4RD" />),
+      ).not.toThrow();
+
+      expect(screen.getByText("Seu grupo")).toBeTruthy();
+      expect(screen.getByText(presetGroup.name)).toBeTruthy();
+    });
+
+    it("submete com o groupId do convite e contabiliza o resgate", async () => {
+      render(<SignupForm presetGroup={presetGroup} inviteCode="NKD4RD" />);
+
+      fillTextFields();
+
+      await waitFor(() => {
+        expect(submitButton().disabled).toBe(false);
+      });
+
+      fireEvent.click(submitButton());
+
+      await waitFor(() => {
+        expect(signUpMock).toHaveBeenCalledTimes(1);
+      });
+
+      expect(signUpMock).toHaveBeenCalledWith({
+        name: "Fulano de Tal",
+        nickname: "Fulano",
+        email: "fulano@example.com",
+        password: "secret123",
+        // Convite trava o pool: usa o id do convite, não o do form.
+        groupId: "pool-123",
+      });
+
+      await waitFor(() => {
+        expect(redeemInviteMock).toHaveBeenCalledWith("NKD4RD");
+      });
+    });
   });
 });

@@ -12,7 +12,7 @@ import {
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-import { firebaseAuth, firestore } from "@/firebase";
+import { authPersistenceReady, firebaseAuth, firestore } from "@/firebase";
 import { userSchema } from "@/schemas";
 import type { Role, User, UserStatus } from "@/types";
 
@@ -118,11 +118,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    // Cancela o registro tardio do listener se o effect for limpo antes de
+    // `authPersistenceReady` resolver (evita subscrever após desmontagem).
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
 
-    // Subscription de sessão (idioma Firebase). Retorna o unsubscribe.
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (nextUser) => {
-      // Cada mudança de auth reinicia a resolução do perfil.
-      void resolveSession(nextUser);
+    // Só registra `onAuthStateChanged` APÓS a persistência ser aplicada. Antes
+    // disso o SDK usa a persistência default (in-memory) e emite um `null`
+    // transiente — a restauração da sessão só ocorre após `setPersistence`. Sem
+    // este gate, esse null falso baixaria `loading` e dispararia o redirect
+    // /login → /home. Até resolver, `loading` permanece `true` (estado inicial).
+    void authPersistenceReady.then(() => {
+      if (cancelled || !mountedRef.current) return;
+      // Subscription de sessão (idioma Firebase). Retorna o unsubscribe.
+      unsubscribe = onAuthStateChanged(firebaseAuth, (nextUser) => {
+        // Cada mudança de auth reinicia a resolução do perfil.
+        void resolveSession(nextUser);
+      });
     });
 
     async function resolveSession(nextUser: FirebaseUser | null) {
@@ -149,8 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       // Invalida qualquer loadProfile em voo antes de cancelar a subscription.
+      cancelled = true;
       mountedRef.current = false;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, [loadProfile]);
 
