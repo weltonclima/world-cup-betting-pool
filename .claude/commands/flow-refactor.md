@@ -52,6 +52,21 @@ unit 1?"
 ## Stage 2 — Per-unit execution
 For each refactor unit, follow this exact order:
 
+### 2.0 Status gate (prevents reprocessing)
+Before starting a unit, read its `Status` from the analysis file
+(`ai/refactor/...`):
+- `Status: done` → **skip the unit entirely.** Announce
+  "UNIT-XX — skipped (already done)" and move to the next unit.
+- `Status: in-progress` → **resume**: read `Phases done` and skip
+  every phase already listed; continue from the first phase not
+  recorded.
+- `Status: pending` → run the full cycle from 2.1.
+
+When you start (or resume) a unit, set its `Status` to
+`in-progress` in the analysis file before running any phase.
+**After each phase below completes, append that skill's name to
+the unit's `Phases done` list** (`refactor`, `test`, `review`).
+
 ### 2.1 REFACTOR
 - run `/refactor` for the current unit
 
@@ -64,6 +79,10 @@ For each refactor unit, follow this exact order:
 - if the refactor unit touches frontend/UI code and `ai/
 ui-spec/task-{prd}-{NN}.md` exists, also run `/ui-review`
 - summarize outcome and verdict
+- if the review verdict passes, mark the unit complete: set its
+  `Status` to `done` in the analysis file (a failing review
+  leaves `Status: in-progress` so the unit is retried, not
+  skipped)
 - stop and ask whether to continue
 
 Approval question example:

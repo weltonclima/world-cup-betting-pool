@@ -3,24 +3,23 @@ import "server-only";
 import {
   fetchAllMatches,
   EspnScoreClient,
-  buildEspnPatchMap,
+  mapEspnEventsToMatches,
 } from "@/server/copaData";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { matchSchema } from "@/schemas";
-import type { MatchWithId, EspnMatchPatch } from "@/server/copaData";
+import type { MatchWithId } from "@/server/copaData";
 
 /**
- * Fonte efetiva de partidas (PRD-11 — persistência + edição manual).
+ * Fonte efetiva de partidas (PRD-13 — ESPN como fonte primária).
  *
- * Estratégia OVERLAY (menor risco, sem regressão): a base continua sendo o
- * openfootball ao vivo (`fetchAllMatches`) — placares em tempo real seguem
- * fluindo normalmente. Por cima, aplicamos as partidas persistidas em
- * `matches/{id}` QUE FORAM EDITADAS MANUALMENTE (`isManualOverride === true`):
- * uma correção do super_admin SEMPRE vence o dado do openfootball.
+ * Pipeline INVERTIDA: ESPN deixa de ser overlay e vira a BASE do schedule
+ * completo (`fetchSchedule` + `mapEspnEventsToMatches`). O openfootball
+ * (`fetchAllMatches`) vira FALLBACK de emergência — usado só quando a ESPN
+ * falha integralmente (fetch OU mapping). Por cima de qualquer base, as
+ * partidas persistidas em `matches/{id}` EDITADAS MANUALMENTE
+ * (`isManualOverride === true`) sempre vencem.
  *
- * Consequência: com a coleção `matches` vazia (estado inicial, antes do 1º
- * sync/edição) o comportamento é IDÊNTICO ao de hoje. Só diverge quando há
- * override manual — exatamente o objetivo.
+ * Precedência: `manual > ESPN > openfootball-fallback`.
  */
 
 /** Lê a coleção `matches` persistida → mapa id→match (ignora docs malformados). */
@@ -43,83 +42,53 @@ export async function readPersistedMatches(): Promise<Map<string, MatchWithId>> 
   return map;
 }
 
-/** Dia atual em UTC no formato `YYYYMMDD` exigido pelo `?dates` da ESPN. */
-function todayUtcYyyymmdd(): string {
-  return new Date().toISOString().slice(0, 10).replace(/-/g, "");
-}
-
 /**
- * Busca o patch ESPN (status/placar ao vivo) para a base. BEST-EFFORT: qualquer
- * falha (timeout, HTTP, parse, rede) é absorvida com `console.error` e retorna
- * mapa vazio — ESPN-down nunca derruba nem altera o pipeline (zero regressão).
+ * Base ESPN: schedule completo (104 jogos) mapeado para `MatchWithId[]`.
+ * NÃO absorve erros — qualquer falha (fetch, parse, mapping) propaga para
+ * `getEffectiveMatches`, que decide o fallback openfootball.
  */
-async function fetchEspnPatchMap(
-  base: MatchWithId[],
-): Promise<Map<string, EspnMatchPatch>> {
-  try {
-    const client = new EspnScoreClient();
-    const scoreboard = await client.fetchScoreboard(todayUtcYyyymmdd());
-    return buildEspnPatchMap(scoreboard.events, base);
-  } catch (err) {
-    console.error(
-      "[matchSource] falha ESPN; seguindo sem live scores (degradação resiliente):",
-      err,
-    );
-    return new Map();
-  }
+async function fetchEspnBase(): Promise<MatchWithId[]> {
+  const client = new EspnScoreClient();
+  const events = await client.fetchSchedule();
+  return mapEspnEventsToMatches(events);
 }
 
 /**
- * Aplica o patch ESPN (só status/placar) sobre a base. Map vazio → base intacta.
+ * Partidas efetivas com precedência `manual > ESPN > openfootball-fallback`.
  *
- * Precedência ESPN > openfootball é INCONDICIONAL por design (PRD-12): se a base
- * já marca `finished` mas a ESPN ainda reporta `in` (lag de fim de jogo), o match
- * volta a `live` e sai do ranking (recalc filtra `finished`) até a ESPN convergir
- * (≤5min, janela de cache). Risco transitório ACEITO — não há guarda anti-regressão.
- */
-function applyEspnPatches(
-  base: MatchWithId[],
-  patchMap: Map<string, EspnMatchPatch>,
-): MatchWithId[] {
-  if (patchMap.size === 0) return base;
-  return base.map((m) => {
-    const patch = patchMap.get(m.id);
-    return patch
-      ? { ...m, status: patch.status, homeScore: patch.homeScore, awayScore: patch.awayScore }
-      : m;
-  });
-}
-
-/**
- * Partidas efetivas com precedência `manual > ESPN > openfootball`.
- *
- * Pipeline: base openfootball → patch ESPN ao vivo (best-effort) → overrides
- * manuais persistidos por cima. Resiliente em ambas as bordas:
- *  - ESPN-down → patch vazio → saída idêntica ao openfootball (zero regressão);
- *  - Firestore-down → cai para a base já com ESPN aplicado (live scores seguem).
- * Coleção `matches` vazia → base + ESPN, sem overrides.
+ * Pipeline: base ESPN (fonte primária) → fallback openfootball se a ESPN cair
+ * integralmente → overrides manuais persistidos por cima. Resiliente em ambas
+ * as bordas:
+ *  - ESPN-down → fallback para o schedule openfootball (best-effort);
+ *  - Firestore-down → retorna a base (ESPN ou openfootball) sem overrides.
+ * Coleção `matches` vazia → base sem overrides.
  */
 export async function getEffectiveMatches(): Promise<MatchWithId[]> {
-  const base = await fetchAllMatches();
-
-  // Camada ESPN (antes dos overrides manuais — manual sempre vence).
-  const espnPatchMap = await fetchEspnPatchMap(base);
-  const espnBase = applyEspnPatches(base, espnPatchMap);
+  let base: MatchWithId[];
+  try {
+    base = await fetchEspnBase();
+  } catch (err) {
+    console.error(
+      "[matchSource] ESPN indisponível; usando fallback openfootball:",
+      err,
+    );
+    base = await fetchAllMatches();
+  }
 
   let persisted: Map<string, MatchWithId>;
   try {
     persisted = await readPersistedMatches();
   } catch (err) {
     console.error(
-      "[matchSource] falha lendo matches persistidos; usando base + ESPN:",
+      "[matchSource] falha lendo matches persistidos; usando base sem overrides:",
       err,
     );
-    return espnBase;
+    return base;
   }
-  if (persisted.size === 0) return espnBase;
+  if (persisted.size === 0) return base;
 
-  const baseIds = new Set(espnBase.map((m) => m.id));
-  const merged = espnBase.map((m) => {
+  const baseIds = new Set(base.map((m) => m.id));
+  const merged = base.map((m) => {
     const override = persisted.get(m.id);
     return override && override.isManualOverride === true ? override : m;
   });

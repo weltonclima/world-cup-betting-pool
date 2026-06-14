@@ -224,6 +224,7 @@ describe("espnScoreboardSchema", () => {
     const sb = {
       events: [
         {
+          id: "1",
           date: "2026-06-14T19:00Z",
           competitions: [
             {

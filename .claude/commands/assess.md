@@ -116,11 +116,20 @@ Files, modules, and dependencies impacted.
 Known breaking changes and their impact.
 
 ## 5. Incremental migration steps
-Ordered list of steps, each with:
+Ordered list of steps. Number them `STEP-01`, `STEP-02`, … and
+give each:
 - scope
 - what changes
 - validation criteria
 - rollback path
+- Status: pending
+- Phases done: (none)
+
+`Status` is one of exactly `pending` · `in-progress` · `done`
+and `Phases done` lists which skills already ran for the step
+(e.g. `migrate, validate, test, review`). `/assess` seeds them
+as `pending` / `(none)`; `/flow-migration` updates them during
+execution so a re-run does not reprocess finished steps.
 
 ## 6. Risks and blockers
 Technical risks, unknowns, and blockers.

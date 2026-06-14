@@ -43,19 +43,29 @@ Based on artifacts found:
 ### 4. Calculate progress
 For **feature workflows**:
 - Count total tasks in plan
-- Count completed specs
-- Cross-reference implemented tasks (by checking code changes
-  or spec presence)
-- Identify current task
+- **Read each task's `Status` field** (`pending` / `in-progress`
+  / `done`) from `ai/plan/feature.md` — this is the authoritative
+  progress signal written by `/flow`. Use the per-task
+  `Phases done` list to report which skills ran on the current
+  task.
+- If `Status` fields are absent (plan predates status tracking),
+  fall back to inferring from completed specs, code changes, and
+  spec presence.
+- Identify the current task (first task not `done`)
 
 For **migration workflows**:
 - Count total steps in assessment
-- Identify which steps have been completed (by checking code
-  state)
+- Read each step's `Status` field (`pending` / `in-progress` /
+  `done`) from `ai/migration/...`, with `Phases done` showing
+  which skills ran. Fall back to checking code state if the
+  assessment predates status tracking.
 
 For **refactor workflows**:
 - Count total units in analysis
-- Identify which units have been completed
+- Read each unit's `Status` field (`pending` / `in-progress` /
+  `done`) from `ai/refactor/...`, with `Phases done` showing
+  which skills ran. Fall back to checking code state if the
+  analysis predates status tracking.
 
 ### 5. Determine next action
 Based on progress, recommend what to run next.
@@ -74,11 +84,11 @@ Respond with:
 | ... | done / in progress / pending |
 
 ## 3. Detailed progress (for feature/migration/refactor)
-| Task/Step | Status | Notes |
+| Task/Step | Status | Phases done |
 |---|---|---|
-| TASK-01 | done | ... |
-| TASK-02 | in progress | ... |
-| TASK-03 | pending | ... |
+| TASK-01 | done | spec, implement, test, review |
+| TASK-02 | in progress | spec, implement |
+| TASK-03 | pending | (none) |
 
 ## 4. Current state
 - what is currently in progress or just completed

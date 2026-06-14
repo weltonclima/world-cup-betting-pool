@@ -11,7 +11,7 @@ import "server-only";
 import { HttpCopaDataClient } from "./client";
 import { COPA_DATA_URL } from "./config";
 import { mapOpenFootballMatch } from "./mapper";
-import { resolveTeam } from "./teamRegistry";
+import { TEAM_REGISTRY } from "./teamRegistry";
 import type { CopaDataClient } from "./client";
 import type { MatchWithId } from "@/types/matches";
 import type { TeamWithId } from "@/types/teams";
@@ -35,37 +35,20 @@ export async function fetchAllMatches(): Promise<MatchWithId[]> {
 }
 
 /**
- * Deriva as seleções participantes a partir dos matches de grupo
- * (times reais, excluindo placeholders de mata-mata).
- * groupId vem do campo `group` do match de grupo ("Group A" → "A").
+ * Deriva as 48 seleções participantes do `TEAM_REGISTRY` estático (PRD-13).
+ *
+ * Sem HTTP: o registry já tem todos os times reais com `groupId` embarcado
+ * ("A".."L"). Async só por interface (rota consome com React Query). Placeholders
+ * de mata-mata nunca aparecem — o registry só contém seleções reais.
  */
 export async function fetchAllTeams(): Promise<TeamWithId[]> {
-  const client = getCopaDataClient();
-  const data = await client.getData();
-
-  const seen = new Set<string>();
-  const teams: TeamWithId[] = [];
-
-  for (const match of data.matches) {
-    if (!match.group) continue; // só jogos de grupo têm times reais com nome
-
-    const groupId = match.group.replace(/^Group\s+/i, "").trim();
-
-    for (const teamName of [match.team1, match.team2]) {
-      const entry = resolveTeam(teamName);
-      if (!entry || seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      teams.push({
-        id: entry.id,
-        name: entry.name,
-        code: entry.code,
-        flagUrl: entry.flagUrl,
-        groupId,
-      });
-    }
-  }
-
-  return teams;
+  return Object.values(TEAM_REGISTRY).map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    code: entry.code,
+    flagUrl: entry.flagUrl,
+    groupId: entry.groupId,
+  }));
 }
 
 // ─── Re-exports ───────────────────────────────────────────────────────────────
@@ -79,7 +62,7 @@ export type { CopaDataClient } from "./client";
 export { COPA_DATA_URL, REVALIDATE_MATCHES, REVALIDATE_TEAMS } from "./config";
 export type { MatchWithId, TeamWithId };
 
-// Pipeline ESPN live scores (PRD-12) — consumido pelo merge em matchSource.
-export { EspnScoreClient } from "./espnClient";
-export { buildEspnPatchMap } from "./espnMatcher";
+// Pipeline ESPN como fonte primária (PRD-13) — consumido por matchSource.
+export { EspnScoreClient, ESPN_TOURNAMENT_RANGES } from "./espnClient";
+export { mapEspnEventsToMatches, mapEspnEventToMatch } from "./espnMapper";
 export type { EspnMatchPatch } from "./espnMapper";

@@ -21,6 +21,32 @@ export const espnTeamSchema = z
   .object({ abbreviation: z.string() })
   .passthrough();
 
+/** Endereço da venue ESPN — campos tolerantes (API não-oficial). */
+export const espnAddressSchema = z
+  .object({
+    city: z.string().optional(),
+    country: z.string().optional(),
+  })
+  .passthrough();
+
+/** Venue da competition ESPN — local da partida. */
+export const espnVenueSchema = z
+  .object({
+    id: z.string().optional(),
+    fullName: z.string().optional(),
+    address: espnAddressSchema.optional(),
+  })
+  .passthrough();
+
+/** Season do evento ESPN — `slug` identifica o stage ("group-stage", "round-of-32"). */
+export const espnSeasonSchema = z
+  .object({
+    year: z.number().optional(),
+    type: z.number().optional(),
+    slug: z.string().optional(),
+  })
+  .passthrough();
+
 export const espnCompetitorSchema = z
   .object({
     homeAway: z.enum(["home", "away"]),
@@ -46,12 +72,19 @@ export const espnCompetitionSchema = z
   .object({
     status: espnStatusSchema,
     competitors: z.array(espnCompetitorSchema).length(2),
+    venue: espnVenueSchema.optional(),
+    // Fonte do grupo: "FIFA World Cup, Group A" (mata-mata: "FIFA World Cup").
+    altGameNote: z.string().optional(),
   })
   .passthrough();
 
 export const espnEventSchema = z
   .object({
+    // ID numérico do evento (ex.: "760415") — presente em todos os eventos.
+    id: z.string(),
+    uid: z.string().optional(),
     date: z.string(),
+    season: espnSeasonSchema.optional(),
     competitions: z.array(espnCompetitionSchema).min(1),
   })
   .passthrough();
@@ -64,6 +97,9 @@ export type EspnScoreboard = z.infer<typeof espnScoreboardSchema>;
 export type EspnEvent = z.infer<typeof espnEventSchema>;
 export type EspnCompetition = z.infer<typeof espnCompetitionSchema>;
 export type EspnCompetitor = z.infer<typeof espnCompetitorSchema>;
+export type EspnSeason = z.infer<typeof espnSeasonSchema>;
+export type EspnVenue = z.infer<typeof espnVenueSchema>;
+export type EspnAddress = z.infer<typeof espnAddressSchema>;
 
 /** Parsing seguro do scoreboard ESPN — nunca lança, retorna `SafeParseReturnType`. */
 export function parseEspnScoreboard(raw: unknown) {

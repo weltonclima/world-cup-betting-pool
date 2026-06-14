@@ -8,7 +8,6 @@ import {
   stageSchema,
   syncLogSchema,
 } from "@/schemas";
-import type { SyncLog } from "@/schemas/syncLogs";
 import type { Invite } from "@/types/invites";
 
 /**
@@ -383,19 +382,6 @@ export async function listAdminMatches(
   if (!response.ok) throw await toServiceError(response);
   const body = (await response.json()) as { matches: unknown[] };
   return body.matches.map((m) => adminMatchViewSchema.parse(m));
-}
-
-/**
- * Dispara o sync openfootball → Firestore (PRD-11 TASK-02). Persiste as partidas
- * preservando overrides manuais; retorna o resumo (`SyncLog`) já gravado.
- */
-export async function syncWorldCup(): Promise<SyncLog> {
-  const response = await fetch("/api/admin/worldcup/sync", {
-    method: "POST",
-    credentials: "same-origin",
-  });
-  if (!response.ok) throw await toServiceError(response);
-  return syncLogSchema.parse(await response.json());
 }
 
 /** Campos editáveis de uma partida (edição manual, PRD-11 TASK-04). */
