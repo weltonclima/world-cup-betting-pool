@@ -2,12 +2,14 @@ import { z } from "zod";
 
 import { extractErrorDetail } from "./_apiClient";
 import {
+  inviteSchema,
   matchStatusSchema,
   poolStatusSchema,
   stageSchema,
   syncLogSchema,
 } from "@/schemas";
 import type { SyncLog } from "@/schemas/syncLogs";
+import type { Invite } from "@/types/invites";
 
 /**
  * Camada de serviço da área global do Super Admin (PRD-11). Consome os Route
@@ -192,6 +194,37 @@ export async function updateAdminGroup(
     body: JSON.stringify(patch),
   });
   if (!response.ok) throw await toServiceError(response);
+}
+
+// ─── Convite por grupo (super_admin gera para qualquer pool) ──────────────────
+
+export interface CreateAdminGroupInviteInput {
+  maxUses: number;
+  validityDays: number;
+}
+
+/**
+ * Gera um convite para QUALQUER pool (super_admin), via
+ * `POST /api/admin/groups/[id]/invites` (superadmin-invite-generator TASK-03).
+ * `groupId` vai na URL, nunca no body. Sem `label` (decisão travada). A resposta
+ * é validada com `inviteSchema` — mesmo shape do convite do group_admin.
+ */
+export async function createAdminGroupInvite(
+  poolId: string,
+  input: CreateAdminGroupInviteInput,
+): Promise<Invite> {
+  const response = await fetch(
+    `/api/admin/groups/${encodeURIComponent(poolId)}/invites`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(input),
+    },
+  );
+  if (!response.ok) throw await toServiceError(response);
+  const body = (await response.json()) as { invite: unknown };
+  return inviteSchema.parse(body.invite);
 }
 
 // ─── Membros de um pool (seletor de novo admin) ───────────────────────────────

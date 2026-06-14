@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type JSX } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Eye, Pencil, Plus, UserCog } from "lucide-react";
+import { Ban, Eye, Link, Pencil, Plus, UserCog } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 } from "./shared";
 import { ChangeAdminDialog } from "./ChangeAdminDialog";
 import { AdminGroupFormDialog } from "./AdminGroupFormDialog";
+import { AdminGroupInviteDialog } from "./AdminGroupInviteDialog";
 
 /**
  * Grupos Ativos (PRD11-03). Lista com avatar/nome/slug/contagem de participantes
@@ -93,6 +94,7 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
   const [blockOpen, setBlockOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const busy = update.isPending || changeAdmin.isPending;
 
   return (
@@ -119,6 +121,11 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
             label: "Visualizar",
             icon: <Eye size={16} aria-hidden="true" />,
             onSelect: () => router.push(`/groups/${pool.id}`),
+          },
+          {
+            label: "Gerar convite",
+            icon: <Link size={16} aria-hidden="true" />,
+            onSelect: () => setInviteOpen(true),
           },
           {
             label: "Editar",
@@ -173,6 +180,14 @@ function ActiveRow({ pool }: { pool: AdminPoolRow }): JSX.Element {
       />
 
       <AdminGroupFormDialog open={editOpen} onOpenChange={setEditOpen} pool={pool} />
+
+      <AdminGroupInviteDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        poolId={pool.id}
+        poolName={pool.name}
+        allowInvites={pool.allowInvites !== false}
+      />
     </li>
   );
 }

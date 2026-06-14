@@ -27,6 +27,8 @@ export const systemLogTypeSchema = z.enum([
   "user_group_assigned",
   // PRD-12 (palpite manual lançado pelo admin de grupo)
   "group_admin_manual_prediction",
+  // superadmin-invite-generator
+  "group_invite_created",
 ]);
 
 export const systemLogLevelSchema = z.enum(["info", "warning", "error"]);

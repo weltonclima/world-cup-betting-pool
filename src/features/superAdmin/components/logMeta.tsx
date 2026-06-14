@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import {
   Ban,
   CheckCircle2,
+  Link as LinkIcon,
   Pencil,
   RefreshCw,
   ShieldCheck,
@@ -80,6 +81,11 @@ const LOG_META: Record<SystemLogType, LogMeta> = {
     icon: UserCog,
     title: "Usuário adicionado a grupo",
     className: "bg-success-bg text-success",
+  },
+  group_invite_created: {
+    icon: LinkIcon,
+    title: "Convite gerado",
+    className: "bg-info-bg text-info",
   },
   // PRD-12 (palpite manual lançado pelo admin de grupo)
   group_admin_manual_prediction: {
