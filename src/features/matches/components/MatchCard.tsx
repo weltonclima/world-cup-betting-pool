@@ -141,8 +141,10 @@ function CenterColumn({ match }: { match: MatchWithId }) {
   const timeStr = format(kickoffDate, "HH:mm", { locale: ptBR });
   const dateStr = format(kickoffDate, "dd/MM/yyyy", { locale: ptBR });
 
-  const isFinished =
-    match.status === "finished" &&
+  // Placar visível para encerrado E ao vivo (com placar parcial). Ao vivo sem
+  // placar (ambos null, ainda válido pelo refine) cai no horário — não inventa 0x0.
+  const hasScore =
+    (match.status === "finished" || match.status === "live") &&
     match.homeScore !== null &&
     match.awayScore !== null;
 
@@ -150,15 +152,15 @@ function CenterColumn({ match }: { match: MatchWithId }) {
     // Largura fixa (shrink-0): o centro não cresce nem força overflow; o estádio
     // quebra linha (break-words) em vez de empurrar a largura do card.
     <div className="flex w-24 shrink-0 flex-col items-center gap-0.5 px-1">
-      {isFinished ? (
-        // Variante encerrado: exibe placar em destaque
+      {hasScore ? (
+        // Variante encerrado/ao vivo: exibe placar em destaque
         <div className="flex items-center gap-2">
           <span className="text-3xl font-bold text-foreground">{match.homeScore}</span>
           <span className="text-lg font-bold text-muted-foreground">x</span>
           <span className="text-3xl font-bold text-foreground">{match.awayScore}</span>
         </div>
       ) : (
-        // Variante agendado/ao vivo: exibe horário
+        // Variante agendado/ao vivo sem placar: exibe horário
         <span className="text-2xl font-bold text-foreground">{timeStr}</span>
       )}
 
@@ -189,6 +191,7 @@ function CardFooter({
   showChevron: boolean;
 }) {
   const isFinished = matchStatus === "finished";
+  const isLive = matchStatus === "live";
 
   return (
     <>
@@ -198,6 +201,14 @@ function CardFooter({
           // Jogo encerrado: GameStatusBadge centralizado sem chevron
           <div className="flex justify-center">
             <GameStatusBadge status={matchStatus} />
+          </div>
+        ) : isLive ? (
+          // Jogo ao vivo: badge "Ao Vivo" + chevron (navegável; palpite bloqueado)
+          <div className="flex items-center justify-between">
+            <GameStatusBadge status={matchStatus} />
+            {showChevron && (
+              <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+            )}
           </div>
         ) : (
           // Jogo aberto: MatchStatusBadge + chevron

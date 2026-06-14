@@ -42,6 +42,14 @@ const finishedMatch: MatchWithId = {
   awayScore: 1,
 };
 
+const liveMatch: MatchWithId = {
+  ...baseMatch,
+  id: "match-003",
+  status: "live",
+  homeScore: 1,
+  awayScore: 0,
+};
+
 // ---------------------------------------------------------------------------
 // Testes: variante Palpite Enviado
 // ---------------------------------------------------------------------------
@@ -240,6 +248,76 @@ describe("MatchCard — variante Jogo Encerrado", () => {
     expect(screen.getByText("Resultado Final")).toBeTruthy();
     // Placar do palpite "2 x 1" deve aparecer no footer
     expect(screen.getByText(/2 x 1/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Testes: variante Jogo Ao Vivo (TASK-07)
+// ---------------------------------------------------------------------------
+
+describe("MatchCard — variante Ao Vivo (TASK-07)", () => {
+  it("T19: exibe placar parcial no bloco central", () => {
+    render(
+      <MatchCard
+        match={liveMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="bloqueado"
+        detailHref="/matches/match-003"
+      />,
+    );
+    expect(screen.getByText("1")).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
+    expect(screen.getByText("x")).toBeTruthy();
+  });
+
+  it("T20: badge 'Ao Vivo' (GameStatusBadge) visível", () => {
+    render(
+      <MatchCard
+        match={liveMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="bloqueado"
+        detailHref="/matches/match-003"
+      />,
+    );
+    expect(screen.getByText("Ao Vivo")).toBeTruthy();
+  });
+
+  it("T21: card ao vivo permanece navegável (chevron) e NÃO mostra seção de encerrado", () => {
+    render(
+      <MatchCard
+        match={liveMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="bloqueado"
+        detailHref="/matches/match-003"
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Brasil vs França" })).toBeTruthy();
+    // Seção exclusiva de encerrado não deve aparecer no ao vivo
+    expect(screen.queryByText("Resultado Final")).toBeNull();
+    expect(screen.queryByText(/jogos encerrados/i)).toBeNull();
+  });
+
+  it("T22: ao vivo SEM placar (scores null) cai no horário, sem placar", () => {
+    const liveSemPlacar: MatchWithId = {
+      ...liveMatch,
+      homeScore: null,
+      awayScore: null,
+    };
+    render(
+      <MatchCard
+        match={liveSemPlacar}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="bloqueado"
+        detailHref="/matches/match-003"
+      />,
+    );
+    // Sem o separador de placar "x" no centro; badge "Ao Vivo" segue visível
+    expect(screen.queryByText("x")).toBeNull();
+    expect(screen.getByText("Ao Vivo")).toBeTruthy();
   });
 });
 

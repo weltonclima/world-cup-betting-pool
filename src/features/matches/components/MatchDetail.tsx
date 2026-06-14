@@ -354,7 +354,7 @@ export function MatchDetail({ id }: MatchDetailProps) {
             className="text-2xl font-bold text-muted-foreground"
             aria-label="versus"
           >
-            {match.status === "finished" &&
+            {(match.status === "finished" || match.status === "live") &&
             match.homeScore !== null &&
             match.awayScore !== null
               ? `${match.homeScore} × ${match.awayScore}`

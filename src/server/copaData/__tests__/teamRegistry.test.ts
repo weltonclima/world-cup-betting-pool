@@ -6,8 +6,8 @@
  * pois o barrel inclui `import "server-only"` que lança fora de RSC (vitest).
  */
 
-import { describe, it, expect } from "vitest";
-import { TEAM_REGISTRY, resolveTeam } from "../teamRegistry";
+import { describe, it, expect, afterEach } from "vitest";
+import { TEAM_REGISTRY, resolveTeam, resolveTeamByCode, ESPN_ALIASES } from "../teamRegistry";
 
 // ─── Nomes exatos como aparecem no JSON openfootball (a confirmar no GREEN) ───
 // Os nomes abaixo são os 48 esperados na Copa 2026 conforme spec §4.3.
@@ -140,6 +140,92 @@ describe("resolveTeam — lookup por nome openfootball", () => {
     for (const [name] of Object.entries(TEAM_REGISTRY)) {
       const entry = resolveTeam(name);
       expect(entry, `resolveTeam("${name}") retornou undefined`).toBeDefined();
+    }
+  });
+});
+
+// ─── Índice reverso ESPN abbreviation → TeamEntry (TASK-01) ───
+describe("resolveTeamByCode — lookup por ESPN abbreviation", () => {
+  afterEach(() => {
+    // limpa aliases injetados em testes para não vazar entre casos
+    for (const k of Object.keys(ESPN_ALIASES)) {
+      delete ESPN_ALIASES[k];
+    }
+  });
+
+  it("RCB-01: resolveTeamByCode('BRA') retorna TeamEntry com id=BRA", () => {
+    const entry = resolveTeamByCode("BRA");
+    expect(entry).toBeDefined();
+    expect(entry?.id).toBe("BRA");
+  });
+
+  it("RCB-02: resolveTeamByCode('USA') retorna TeamEntry com id=USA", () => {
+    const entry = resolveTeamByCode("USA");
+    expect(entry).toBeDefined();
+    expect(entry?.id).toBe("USA");
+  });
+
+  it("RCB-03: resolveTeamByCode('RSA') retorna TeamEntry com id=RSA (code não-ISO)", () => {
+    const entry = resolveTeamByCode("RSA");
+    expect(entry).toBeDefined();
+    expect(entry?.id).toBe("RSA");
+  });
+
+  it("RCB-04: resolveTeamByCode('SUI') retorna TeamEntry com id=SUI", () => {
+    const entry = resolveTeamByCode("SUI");
+    expect(entry).toBeDefined();
+    expect(entry?.id).toBe("SUI");
+  });
+
+  it("RCB-05: resolveTeamByCode('GER') retorna TeamEntry com id=GER", () => {
+    const entry = resolveTeamByCode("GER");
+    expect(entry).toBeDefined();
+    expect(entry?.id).toBe("GER");
+  });
+
+  it("RCB-06: resolveTeamByCode('1A') retorna undefined (placeholder mata-mata)", () => {
+    expect(resolveTeamByCode("1A")).toBeUndefined();
+  });
+
+  it("RCB-07: resolveTeamByCode('RD16 W1') retorna undefined", () => {
+    expect(resolveTeamByCode("RD16 W1")).toBeUndefined();
+  });
+
+  it("RCB-08: resolveTeamByCode('') retorna undefined", () => {
+    expect(resolveTeamByCode("")).toBeUndefined();
+  });
+
+  it("RCB-09: todos os 48 codes do registry resolvem via resolveTeamByCode", () => {
+    for (const [name, entry] of Object.entries(TEAM_REGISTRY)) {
+      const resolved = resolveTeamByCode(entry.code);
+      expect(resolved, `resolveTeamByCode("${entry.code}") (${name}) retornou undefined`).toBeDefined();
+      expect(resolved?.id).toBe(entry.id);
+    }
+  });
+
+  it("RCB-10: alias ESPN→code é aplicado antes do lookup", () => {
+    Object.assign(ESPN_ALIASES, { US: "USA" });
+    const entry = resolveTeamByCode("US");
+    expect(entry).toBeDefined();
+    expect(entry?.id).toBe("USA");
+  });
+
+  it("RCB-11: ESPN_ALIASES exportado nasce vazio (zero divergências — TASK-00)", () => {
+    // afterEach limpa qualquer alias injetado; estado base deve ser vazio
+    expect(Object.keys(ESPN_ALIASES)).toHaveLength(0);
+  });
+
+  it("RCB-12: outros placeholders de mata-mata (2L, 3RD, RD32, RD16 W8) → undefined", () => {
+    for (const ph of ["2L", "3RD", "RD32", "RD16 W8"]) {
+      expect(resolveTeamByCode(ph), `placeholder "${ph}" não deveria resolver`).toBeUndefined();
+    }
+  });
+
+  it("RCB-13: displayName da ESPN NÃO resolve — só abbreviation (TASK-00)", () => {
+    // ESPN emite displayName divergente (Czechia/United States/Congo DR);
+    // o matcher deve usar abbreviation, nunca displayName.
+    for (const dn of ["Czechia", "United States", "Congo DR", "Türkiye", "Brazil"]) {
+      expect(resolveTeamByCode(dn), `displayName "${dn}" não deveria resolver via code`).toBeUndefined();
     }
   });
 });

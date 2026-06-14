@@ -78,3 +78,8 @@ export {
 export type { CopaDataClient } from "./client";
 export { COPA_DATA_URL, REVALIDATE_MATCHES, REVALIDATE_TEAMS } from "./config";
 export type { MatchWithId, TeamWithId };
+
+// Pipeline ESPN live scores (PRD-12) — consumido pelo merge em matchSource.
+export { EspnScoreClient } from "./espnClient";
+export { buildEspnPatchMap } from "./espnMatcher";
+export type { EspnMatchPatch } from "./espnMapper";
