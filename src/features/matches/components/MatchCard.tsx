@@ -58,7 +58,7 @@ function TeamFlag({ team }: { team: ResolvedTeam }) {
         height={28}
         loading="lazy"
         decoding="async"
-        className="w-10 h-7 rounded-sm object-contain"
+        className="w-10 h-7 rounded-sm object-contain ring-1 ring-border/50"
       />
     );
   }
@@ -219,6 +219,13 @@ function CardFooter({
             )}
           </div>
         )}
+
+        {/* Palpite do usuário em jogo não-encerrado (scheduled/live): discreto */}
+        {!isFinished && userPrediction != null && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Seu palpite: {userPrediction.homeScore} x {userPrediction.awayScore}
+          </p>
+        )}
       </div>
 
       {/* Seção extra para jogo encerrado */}
@@ -227,7 +234,7 @@ function CardFooter({
           {/* Palpite do usuário ou bloqueado */}
           {userPrediction != null ? (
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Resultado Final</span>
+              <span className="text-xs text-muted-foreground">Meu Palpite</span>
               <span className="text-xs font-bold text-foreground">
                 {userPrediction.homeScore} x {userPrediction.awayScore}
               </span>

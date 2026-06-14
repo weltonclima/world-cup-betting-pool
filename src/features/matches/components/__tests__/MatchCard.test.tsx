@@ -234,7 +234,7 @@ describe("MatchCard — variante Jogo Encerrado", () => {
     expect(bloqueadoEls.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("T13: exibe 'Resultado Final' e placar do palpite quando userPrediction presente", () => {
+  it("T13: exibe 'Meu Palpite' e placar do palpite quando userPrediction presente", () => {
     render(
       <MatchCard
         match={finishedMatch}
@@ -245,7 +245,7 @@ describe("MatchCard — variante Jogo Encerrado", () => {
         detailHref="/matches/match-002"
       />,
     );
-    expect(screen.getByText("Resultado Final")).toBeTruthy();
+    expect(screen.getByText("Meu Palpite")).toBeTruthy();
     // Placar do palpite "2 x 1" deve aparecer no footer
     expect(screen.getByText(/2 x 1/)).toBeTruthy();
   });
@@ -296,7 +296,7 @@ describe("MatchCard — variante Ao Vivo (TASK-07)", () => {
     );
     expect(screen.getByRole("link", { name: "Brasil vs França" })).toBeTruthy();
     // Seção exclusiva de encerrado não deve aparecer no ao vivo
-    expect(screen.queryByText("Resultado Final")).toBeNull();
+    expect(screen.queryByText("Meu Palpite")).toBeNull();
     expect(screen.queryByText(/jogos encerrados/i)).toBeNull();
   });
 
@@ -360,6 +360,100 @@ describe("MatchCard — fallback de bandeira", () => {
         />,
       ),
     ).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Testes: borda de bandeira + palpite visível (TASK-02)
+// ---------------------------------------------------------------------------
+
+describe("MatchCard — borda de bandeira (TASK-02)", () => {
+  it("T23: img da bandeira tem ring-1 (borda sutil)", () => {
+    render(
+      <MatchCard
+        match={baseMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="enviado"
+        detailHref="/matches/match-001"
+      />,
+    );
+    const imgs = screen.getAllByRole("img");
+    expect(imgs.every((img) => img.className.includes("ring-1"))).toBe(true);
+  });
+
+  it("T24: fallback de iniciais NÃO recebe ring", () => {
+    const teamSemBandeira: ResolvedTeam = { name: "Brasil", flagUrl: undefined };
+    render(
+      <MatchCard
+        match={baseMatch}
+        homeTeam={teamSemBandeira}
+        awayTeam={awayTeam}
+        predictionStatus="pendente"
+        detailHref="/matches/match-001"
+      />,
+    );
+    const fallback = screen.getByLabelText("Brasil");
+    expect(fallback.className).not.toContain("ring-1");
+  });
+});
+
+describe("MatchCard — palpite visível em jogo aberto (TASK-02)", () => {
+  it("T25: scheduled COM palpite exibe 'Seu palpite: H x A'", () => {
+    render(
+      <MatchCard
+        match={baseMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="enviado"
+        userPrediction={{ homeScore: 2, awayScore: 1 }}
+        detailHref="/matches/match-001"
+      />,
+    );
+    expect(screen.getByText(/Seu palpite: 2 x 1/)).toBeTruthy();
+  });
+
+  it("T26: scheduled SEM palpite não exibe 'Seu palpite'", () => {
+    render(
+      <MatchCard
+        match={baseMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="pendente"
+        userPrediction={null}
+        detailHref="/matches/match-001"
+      />,
+    );
+    expect(screen.queryByText(/Seu palpite/)).toBeNull();
+  });
+
+  it("T27: live COM palpite exibe 'Seu palpite: H x A'", () => {
+    render(
+      <MatchCard
+        match={liveMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="bloqueado"
+        userPrediction={{ homeScore: 0, awayScore: 3 }}
+        detailHref="/matches/match-003"
+      />,
+    );
+    expect(screen.getByText(/Seu palpite: 0 x 3/)).toBeTruthy();
+  });
+
+  it("T28: finished COM palpite NÃO usa rótulo 'Seu palpite' (mantém 'Meu Palpite')", () => {
+    render(
+      <MatchCard
+        match={finishedMatch}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        predictionStatus="bloqueado"
+        userPrediction={{ homeScore: 2, awayScore: 1 }}
+        detailHref="/matches/match-002"
+      />,
+    );
+    expect(screen.queryByText(/Seu palpite/)).toBeNull();
+    expect(screen.getByText("Meu Palpite")).toBeTruthy();
   });
 });
 
