@@ -57,12 +57,13 @@ if (useEmulators && !globalThis.__FIREBASE_EMULATORS_CONNECTED__) {
  * pretendida. A garantia é aplicada no boundary da camada de serviço:
  * `signIn`/`signUp` aguardam `authPersistenceReady` antes de autenticar.
  *
- * `onAuthStateChanged` (em `AuthProvider`) NÃO aguarda essa promise de
- * propósito: a restauração de sessão lê o `FirebaseUser`, que é idêntico
- * independentemente da persistência local escolhida — só o caminho de escrita
- * precisa ser gated. Se um dia a seleção de persistência virar condicional
- * (ex.: toggle "manter conectado"), os consumidores de leitura passariam a
- * precisar aguardar — hoje não é o caso (persistência `local` fixa).
+ * `onAuthStateChanged` (em `AuthProvider`) TAMBÉM precisa aguardar essa promise
+ * antes de subscrever: a restauração da sessão persistida só ocorre APÓS
+ * `setPersistence` aplicar a persistência `local`. Se o listener registra antes,
+ * ele emite um `null` transiente (persistência default in-memory, sem sessão
+ * restaurada) que é falsamente interpretado como "deslogado" e dispara um
+ * redirect /login → /home. Por isso tanto a ESCRITA (signIn/signUp) quanto a
+ * LEITURA (AuthProvider) são gated em `authPersistenceReady`.
  *
  * Achado de auditoria de persistência (Frente A): o estado de Auth no client já
  * persistia indefinidamente (default local), MAS o session cookie `__session`
