@@ -225,6 +225,37 @@ describe("MatchDetail — estado sucesso", () => {
     // Placar exibido como "2 × 1" no separador
     expect(screen.getByText("2 × 1")).toBeTruthy();
   });
+
+  it("T18: renderiza placar parcial e badge 'Ao Vivo' para jogo ao vivo (TASK-07)", () => {
+    const match: MatchListItem = {
+      ...matchFixture,
+      status: "live",
+      homeScore: 1,
+      awayScore: 0,
+      predictionStatus: "bloqueado",
+    };
+    mockedUseMatchDetail.mockReturnValue(makeData({ match }));
+    render(<MatchDetail id="match-001" />);
+    // Placar parcial no separador
+    expect(screen.getByText("1 × 0")).toBeTruthy();
+    // Badge de status do jogo já mapeia live → "Ao Vivo"
+    expect(screen.getByText("Ao Vivo")).toBeTruthy();
+  });
+
+  it("T19: ao vivo SEM placar mostra separador '×' (não inventa 0x0) (TASK-07)", () => {
+    const match: MatchListItem = {
+      ...matchFixture,
+      status: "live",
+      homeScore: null,
+      awayScore: null,
+      predictionStatus: "bloqueado",
+    };
+    mockedUseMatchDetail.mockReturnValue(makeData({ match }));
+    render(<MatchDetail id="match-001" />);
+    // Separador permanece "×" puro; badge "Ao Vivo" segue visível
+    expect(screen.getByLabelText("versus").textContent).toBe("×");
+    expect(screen.getByText("Ao Vivo")).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
