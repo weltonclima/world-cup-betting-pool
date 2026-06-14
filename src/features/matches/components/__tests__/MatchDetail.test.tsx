@@ -64,6 +64,7 @@ const matchFixture: MatchListItem = {
   homeTeam: { name: "Brasil", flagUrl: "https://example.com/br.png" },
   awayTeam: { name: "França", flagUrl: "https://example.com/fr.png" },
   predictionStatus: "pendente",
+  userPrediction: null,
 };
 
 const makeData = (overrides: Partial<MatchDetailData>): MatchDetailData => ({

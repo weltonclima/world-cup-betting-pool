@@ -40,6 +40,9 @@ export interface MatchFilters {
   teamId?: string;
 }
 
+/** Bucket temporal de uma partida relativo ao dia corrente. */
+export type TemporalBucket = "anteriores" | "hoje" | "proximos";
+
 // ---------------------------------------------------------------------------
 // 1. buildTeamMap
 // ---------------------------------------------------------------------------
@@ -78,10 +81,31 @@ export function resolveTeam(teamId: string, teamMap: Map<string, TeamWithId>): R
 /**
  * Extrai a data UTC no formato "yyyy-MM-dd" de uma string ISO 8601.
  * Comparação de dia usa a data UTC do kickoff vs a data UTC de now (sem conversão de fuso).
+ *
+ * Exportada para reuso no compositor de tabs temporais (classificação por dateKey).
  */
-function toUtcDateKey(isoString: string): string {
+export function toUtcDateKey(isoString: string): string {
   // Pega os 10 primeiros caracteres de uma data ISO normalizada para UTC.
   return new Date(isoString).toISOString().slice(0, 10);
+}
+
+/**
+ * Classifica um dateKey ("yyyy-MM-dd" UTC) em um bucket temporal relativo a todayKey.
+ *
+ * Comparação lexicográfica de strings ISO date == comparação cronológica:
+ * - dateKey < todayKey  → "anteriores"
+ * - dateKey === todayKey → "hoje"
+ * - dateKey > todayKey  → "proximos"
+ *
+ * Ambas as chaves devem vir de toUtcDateKey (mesmo formato/fuso UTC).
+ *
+ * @param dateKey  - Data UTC da partida ("yyyy-MM-dd").
+ * @param todayKey - Data UTC de referência ("yyyy-MM-dd").
+ */
+export function classifyDateKey(dateKey: string, todayKey: string): TemporalBucket {
+  if (dateKey < todayKey) return "anteriores";
+  if (dateKey > todayKey) return "proximos";
+  return "hoje";
 }
 
 /**

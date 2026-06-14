@@ -37,6 +37,7 @@ function makeItem(overrides: Partial<MatchListItem> = {}): MatchListItem {
     homeTeam: { name: "Brasil", flagUrl: undefined },
     awayTeam: { name: "Sérvia", flagUrl: undefined },
     predictionStatus: "pendente",
+    userPrediction: null,
     ...overrides,
   };
 }

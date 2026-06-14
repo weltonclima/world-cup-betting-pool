@@ -41,6 +41,8 @@ export interface MatchListItem {
   homeTeam: ResolvedTeam;
   awayTeam: ResolvedTeam;
   predictionStatus: MatchPredictionStatus;
+  /** Placar apostado pelo usuário nesta partida, ou null se não houver palpite. */
+  userPrediction: { homeScore: number; awayScore: number } | null;
 }
 
 /** Seção de dia com matches já enriquecidos. */
@@ -114,29 +116,34 @@ export function useMatchesList(): MatchesListData {
   const teams       = teamsQuery.data ?? [];
   const predictions = predictionsQuery.data ?? [];
 
-  // 7. Cache de teams
+  // 7. Cache de teams + palpites (lookup O(1) por matchId)
   const teamMap = buildTeamMap(teams);
+  const predMap = new Map(predictions.map((p) => [p.matchId, p]));
 
   // 8. now — capturado uma vez no render
   const now = new Date();
 
   // 9. flatList — join + derivação por partida
-  const flatList: MatchListItem[] = matches.map((match) => ({
-    id: match.id,
-    kickoffAt: match.kickoffAt,
-    stage: match.stage,
-    round: match.round,
-    groupId: match.groupId,
-    venue: match.venue,
-    status: match.status,
-    homeScore: match.homeScore,
-    awayScore: match.awayScore,
-    homeTeamId: match.homeTeamId,
-    awayTeamId: match.awayTeamId,
-    homeTeam: resolveTeam(match.homeTeamId, teamMap),
-    awayTeam: resolveTeam(match.awayTeamId, teamMap),
-    predictionStatus: deriveMatchPredictionStatus(match, predictions, now),
-  }));
+  const flatList: MatchListItem[] = matches.map((match) => {
+    const pred = predMap.get(match.id);
+    return {
+      id: match.id,
+      kickoffAt: match.kickoffAt,
+      stage: match.stage,
+      round: match.round,
+      groupId: match.groupId,
+      venue: match.venue,
+      status: match.status,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      homeTeamId: match.homeTeamId,
+      awayTeamId: match.awayTeamId,
+      homeTeam: resolveTeam(match.homeTeamId, teamMap),
+      awayTeam: resolveTeam(match.awayTeamId, teamMap),
+      predictionStatus: deriveMatchPredictionStatus(match, predictions, now),
+      userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
+    };
+  });
 
   // 10. groups — agrupar os MatchListItem por dia
   // groupMatchesByDay opera sobre MatchWithId[]; reutilizamos as matches brutas para agrupar

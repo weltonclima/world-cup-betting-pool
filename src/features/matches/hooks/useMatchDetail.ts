@@ -87,6 +87,7 @@ export function useMatchDetail(id: string): MatchDetailData {
   // 8. Join + derivação
   const teamMap = buildTeamMap(teams);
   const now = new Date();
+  const pred = predictions.find((p) => p.matchId === rawMatch.id);
 
   const match: MatchDetailItem = {
     id: rawMatch.id,
@@ -103,6 +104,7 @@ export function useMatchDetail(id: string): MatchDetailData {
     homeTeam: resolveTeam(rawMatch.homeTeamId, teamMap),
     awayTeam: resolveTeam(rawMatch.awayTeamId, teamMap),
     predictionStatus: deriveMatchPredictionStatus(rawMatch, predictions, now),
+    userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
   };
 
   return { match, isLoading, isError, refetch };
