@@ -1,9 +1,13 @@
 import "server-only";
 
-import { fetchAllMatches } from "@/server/copaData";
+import {
+  fetchAllMatches,
+  EspnScoreClient,
+  buildEspnPatchMap,
+} from "@/server/copaData";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { matchSchema } from "@/schemas";
-import type { MatchWithId } from "@/types/matches";
+import type { MatchWithId, EspnMatchPatch } from "@/server/copaData";
 
 /**
  * Fonte efetiva de partidas (PRD-11 — persistência + edição manual).
@@ -39,28 +43,83 @@ export async function readPersistedMatches(): Promise<Map<string, MatchWithId>> 
   return map;
 }
 
+/** Dia atual em UTC no formato `YYYYMMDD` exigido pelo `?dates` da ESPN. */
+function todayUtcYyyymmdd(): string {
+  return new Date().toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 /**
- * Partidas efetivas = openfootball (base) com overrides manuais aplicados.
- * Resiliente: falha lendo o Firestore → cai para a base ao vivo (não quebra
- * ranking/groups/bracket). Coleção vazia → retorna a base inalterada.
+ * Busca o patch ESPN (status/placar ao vivo) para a base. BEST-EFFORT: qualquer
+ * falha (timeout, HTTP, parse, rede) é absorvida com `console.error` e retorna
+ * mapa vazio — ESPN-down nunca derruba nem altera o pipeline (zero regressão).
+ */
+async function fetchEspnPatchMap(
+  base: MatchWithId[],
+): Promise<Map<string, EspnMatchPatch>> {
+  try {
+    const client = new EspnScoreClient();
+    const scoreboard = await client.fetchScoreboard(todayUtcYyyymmdd());
+    return buildEspnPatchMap(scoreboard.events, base);
+  } catch (err) {
+    console.error(
+      "[matchSource] falha ESPN; seguindo sem live scores (degradação resiliente):",
+      err,
+    );
+    return new Map();
+  }
+}
+
+/**
+ * Aplica o patch ESPN (só status/placar) sobre a base. Map vazio → base intacta.
+ *
+ * Precedência ESPN > openfootball é INCONDICIONAL por design (PRD-12): se a base
+ * já marca `finished` mas a ESPN ainda reporta `in` (lag de fim de jogo), o match
+ * volta a `live` e sai do ranking (recalc filtra `finished`) até a ESPN convergir
+ * (≤5min, janela de cache). Risco transitório ACEITO — não há guarda anti-regressão.
+ */
+function applyEspnPatches(
+  base: MatchWithId[],
+  patchMap: Map<string, EspnMatchPatch>,
+): MatchWithId[] {
+  if (patchMap.size === 0) return base;
+  return base.map((m) => {
+    const patch = patchMap.get(m.id);
+    return patch
+      ? { ...m, status: patch.status, homeScore: patch.homeScore, awayScore: patch.awayScore }
+      : m;
+  });
+}
+
+/**
+ * Partidas efetivas com precedência `manual > ESPN > openfootball`.
+ *
+ * Pipeline: base openfootball → patch ESPN ao vivo (best-effort) → overrides
+ * manuais persistidos por cima. Resiliente em ambas as bordas:
+ *  - ESPN-down → patch vazio → saída idêntica ao openfootball (zero regressão);
+ *  - Firestore-down → cai para a base já com ESPN aplicado (live scores seguem).
+ * Coleção `matches` vazia → base + ESPN, sem overrides.
  */
 export async function getEffectiveMatches(): Promise<MatchWithId[]> {
   const base = await fetchAllMatches();
+
+  // Camada ESPN (antes dos overrides manuais — manual sempre vence).
+  const espnPatchMap = await fetchEspnPatchMap(base);
+  const espnBase = applyEspnPatches(base, espnPatchMap);
 
   let persisted: Map<string, MatchWithId>;
   try {
     persisted = await readPersistedMatches();
   } catch (err) {
     console.error(
-      "[matchSource] falha lendo matches persistidos; usando só openfootball:",
+      "[matchSource] falha lendo matches persistidos; usando base + ESPN:",
       err,
     );
-    return base;
+    return espnBase;
   }
-  if (persisted.size === 0) return base;
+  if (persisted.size === 0) return espnBase;
 
-  const baseIds = new Set(base.map((m) => m.id));
-  const merged = base.map((m) => {
+  const baseIds = new Set(espnBase.map((m) => m.id));
+  const merged = espnBase.map((m) => {
     const override = persisted.get(m.id);
     return override && override.isManualOverride === true ? override : m;
   });
