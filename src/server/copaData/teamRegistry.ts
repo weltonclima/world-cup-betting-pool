@@ -217,3 +217,29 @@ export const TEAM_REGISTRY: Record<string, TeamEntry> = {
 export function resolveTeam(name: string): TeamEntry | undefined {
   return TEAM_REGISTRY[name];
 }
+
+/**
+ * Aliases ESPN `team.abbreviation` → `code` do registry.
+ *
+ * Nasce VAZIO: o spike TASK-00 (2026-06-14) confirmou que os 48 `abbreviation`
+ * da ESPN batem exatamente com o `code` do registry — zero divergências.
+ * Mantido como ponto de extensão caso a ESPN mude alguma abreviação no futuro.
+ * Mutável de propósito (testes injetam aliases temporários).
+ */
+export const ESPN_ALIASES: Record<string, string> = {};
+
+/** Índice reverso `code` → TeamEntry, construído uma vez (lookup O(1)). */
+const CODE_INDEX: ReadonlyMap<string, TeamEntry> = new Map(
+  Object.values(TEAM_REGISTRY).map((entry) => [entry.code, entry]),
+);
+
+/**
+ * Resolve a `abbreviation` da ESPN para TeamEntry.
+ * Aplica ESPN_ALIASES antes do lookup direto por `code`.
+ * Retorna undefined para abreviações não reconhecidas
+ * (placeholders de mata-mata `1A`/`RD16 W1`, string vazia, etc.).
+ */
+export function resolveTeamByCode(abbr: string): TeamEntry | undefined {
+  const code = ESPN_ALIASES[abbr] ?? abbr;
+  return CODE_INDEX.get(code);
+}
