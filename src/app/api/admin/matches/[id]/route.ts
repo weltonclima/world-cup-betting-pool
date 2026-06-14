@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { authorizeGroupAdmin } from "@/app/api/admin/groups/_authorize";
@@ -109,6 +110,12 @@ export async function PUT(
       db.collection("worldcup_cache").doc("bracket").delete(),
     ]);
 
+    // Invalida o cache de segmento das rotas públicas de jogos (lista + detalhe),
+    // que usam `revalidate = 3600`. Sem isto, o override manual só apareceria
+    // até 1h depois — espelha o bust de groups/bracket acima.
+    revalidatePath("/api/matches");
+    revalidatePath(`/api/matches/${id}`);
+
     // Auditoria (best-effort): inclui o caminho secret/cron (actorUid ausente →
     // ator sentinela "system"), garantindo trilha mesmo em execução automatizada.
     await writeAuditLog({
@@ -173,6 +180,11 @@ export async function DELETE(
       db.collection("worldcup_cache").doc("groups").delete(),
       db.collection("worldcup_cache").doc("bracket").delete(),
     ]);
+
+    // Invalida o cache de segmento das rotas públicas de jogos (lista + detalhe).
+    // A remoção do override muda o dado efetivo → precisa refletir na hora.
+    revalidatePath("/api/matches");
+    revalidatePath(`/api/matches/${id}`);
 
     await writeAuditLog({
       type: "match_edited",
