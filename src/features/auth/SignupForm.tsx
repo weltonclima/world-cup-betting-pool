@@ -12,6 +12,7 @@ import { redeemInvite } from "@/services/invites";
 import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Form,
   FormControl,
@@ -190,15 +191,17 @@ export function SignupForm({ presetGroup, inviteCode }: SignupFormProps = {}) {
           // Fluxo de convite: grupo fixado — confirmação read-only (sem busca).
           // No cadastro comum o grupo não é escolhido: a associação a um pool só
           // ocorre via convite (`/invite/[code]`).
-          <FormItem>
-            <FormLabel>Seu grupo</FormLabel>
+          // Não é um campo do form: usa Label simples (FormLabel exigiria um
+          // FormField em volta — não há `name` aqui, apenas exibição).
+          <div className="grid gap-2">
+            <Label>Seu grupo</Label>
             <p className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-primary">
               <Check size={16} aria-hidden="true" />
               <span>
                 Você foi convidado para <strong>{presetGroup.name}</strong>
               </span>
             </p>
-          </FormItem>
+          </div>
         ) : null}
 
         <FormField
