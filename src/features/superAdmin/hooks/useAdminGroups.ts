@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import {
   changeGroupAdmin,
   createAdminGroup,
+  createAdminGroupInvite,
+  getAdminGroupInvite,
   deleteGroup,
   listGroupsByStatus,
   removeGroupAdmin,
@@ -20,9 +22,13 @@ import {
   updateGroupStatus,
   type AdminPoolRow,
   type CreateAdminGroupInput,
+  type CreateAdminGroupInviteInput,
   type EditAdminGroupInput,
 } from "@/services/superAdmin";
+import type { Invite } from "@/types/invites";
 import { superAdminKeys } from "./superAdminKeys";
+
+export type { CreateAdminGroupInviteInput };
 
 type GroupStatus = "pending" | "active" | "blocked";
 
@@ -136,5 +142,31 @@ export function useRemoveGroupAdmin(): UseMutationResult<void, Error, string> {
     mutationFn: (id) => removeGroupAdmin(id),
     onSuccess: invalidate,
     onError: () => toast.error("Não foi possível remover o administrador."),
+  });
+}
+
+/**
+ * Gera um convite para um pool (super_admin). Escopo só-gerar: não lista nem
+ * invalida queries — o convite criado é exibido inline pelo Dialog (TASK-05).
+ */
+export function useCreateAdminGroupInvite(
+  poolId: string,
+): UseMutationResult<Invite, Error, CreateAdminGroupInviteInput> {
+  return useMutation<Invite, Error, CreateAdminGroupInviteInput>({
+    mutationFn: (input) => createAdminGroupInvite(poolId, input),
+  });
+}
+
+/**
+ * Lê o convite ativo atual de um pool (super_admin) p/ exibir nos detalhes do
+ * grupo. Desabilitado enquanto `poolId` for vazio. `null` = sem convite ativo.
+ */
+export function useAdminGroupInvite(
+  poolId: string,
+): UseQueryResult<Invite | null, Error> {
+  return useQuery<Invite | null, Error>({
+    queryKey: superAdminKeys.groupInvite(poolId),
+    queryFn: () => getAdminGroupInvite(poolId),
+    enabled: poolId.length > 0,
   });
 }

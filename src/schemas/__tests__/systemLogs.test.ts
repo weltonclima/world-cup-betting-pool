@@ -43,6 +43,15 @@ describe("systemLogSchema", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("aceita type 'group_invite_created' (superadmin-invite-generator)", () => {
+    expect(
+      systemLogSchema.safeParse({
+        ...validLog,
+        type: "group_invite_created",
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("systemLogInputSchema", () => {
