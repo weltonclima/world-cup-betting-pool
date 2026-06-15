@@ -117,18 +117,59 @@ describe("ParticipantProfile", () => {
     expect(screen.getByText("de 2 participantes")).toBeTruthy();
     // Acertos = 11 (sem duplicar como "Pontos")
     expect(screen.getByText("11")).toBeTruthy();
-    expect(screen.getByText("23%")).toBeTruthy();
     // Desempenho por fase: grupos 6 pts, oitavas 3 pts.
     expect(screen.getByText("6 pts")).toBeTruthy();
   });
 
-  it("grade de métricas NÃO tem Pontos duplicado (3 células: Acertos/Erros/Aproveitamento)", () => {
+  it("grade de métricas tem 3 células: Acertos/Vitórias/Empates (sem Erros nem Aproveitamento)", () => {
     okRanking(ranking, stats);
     render(<ParticipantProfile uid="u-x" />, { wrapper });
     expect(screen.queryByText("Pontos")).toBeNull();
+    expect(screen.queryByText("Erros")).toBeNull();
+    expect(screen.queryByText("Aproveitamento")).toBeNull();
     expect(screen.getByText("Acertos")).toBeTruthy();
-    expect(screen.getByText("Erros")).toBeTruthy();
-    expect(screen.getByText("Aproveitamento")).toBeTruthy();
+    expect(screen.getByText("Vitórias")).toBeTruthy();
+    expect(screen.getByText("Empates")).toBeTruthy();
+  });
+
+  it("Vitórias e Empates derivam de items: 2 não-empates → Vitórias=2, Empates=1", () => {
+    okRanking(ranking, stats);
+    const nonDraw: ProfilePredictionsResult["items"][number] = {
+      matchId: "m1",
+      kickoffAt: "2026-06-20T18:00:00.000Z",
+      stage: "grupos",
+      groupId: "A",
+      homeTeam: { id: "t-h", name: "Brasil", flagUrl: null },
+      awayTeam: { id: "t-a", name: "Argentina", flagUrl: null },
+      prediction: { homeScore: 2, awayScore: 1 },
+      actualScore: null,
+      matchStatus: "scheduled",
+      displayStatus: "pendente",
+    };
+    const draw: ProfilePredictionsResult["items"][number] = {
+      ...nonDraw,
+      matchId: "m2",
+      prediction: { homeScore: 1, awayScore: 1 },
+    };
+    useProfilePredictionsMock.mockReturnValue({
+      ...emptyPredictions,
+      items: [nonDraw, { ...nonDraw, matchId: "m3" }, draw],
+    });
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+    // Acertos = entry.points = 11 (unchanged)
+    expect(screen.getByText("11")).toBeTruthy();
+    // Vitórias = 2 (homeScore !== awayScore), Empates = 1 (homeScore === awayScore)
+    const twos = screen.getAllByText("2");
+    expect(twos.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("1")).toBeTruthy();
+  });
+
+  it("Vitórias e Empates mostram 0 quando items está vazio", () => {
+    okRanking(ranking, stats);
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+    // With empty predictions, wins=0 and draws=0
+    const zeros = screen.getAllByText("0");
+    expect(zeros.length).toBeGreaterThanOrEqual(2);
   });
 
   it("StagePerformance oculta fases com correctByStage === 0", () => {
