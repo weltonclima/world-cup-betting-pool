@@ -13,7 +13,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Fixa o relógio para que toUtcDateKey(new Date()) retorne "2026-06-14" determinísticamente.
+// Fixa o relógio para que toLocalDateKey(new Date()) retorne "2026-06-14".
+// TZ dos testes = America/Sao_Paulo (UTC−3, vitest.config): 12:00 UTC = 09:00 BRT.
 beforeAll(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-06-14T12:00:00.000Z"));
@@ -648,5 +649,109 @@ describe("MatchList — TASK-03: userPrediction passado ao MatchCard", () => {
     render(<MatchList />);
     // brasilFranca tem userPrediction: null
     expect(screen.queryByText(/Seu palpite/)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bugfix home-screen-data-bugs — fuso local + ordenação de Anteriores
+// ---------------------------------------------------------------------------
+
+describe("MatchList — REGRESSÃO: jogo noturno cai no dia LOCAL, não no UTC seguinte", () => {
+  it("T48: jogo às 23:00 BRT (02:00 UTC do dia seguinte) aparece na aba Hoje, não em Próximos", () => {
+    // todayKey = 2026-06-14 (BRT). Jogo 23:00 BRT do dia 14 = 2026-06-15T02:00Z.
+    // Pelo dia UTC cairia em "Próximos" (bug). Pelo dia local: "Hoje".
+    const jogoNoturno = makeItem({
+      id: "match-noturno",
+      kickoffAt: "2026-06-15T02:00:00Z",
+      homeTeam: { name: "Canadá", flagUrl: undefined },
+      awayTeam: { name: "México", flagUrl: undefined },
+      predictionStatus: "pendente",
+    });
+    const secaoHoje: MatchListItemDaySection = {
+      label: "Hoje",
+      date: "2026-06-14",
+      matches: [jogoNoturno],
+    };
+    mockUseMatchesList.mockReturnValue({
+      groups: [secaoHoje],
+      flatList: [jogoNoturno],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MatchList />);
+    // Default tab = "hoje" e o jogo noturno deve estar visível nela
+    expect(screen.getByText("Canadá")).toBeTruthy();
+    // Não deve aparecer ao trocar para "Próximos"
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    expect(screen.queryByText("Canadá")).toBeNull();
+  });
+});
+
+describe("MatchList — Anteriores ordena do mais recente para o mais antigo (DESC)", () => {
+  // Dois dias passados; o mais recente (13) deve renderizar antes do mais antigo (12).
+  const jogoDia12 = makeItem({
+    id: "m-0612",
+    kickoffAt: "2026-06-12T16:00:00Z",
+    homeTeam: { name: "Chile", flagUrl: undefined },
+    awayTeam: { name: "Peru", flagUrl: undefined },
+    status: "finished",
+    predictionStatus: "bloqueado",
+  });
+  const jogoDia13Cedo = makeItem({
+    id: "m-0613-cedo",
+    kickoffAt: "2026-06-13T13:00:00Z",
+    homeTeam: { name: "Paraguai", flagUrl: undefined },
+    awayTeam: { name: "Portugal", flagUrl: undefined },
+    status: "finished",
+    predictionStatus: "bloqueado",
+  });
+  const jogoDia13Tarde = makeItem({
+    id: "m-0613-tarde",
+    kickoffAt: "2026-06-13T20:00:00Z",
+    homeTeam: { name: "Bélgica", flagUrl: undefined },
+    awayTeam: { name: "Croácia", flagUrl: undefined },
+    status: "finished",
+    predictionStatus: "bloqueado",
+  });
+
+  // Grupos vêm do hook em ordem ASC (mais antigo primeiro), jogos ASC dentro do dia.
+  const secao12: MatchListItemDaySection = {
+    label: "12 de junho de 2026",
+    date: "2026-06-12",
+    matches: [jogoDia12],
+  };
+  const secao13: MatchListItemDaySection = {
+    label: "13 de junho de 2026",
+    date: "2026-06-13",
+    matches: [jogoDia13Cedo, jogoDia13Tarde],
+  };
+
+  beforeEach(() => {
+    mockUseMatchesList.mockReturnValue({
+      groups: [secao12, secao13],
+      flatList: [jogoDia12, jogoDia13Cedo, jogoDia13Tarde],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+  });
+
+  it("T49: seções aparecem em ordem DESC (dia 13 antes do dia 12)", () => {
+    render(<MatchList />); // defaultTab = "anteriores" (sem hoje/proximos)
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((h) => h.textContent);
+    expect(headings).toEqual(["13 de junho de 2026", "12 de junho de 2026"]);
+  });
+
+  it("T50: dentro do dia, jogos mais recentes aparecem primeiro (tarde antes de cedo)", () => {
+    render(<MatchList />);
+    const belgica = screen.getByText("Bélgica");
+    const paraguai = screen.getByText("Paraguai");
+    // Bélgica (20:00) deve preceder Paraguai (13:00) no DOM
+    expect(
+      belgica.compareDocumentPosition(paraguai) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
