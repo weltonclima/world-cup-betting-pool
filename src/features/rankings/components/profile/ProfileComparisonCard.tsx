@@ -25,8 +25,8 @@ function initials(name: string): string {
 
 function pointsDiffLabel(diff: number): string {
   if (diff === 0) return "Empatados em pontos";
-  if (diff < 0) return `+${Math.abs(diff)} pts à sua frente`;
-  return `${diff} pts atrás`;
+  if (diff < 0) return `Você está ${Math.abs(diff)} pts à frente`;
+  return `Você está ${diff} pts atrás`;
 }
 
 export function ProfileComparisonCard({
