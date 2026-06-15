@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -115,8 +115,8 @@ describe("ParticipantProfile", () => {
     expect(screen.getAllByText("Lucas Pereira").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("#5")).toBeTruthy();
     expect(screen.getByText("de 2 participantes")).toBeTruthy();
-    // Acertos = 11 (sem duplicar como "Pontos")
-    expect(screen.getByText("11")).toBeTruthy();
+    // Sem palpites encerrados carregados → Acertos = 0 (não é mais entry.points)
+    expect(screen.getByText("Acertos")).toBeTruthy();
     // Desempenho por fase: grupos 6 pts, oitavas 3 pts.
     expect(screen.getByText("6 pts")).toBeTruthy();
   });
@@ -132,9 +132,9 @@ describe("ParticipantProfile", () => {
     expect(screen.getByText("Empates")).toBeTruthy();
   });
 
-  it("Vitórias e Empates derivam de items: 2 não-empates → Vitórias=2, Empates=1", () => {
+  it("Acertos/Vitórias/Empates derivam de displayStatus: acertou=1, acertou_vencedor=2, acertou_empate=1", () => {
     okRanking(ranking, stats);
-    const nonDraw: ProfilePredictionsResult["items"][number] = {
+    const base: ProfilePredictionsResult["items"][number] = {
       matchId: "m1",
       kickoffAt: "2026-06-20T18:00:00.000Z",
       stage: "grupos",
@@ -142,26 +142,27 @@ describe("ParticipantProfile", () => {
       homeTeam: { id: "t-h", name: "Brasil", flagUrl: null },
       awayTeam: { id: "t-a", name: "Argentina", flagUrl: null },
       prediction: { homeScore: 2, awayScore: 1 },
-      actualScore: null,
-      matchStatus: "scheduled",
-      displayStatus: "pendente",
-    };
-    const draw: ProfilePredictionsResult["items"][number] = {
-      ...nonDraw,
-      matchId: "m2",
-      prediction: { homeScore: 1, awayScore: 1 },
+      actualScore: { homeScore: 2, awayScore: 1 },
+      matchStatus: "finished",
+      displayStatus: "acertou",
     };
     useProfilePredictionsMock.mockReturnValue({
       ...emptyPredictions,
-      items: [nonDraw, { ...nonDraw, matchId: "m3" }, draw],
+      items: [
+        { ...base, matchId: "m1", displayStatus: "acertou" },
+        { ...base, matchId: "m2", displayStatus: "acertou_vencedor" },
+        { ...base, matchId: "m3", displayStatus: "acertou_vencedor" },
+        { ...base, matchId: "m4", displayStatus: "acertou_empate" },
+      ],
     });
     render(<ParticipantProfile uid="u-x" />, { wrapper });
-    // Acertos = entry.points = 11 (unchanged)
-    expect(screen.getByText("11")).toBeTruthy();
-    // Vitórias = 2 (homeScore !== awayScore), Empates = 1 (homeScore === awayScore)
-    const twos = screen.getAllByText("2");
-    expect(twos.length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("1")).toBeTruthy();
+    // Lê o valor dentro de cada card (escopado por <dt> → card), evitando colisão
+    // com placares 2×1 renderizados na lista de palpites.
+    const cardValue = (label: string): string =>
+      within(screen.getByText(label).closest("div")!).getByText(/^\d+$/).textContent ?? "";
+    expect(cardValue("Acertos")).toBe("1"); // displayStatus === "acertou"
+    expect(cardValue("Vitórias")).toBe("2"); // displayStatus === "acertou_vencedor"
+    expect(cardValue("Empates")).toBe("1"); // displayStatus === "acertou_empate"
   });
 
   it("Vitórias e Empates mostram 0 quando items está vazio", () => {
