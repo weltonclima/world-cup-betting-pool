@@ -31,13 +31,19 @@ function makeInput(overrides: Partial<HubPhaseInput> = {}): HubPhaseInput {
     href: "/predictions/groups",
     gamesCount: 72,
     filledCount: 0,
+    isFinished: false,
     ...overrides,
   };
 }
 
-/** Sete fases na ordem fixa do Hub, com filled controlável por fase. */
+/**
+ * Sete fases na ordem fixa do Hub. `fillByStage` controla palpites preenchidos;
+ * `finishedStages` controla quais fases tiveram os jogos REAIS terminados
+ * (isFinished) — é isso que destrava a fase seguinte.
+ */
 function makePhases(
   fillByStage: Partial<Record<string, number>> = {},
+  finishedStages: string[] = [],
 ): PhaseHubItem[] {
   const defs: HubPhaseInput[] = [
     makeInput({ stage: "grupos", title: "Fase de Grupos", href: "/predictions/groups", gamesCount: 72 }),
@@ -47,7 +53,11 @@ function makePhases(
     makeInput({ stage: "semifinal", title: "Semifinal", href: "/predictions/knockout/semifinal", gamesCount: 2 }),
     makeInput({ stage: "terceiro", title: "Disputa de 3º Lugar", href: "/predictions/knockout/terceiro", gamesCount: 1 }),
     makeInput({ stage: "final", title: "Final", href: "/predictions/knockout/final", gamesCount: 1 }),
-  ].map((d) => ({ ...d, filledCount: fillByStage[d.stage] ?? 0 }));
+  ].map((d) => ({
+    ...d,
+    filledCount: fillByStage[d.stage] ?? 0,
+    isFinished: finishedStages.includes(d.stage),
+  }));
   return buildHubPhases(defs);
 }
 
@@ -68,41 +78,47 @@ function renderHub(overrides: Partial<React.ComponentProps<typeof PredictionsHub
 
 // ── buildHubPhases (regra A6) ───────────────────────────────────────────────────
 
-describe("buildHubPhases (bloqueio A6)", () => {
+describe("buildHubPhases (bloqueio A6 — por jogos reais)", () => {
   it("a primeira fase nunca é bloqueada", () => {
     const phases = buildHubPhases([makeInput({ filledCount: 0 })]);
     expect(phases[0]!.status).toBe("nao-iniciado");
   });
 
-  it("deriva andamento / concluido / nao-iniciado pela contagem", () => {
-    const phases = makePhases({ grupos: 72 }); // grupos completo
-    expect(phases[0]!.status).toBe("concluido");
-    // 16 avos: 0 preenchidos, grupos concluído → desbloqueado, nao-iniciado
-    expect(phases[1]!.status).toBe("nao-iniciado");
+  it("badge concluido vem do preenchimento; gate da próxima vem dos jogos reais", () => {
+    // grupos com palpites completos mas jogos reais NÃO terminados.
+    const phases = makePhases({ grupos: 72 }); // sem finishedStages
+    expect(phases[0]!.status).toBe("concluido"); // palpites completos
+    // 16 avos segue bloqueado: jogos reais dos grupos não terminaram.
+    expect(phases[1]!.status).toBe("bloqueado");
   });
 
-  it("bloqueia fases futuras enquanto a anterior não concluir", () => {
-    const phases = makePhases({ grupos: 10 }); // grupos em andamento (10/72)
-    expect(phases[0]!.status).toBe("andamento");
-    // todas as fases seguintes ficam bloqueadas
+  it("terminar os jogos dos grupos libera 16 avos (mesmo com palpites incompletos)", () => {
+    const phases = makePhases({ grupos: 0 }, ["grupos"]);
+    expect(phases[0]!.status).toBe("nao-iniciado");
+    expect(phases[1]!.status).toBe("nao-iniciado"); // 16 avos liberado
+    expect(phases[2]!.status).toBe("bloqueado"); // oitavas ainda bloqueada
+  });
+
+  it("bloqueia fases futuras enquanto os jogos reais da anterior não terminarem", () => {
+    const phases = makePhases({ grupos: 72 }); // palpites completos, jogos não terminados
     for (let i = 1; i < phases.length; i++) {
       expect(phases[i]!.status).toBe("bloqueado");
     }
   });
 
-  it("desbloqueia em cascata: concluir grupos libera 16 avos, mas não além", () => {
-    const phases = makePhases({ grupos: 72, "dezesseis-avos": 4 });
+  it("desbloqueia em cascata: jogos dos grupos terminam → 16 avos abre, oitavas não", () => {
+    const phases = makePhases({ grupos: 72, "dezesseis-avos": 4 }, ["grupos"]);
     expect(phases[0]!.status).toBe("concluido");
-    expect(phases[1]!.status).toBe("andamento"); // 16 avos liberado
-    expect(phases[2]!.status).toBe("bloqueado"); // oitavas ainda bloqueada
+    expect(phases[1]!.status).toBe("andamento"); // 16 avos liberado, em andamento
+    expect(phases[2]!.status).toBe("bloqueado"); // oitavas: 16 avos reais não terminaram
   });
 
-  it("fase com 0 jogos não destrava a seguinte", () => {
+  it("fase não terminada (isFinished false) não destrava a seguinte", () => {
     const phases = buildHubPhases([
-      makeInput({ stage: "grupos", gamesCount: 0, filledCount: 0 }),
+      makeInput({ stage: "grupos", gamesCount: 72, filledCount: 72, isFinished: false }),
       makeInput({ stage: "oitavas", gamesCount: 8, filledCount: 0, href: "/x" }),
     ]);
-    expect(phases[0]!.status).toBe("nao-iniciado"); // 0 jogos → não concluído
+    expect(phases[0]!.status).toBe("concluido");
     expect(phases[1]!.status).toBe("bloqueado");
   });
 
@@ -193,8 +209,8 @@ describe("PredictionsHub — bloqueio A6 (PRD03-16)", () => {
     expect(blocked.getAttribute("aria-disabled")).toBe("true");
   });
 
-  it("concluir grupos torna 16 avos navegável", () => {
-    renderHub({ filled: 72, phases: makePhases({ grupos: 72 }) });
+  it("terminar os jogos dos grupos torna 16 avos navegável", () => {
+    renderHub({ filled: 72, phases: makePhases({ grupos: 72 }, ["grupos"]) });
     const avos = screen.getByRole("link", { name: /16 Avos de Final/ });
     expect(avos.getAttribute("href")).toBe("/predictions/knockout/dezesseis-avos");
   });

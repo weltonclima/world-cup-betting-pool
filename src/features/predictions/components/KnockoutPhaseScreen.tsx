@@ -107,8 +107,8 @@ function PhaseBlocked({ prev }: { prev?: PhaseNavLink }) {
       <p className="text-lg font-semibold text-foreground">Fase bloqueada</p>
       <p className="text-sm text-muted-foreground">
         {prev
-          ? `Conclua ${prev.label} primeiro para liberar esta fase.`
-          : "Conclua a fase anterior primeiro para liberar esta fase."}
+          ? `Os jogos de ${prev.label} precisam terminar para liberar esta fase.`
+          : "Os jogos da fase anterior precisam terminar para liberar esta fase."}
       </p>
       {prev ? (
         <Link

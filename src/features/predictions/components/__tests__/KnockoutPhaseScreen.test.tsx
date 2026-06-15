@@ -87,7 +87,7 @@ describe("KnockoutPhaseScreen — bloqueio A6", () => {
       prev: { href: "/predictions/knockout/dezesseis-avos", label: "16 avos" },
     });
     expect(screen.getByText("Fase bloqueada")).toBeTruthy();
-    expect(screen.getByText(/Conclua 16 avos primeiro/)).toBeTruthy();
+    expect(screen.getByText(/Os jogos de 16 avos precisam terminar/)).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Gols Brasil" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Salvar Fase" })).toBeNull();
   });
