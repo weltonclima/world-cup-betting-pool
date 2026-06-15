@@ -99,12 +99,20 @@ export function ParticipantProfile({
     () => derivePredictionsCount(items, allMatches, new Date()),
     [items, allMatches],
   );
+  // Os 3 cards contam TIPOS DE ACERTO em jogos encerrados (displayStatus só
+  // assume estes valores quando finished): "acertou" = placar exato; "acertou_vencedor"
+  // = errou placar mas acertou o vencedor; "acertou_empate" = errou placar mas acertou
+  // que foi empate. NÃO é entry.points (ponderado) nem tendência de aposta.
+  const exactHits = useMemo(
+    () => items.filter((i) => i.displayStatus === "acertou").length,
+    [items],
+  );
   const wins = useMemo(
-    () => items.filter((i) => i.prediction.homeScore !== i.prediction.awayScore).length,
+    () => items.filter((i) => i.displayStatus === "acertou_vencedor").length,
     [items],
   );
   const draws = useMemo(
-    () => items.filter((i) => i.prediction.homeScore === i.prediction.awayScore).length,
+    () => items.filter((i) => i.displayStatus === "acertou_empate").length,
     [items],
   );
 
@@ -153,7 +161,7 @@ export function ParticipantProfile({
         position={entry.position}
         total={rankingQuery.data?.entries.length ?? 0}
       />
-      <ProfileStatsGrid entry={entry} wins={wins} draws={draws} longestStreak={stats?.longestStreak} />
+      <ProfileStatsGrid exactHits={exactHits} wins={wins} draws={draws} longestStreak={stats?.longestStreak} />
       <StagePerformance stats={stats} />
 
       {isSelf && <BettorDnaCard dna={dna} />}
@@ -238,18 +246,18 @@ function CurrentPositionCard({
 }
 
 function ProfileStatsGrid({
-  entry,
+  exactHits,
   wins,
   draws,
   longestStreak,
 }: {
-  entry: RankingEntry;
+  exactHits: number;
   wins: number;
   draws: number;
   longestStreak?: number | null;
 }): JSX.Element {
   const metrics: ReadonlyArray<{ label: string; value: string }> = [
-    { label: "Acertos", value: String(entry.points) },
+    { label: "Acertos", value: String(exactHits) },
     { label: "Vitórias", value: String(wins) },
     { label: "Empates", value: String(draws) },
   ];

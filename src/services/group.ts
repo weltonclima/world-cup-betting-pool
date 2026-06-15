@@ -195,6 +195,7 @@ export interface UpdateGroupSettingsInput {
   photoBase64?: string;
   maxParticipants?: number | null;
   allowInvites?: boolean;
+  predictionsLocked?: boolean;
 }
 
 export async function updateGroupSettings(
