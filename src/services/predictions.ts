@@ -66,6 +66,37 @@ export async function listPredictionsByUid(uid: string): Promise<Prediction[]> {
   return snapshot.docs.map((d) => predictionSchema.parse(d.data()));
 }
 
+/**
+ * Lista os palpites de OUTRO participante via Route Handler GET /api/predictions/[uid]
+ * (anti-cola, PRD-14 / TASK-02). O servidor (Admin SDK) filtra server-side e retorna
+ * SOMENTE palpites de jogos `status === "finished"` — o cliente nunca recebe palpite
+ * de jogo aberto. Para o PRÓPRIO usuário use `listPredictionsByUid` (Client SDK, todos
+ * os jogos), não este caminho.
+ *
+ * Usa `credentials: "same-origin"` para enviar o cookie de sessão httpOnly.
+ * Mapeia respostas de erro HTTP para `PredictionServiceError` com mensagem pt-BR.
+ *
+ * @param uid - UID do participante alvo.
+ * @throws PredictionServiceError em erro HTTP (401/403/500).
+ * @throws Error genérico em falha de rede (fetch rejeita).
+ * @throws ZodError se algum documento retornado não passar na validação.
+ * @returns Array de Prediction (apenas jogos encerrados; vazio se nenhum).
+ */
+export async function getOtherUserPredictions(uid: string): Promise<Prediction[]> {
+  const response = await fetch(`/api/predictions/${uid}`, {
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    const message =
+      HTTP_ERROR_MESSAGES[response.status] ?? FALLBACK_HTTP_MESSAGE;
+    throw new PredictionServiceError(response.status, message);
+  }
+
+  const data = (await response.json()) as unknown;
+  return predictionSchema.array().parse(data);
+}
+
 // ─── Escrita ─────────────────────────────────────────────────────────────────
 
 export interface UpsertPredictionInput {

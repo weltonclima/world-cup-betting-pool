@@ -11,5 +11,9 @@ export const rankingKeys = {
   group: (groupId: string) => ["ranking", "group", groupId] as const,
   user: (uid: string) => ["ranking", "user", uid] as const, // linha do usuário no geral (UserRankingResult)
   profile: (uid: string) => ["ranking", "profile", uid] as const, // statistics/{uid} (Statistics)
+  // PRD-14: palpites do perfil; context "self" (Client SDK, todos os jogos) vs
+  // "other" (Route Handler, só finished) — caches separados para não colidir.
+  profilePredictions: (uid: string, context: "self" | "other") =>
+    ["ranking", "profile-predictions", uid, context] as const,
   poolStats: () => ["pool-stats"] as const,
 } as const;

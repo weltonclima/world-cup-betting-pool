@@ -6,3 +6,7 @@ export { useGroupRanking } from "./useGroupRanking";
 export { useMyRanking } from "./useMyRanking";
 export { useParticipantProfile } from "./useParticipantProfile";
 export { usePoolStats } from "./usePoolStats";
+export {
+  useProfilePredictions,
+  type ProfilePredictionsResult,
+} from "./useProfilePredictions";

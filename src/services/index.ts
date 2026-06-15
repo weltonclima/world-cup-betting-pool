@@ -34,6 +34,7 @@ export {
 export { listAllTeams } from "./teams";
 export {
   listPredictionsByUid,
+  getOtherUserPredictions,
   upsertPrediction,
   PredictionServiceError,
   type UpsertPredictionInput,
