@@ -19,6 +19,7 @@
 
 import { useCallback, useMemo } from "react";
 
+import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import { usePredictions } from "@/features/predictions/hooks";
@@ -76,6 +77,7 @@ export default function BestThirdsPage() {
 
   return (
     <div className="palpites-theme mx-auto flex max-w-2xl flex-col gap-6 pb-20 md:pb-4">
+      <BackButton />
       <BestThirdsRanking
         thirds={ranking.thirds}
         resolveTeamName={resolveTeamName}

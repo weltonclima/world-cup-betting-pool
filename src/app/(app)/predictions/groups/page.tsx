@@ -13,6 +13,7 @@
 
 import { useMemo } from "react";
 
+import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatches } from "@/features/matches/hooks";
 import { usePredictions } from "@/features/predictions/hooks";
@@ -47,7 +48,8 @@ export default function GroupSelectionPage() {
   };
 
   return (
-    <div className="palpites-theme mx-auto flex max-w-2xl flex-col pb-20 md:pb-4">
+    <div className="palpites-theme mx-auto flex max-w-2xl flex-col gap-4 pb-20 md:pb-4">
+      <BackButton />
       <GroupSelectionGrid
         summaries={summaries}
         isLoading={isLoading}

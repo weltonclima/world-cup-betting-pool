@@ -19,6 +19,7 @@ import { use, useCallback, useMemo } from "react";
 import { notFound } from "next/navigation";
 import { toast } from "sonner";
 
+import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import { buildTeamMap, resolveTeam } from "@/features/matches/lib/matchesHelpers";
@@ -302,6 +303,7 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
 
   return (
     <div className="palpites-theme mx-auto flex max-w-3xl flex-col gap-6 pb-20 md:pb-4">
+      <BackButton />
       <KnockoutPhaseScreen
         phaseTitle={config.title}
         sections={sections}
