@@ -242,20 +242,27 @@ describe("scorePrediction (regra ponderada — TASK-02)", () => {
     expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
   });
 
-  // --- 0 pontos: empate estrito (D1) ---
-  it("D1: empate previsto + jogo decidido (1×1 previsto, 2×1 real) → { status: 'wrong', points: 0 }", () => {
+  // --- 5 pontos: empate parcial (empate previsto + empate real inexato) ---
+  it("empate previsto + empate real inexato (1×1 previsto, 2×2 real) → { status: 'partial', points: 5 }", () => {
+    const match = makeFinishedMatch({ homeScore: 2, awayScore: 2 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "partial", points: 5 });
+  });
+
+  it("empate previsto 0×0 + empate real 1×1 → { status: 'partial', points: 5 }", () => {
+    const match = makeFinishedMatch({ homeScore: 1, awayScore: 1 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 0 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "partial", points: 5 });
+  });
+
+  // --- 0 pontos: empate previsto vs jogo decidido / vitória vs empate ---
+  it("empate previsto + jogo decidido (1×1 previsto, 2×1 real) → { status: 'wrong', points: 0 }", () => {
     const match = makeFinishedMatch({ homeScore: 2, awayScore: 1 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
     expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
   });
 
-  it("D1: empate previsto + empate real inexato (1×1 previsto, 2×2 real) → { status: 'wrong', points: 0 }", () => {
-    const match = makeFinishedMatch({ homeScore: 2, awayScore: 2 });
-    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
-    expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
-  });
-
-  it("D1: vitória prevista + jogo empatou (2×1 previsto, 1×1 real) → { status: 'wrong', points: 0 }", () => {
+  it("vitória prevista + jogo empatou (2×1 previsto, 1×1 real) → { status: 'wrong', points: 0 }", () => {
     const match = makeFinishedMatch({ homeScore: 1, awayScore: 1 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
     expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
@@ -343,11 +350,33 @@ describe("derivePredictionDisplayStatus", () => {
     expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("acertou_vencedor");
   });
 
-  it("D1: empate previsto + jogo decidido (1×1 previsto, 2×1 real) → 'errou' (não 'acertou_vencedor')", () => {
+  it("empate previsto + jogo decidido (1×1 previsto, 2×1 real) → 'errou' (não 'acertou_vencedor')", () => {
     const match = makeFinishedMatch({ kickoffAt, homeScore: 2, awayScore: 1 });
     const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
     const now = new Date(kickoffMs + 7_200_000);
     expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
+  });
+
+  // --- empate parcial (partial por empate → "acertou_empate") ---
+  it("finished + empate previsto + empate real inexato (1×1 previsto, 2×2 real) → 'acertou_empate'", () => {
+    const match = makeFinishedMatch({ kickoffAt, homeScore: 2, awayScore: 2 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("acertou_empate");
+  });
+
+  it("finished + empate previsto 0×0 + empate real 2×2 → 'acertou_empate'", () => {
+    const match = makeFinishedMatch({ kickoffAt, homeScore: 2, awayScore: 2 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 0, awayScore: 0 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("acertou_empate");
+  });
+
+  it("finished + empate parcial não rebaixa para 'acertou_vencedor' (regressão de partial)", () => {
+    const match = makeFinishedMatch({ kickoffAt, homeScore: 3, awayScore: 3 });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).not.toBe("acertou_vencedor");
   });
 
   it("finished tem prioridade sobre lock: finished + now >= kickoffAt → 'acertou' (não 'bloqueado')", () => {

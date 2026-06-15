@@ -81,12 +81,13 @@ function setupLocalStorageMock() {
 // ===========================================================================
 
 describe("PredictionFilters — chips renderizados", () => {
-  it("T1: renderiza os 6 chips de filtro", () => {
+  it("T1: renderiza os 7 chips de filtro", () => {
     render(<PredictionFilters activeFilter="todos" onChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Todos" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Pendentes" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Acertos" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Vencedor" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Empates" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Erros" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Bloqueados" })).toBeTruthy();
   });
@@ -96,6 +97,13 @@ describe("PredictionFilters — chips renderizados", () => {
     render(<PredictionFilters activeFilter="todos" onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: "Vencedor" }));
     expect(onChange).toHaveBeenCalledWith("acertou_vencedor");
+  });
+
+  it("T1c: chip 'Empates' chama onChange com 'acertou_empate'", () => {
+    const onChange = vi.fn();
+    render(<PredictionFilters activeFilter="todos" onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Empates" }));
+    expect(onChange).toHaveBeenCalledWith("acertou_empate");
   });
 
   it("T2: wrapper tem role=group com aria-label='Filtrar palpites'", () => {
@@ -121,6 +129,18 @@ describe("PredictionFilters — single-select e aria-pressed", () => {
     expect(acertos.getAttribute("aria-pressed")).toBe("false");
     expect(erros.getAttribute("aria-pressed")).toBe("false");
     expect(bloqueados.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("T4b: chip 'Empates' tem aria-pressed=true quando activeFilter='acertou_empate'", () => {
+    render(<PredictionFilters activeFilter="acertou_empate" onChange={vi.fn()} />);
+    const empates = screen.getByRole("button", { name: "Empates" }) as HTMLButtonElement;
+    expect(empates.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("T4c: chip 'Empates' tem aria-pressed=false quando outro filtro está ativo", () => {
+    render(<PredictionFilters activeFilter="todos" onChange={vi.fn()} />);
+    const empates = screen.getByRole("button", { name: "Empates" }) as HTMLButtonElement;
+    expect(empates.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("T5: clicar em chip inativo chama onChange com o valor correto", () => {
@@ -181,6 +201,13 @@ describe("PredictionFilters — persistência em localStorage", () => {
     expect(localStorageMock.setItem).toHaveBeenCalledWith("predictions_filter", "pendente");
   });
 
+  it("T10b: clicar em 'Empates' persiste 'acertou_empate' no localStorage", () => {
+    const onChange = vi.fn();
+    render(<PredictionFilters activeFilter="todos" onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Empates" }));
+    expect(localStorageMock.setItem).toHaveBeenCalledWith("predictions_filter", "acertou_empate");
+  });
+
   it("T11: readStoredFilter retorna 'todos' quando localStorage não tem o valor", () => {
     localStorageMock.getItem.mockReturnValue(null);
     const result = readStoredFilter();
@@ -215,6 +242,12 @@ describe("PredictionFilters — persistência em localStorage", () => {
     localStorageMock.getItem.mockReturnValue("acertou_vencedor");
     const result = readStoredFilter();
     expect(result).toBe("acertou_vencedor");
+  });
+
+  it("T15c: readStoredFilter retorna 'acertou_empate' quando salvo", () => {
+    localStorageMock.getItem.mockReturnValue("acertou_empate");
+    const result = readStoredFilter();
+    expect(result).toBe("acertou_empate");
   });
 });
 
@@ -332,6 +365,7 @@ describe("PredictionListCard — badge de status", () => {
     "pendente",
     "acertou",
     "acertou_vencedor",
+    "acertou_empate",
     "errou",
     "bloqueado",
   ];
@@ -372,6 +406,19 @@ describe("PredictionListCard — badge de status", () => {
   it("T31c: label e cor existem para 'acertou_vencedor' (exhaustiveness)", () => {
     expect(PREDICTION_DISPLAY_STATUS_LABEL["acertou_vencedor"]).toBe("Acertou o vencedor");
     expect(PREDICTION_DISPLAY_STATUS_COLOR["acertou_vencedor"]).toBeTruthy();
+  });
+
+  it("T31d: badge 'Acertou o empate' tem texto (empate parcial, +5)", () => {
+    render(<PredictionListCard item={makeItem({ displayStatus: "acertou_empate" })} />);
+    expect(screen.getByText("Acertou o empate")).toBeTruthy();
+  });
+
+  it("T31e: label e cor existem para 'acertou_empate', cor distinta de 'acertou_vencedor'", () => {
+    expect(PREDICTION_DISPLAY_STATUS_LABEL["acertou_empate"]).toBe("Acertou o empate");
+    expect(PREDICTION_DISPLAY_STATUS_COLOR["acertou_empate"]).toBeTruthy();
+    expect(PREDICTION_DISPLAY_STATUS_COLOR["acertou_empate"]).not.toBe(
+      PREDICTION_DISPLAY_STATUS_COLOR["acertou_vencedor"],
+    );
   });
 
   it("T32: badge aplica classe de cor de PREDICTION_DISPLAY_STATUS_COLOR", () => {
@@ -609,6 +656,22 @@ describe("Filtro em memória — integração PredictionFilters + lógica de fil
     expect(filtered[0]!.matchId).toBe("m6");
   });
 
+  it("T49c: filtro 'acertou_empate' retorna zero itens quando nenhum tem esse status", () => {
+    const filtered = applyFilter(allItems, "acertou_empate");
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("T49d: filtro 'acertou_empate' retorna apenas itens com esse status quando existem", () => {
+    const itemsComEmpate: PredictionListItem[] = [
+      ...allItems,
+      makeItem({ matchId: "m7", displayStatus: "acertou_empate" }),
+      makeItem({ matchId: "m8", displayStatus: "acertou_empate" }),
+    ];
+    const filtered = applyFilter(itemsComEmpate, "acertou_empate");
+    expect(filtered).toHaveLength(2);
+    filtered.forEach((item) => expect(item.displayStatus).toBe("acertou_empate"));
+  });
+
   it("T50: filtro 'pendente' retorna apenas itens com displayStatus='pendente'", () => {
     const filtered = applyFilter(allItems, "pendente");
     expect(filtered).toHaveLength(2);
@@ -681,10 +744,11 @@ describe("Tipos — confirma ausência de any", () => {
       "pendente",
       "acertou",
       "acertou_vencedor",
+      "acertou_empate",
       "errou",
       "bloqueado",
     ];
-    expect(validFilters).toHaveLength(6);
+    expect(validFilters).toHaveLength(7);
   });
 
   it("T58: makeItem retorna PredictionListItem corretamente tipado", () => {

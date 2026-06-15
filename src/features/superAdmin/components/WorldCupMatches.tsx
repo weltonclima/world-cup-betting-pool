@@ -3,14 +3,12 @@
 import { useMemo, useState, type JSX } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { LoaderCircle, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   useAdminMatches,
   useAdminGroups,
-  useSyncWorldCup,
   useEditMatch,
 } from "@/features/superAdmin/hooks";
 import type { AdminMatchView, MatchFilters } from "@/services/superAdmin";
@@ -105,9 +103,10 @@ function groupByDay(matches: AdminMatchView[], now: Date): DaySection[] {
 
 /**
  * Jogos da Copa (PRD11-06). 3 filtros (grupo/fase/status, B4 server-side),
- * partidas agrupadas por dia (Hoje/Amanhã/data). Header dispara o sync
- * openfootball → Firestore; cada jogo abre o diálogo de edição manual (overlay
- * `isManualOverride`). Server reforça autorização e coerência placar↔status.
+ * partidas agrupadas por dia (Hoje/Amanhã/data). Cada jogo abre o diálogo de
+ * edição manual (overlay `isManualOverride`). Server reforça autorização e
+ * coerência placar↔status. O sync openfootball foi descontinuado (PRD-13): a
+ * fonte de dados agora é ESPN em tempo real.
  */
 export function WorldCupMatches(): JSX.Element {
   const [group, setGroup] = useState("");
@@ -126,7 +125,6 @@ export function WorldCupMatches(): JSX.Element {
 
   const { data, isLoading, isError, refetch } = useAdminMatches(filters);
   const groupsQuery = useAdminGroups("active");
-  const sync = useSyncWorldCup();
   const edit = useEditMatch();
 
   const groupOptions = useMemo(() => {
@@ -142,43 +140,9 @@ export function WorldCupMatches(): JSX.Element {
     [data],
   );
 
-  const syncResult = sync.data;
-
   return (
     <div className="flex flex-col gap-4">
       <SuperAdminSubHeader title="Jogos da Copa" />
-
-      <div className="flex flex-col gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 self-start"
-          disabled={sync.isPending}
-          aria-busy={sync.isPending}
-          onClick={() => sync.mutate()}
-        >
-          {sync.isPending ? (
-            <LoaderCircle
-              size={16}
-              aria-hidden="true"
-              className="animate-spin motion-reduce:animate-none"
-            />
-          ) : (
-            <RefreshCw size={16} aria-hidden="true" />
-          )}
-          Sincronizar com a Copa
-        </Button>
-        {sync.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {sync.error.message}
-          </p>
-        ) : syncResult ? (
-          <p className="text-sm text-muted-foreground">
-            Sincronizado: {syncResult.matchesUpdated} atualizados,{" "}
-            {syncResult.matchesSkipped} preservados (edição manual).
-          </p>
-        ) : null}
-      </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <FilterSelect
@@ -384,7 +348,7 @@ function TeamSide({
         <img
           src={team.flagUrl}
           alt=""
-          className="size-7 shrink-0 rounded-sm object-cover"
+          className="size-7 shrink-0 rounded-sm object-cover border border-border"
         />
       ) : (
         <span

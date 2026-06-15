@@ -13,12 +13,14 @@ type TeamWithId = Team & { id: string };
 
 import {
   buildTeamMap,
+  classifyDateKey,
   deriveGameStatusLabel,
   deriveMatchPredictionStatus,
   filterMatches,
   groupMatchesByDay,
   resolveTeam,
   searchMatchesByCountry,
+  toUtcDateKey,
 } from "@/features/matches/lib/matchesHelpers";
 
 // ---------------------------------------------------------------------------
@@ -520,5 +522,61 @@ describe("deriveGameStatusLabel", () => {
 
   it("'canceled' → 'Cancelado'", () => {
     expect(deriveGameStatusLabel("canceled")).toBe("Cancelado");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. toUtcDateKey — promovida a export (TASK-01 matches-tabs-prediction)
+// ---------------------------------------------------------------------------
+
+describe("toUtcDateKey", () => {
+  it("extrai 'yyyy-MM-dd' UTC de uma ISO string", () => {
+    expect(toUtcDateKey("2026-06-20T18:00:00.000Z")).toBe("2026-06-20");
+  });
+
+  it("não desloca o dia para horários no fim do dia UTC", () => {
+    expect(toUtcDateKey("2026-06-20T23:59:59.000Z")).toBe("2026-06-20");
+  });
+
+  it("não desloca o dia para meia-noite UTC", () => {
+    expect(toUtcDateKey("2026-06-21T00:00:00.000Z")).toBe("2026-06-21");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. classifyDateKey — classificação temporal (TASK-01 matches-tabs-prediction)
+// ---------------------------------------------------------------------------
+
+describe("classifyDateKey", () => {
+  const todayKey = "2026-06-20";
+
+  it("dateKey === todayKey → 'hoje'", () => {
+    expect(classifyDateKey("2026-06-20", todayKey)).toBe("hoje");
+  });
+
+  it("dateKey < todayKey (ontem) → 'anteriores'", () => {
+    expect(classifyDateKey("2026-06-19", todayKey)).toBe("anteriores");
+  });
+
+  it("dateKey > todayKey (amanhã) → 'proximos'", () => {
+    expect(classifyDateKey("2026-06-21", todayKey)).toBe("proximos");
+  });
+
+  it("data muitas semanas no futuro → 'proximos'", () => {
+    expect(classifyDateKey("2026-07-15", todayKey)).toBe("proximos");
+  });
+
+  it("data muitas semanas no passado → 'anteriores'", () => {
+    expect(classifyDateKey("2026-05-01", todayKey)).toBe("anteriores");
+  });
+
+  it("comparação lexicográfica respeita virada de mês (anteriores)", () => {
+    // "2026-05-31" < "2026-06-01"
+    expect(classifyDateKey("2026-05-31", "2026-06-01")).toBe("anteriores");
+  });
+
+  it("comparação lexicográfica respeita virada de ano (proximos)", () => {
+    // "2027-01-01" > "2026-12-31"
+    expect(classifyDateKey("2027-01-01", "2026-12-31")).toBe("proximos");
   });
 });

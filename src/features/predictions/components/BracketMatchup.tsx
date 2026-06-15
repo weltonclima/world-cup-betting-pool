@@ -79,7 +79,7 @@ function SlotFlag({ flagUrl }: { flagUrl: string | undefined }) {
       height={16}
       loading="lazy"
       decoding="async"
-      className="h-4 w-6 shrink-0 rounded-sm object-cover"
+      className="h-4 w-6 shrink-0 rounded-sm object-cover border border-border"
     />
   );
 }

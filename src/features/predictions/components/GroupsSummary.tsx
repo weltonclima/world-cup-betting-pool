@@ -168,7 +168,7 @@ function QualifierRow({
         <img
           src={team.flagUrl}
           alt=""
-          className="h-4 w-6 shrink-0 rounded-sm object-cover"
+          className="h-4 w-6 shrink-0 rounded-sm object-cover border border-border"
         />
       ) : null}
       <span className="text-sm text-foreground">{team.name}</span>

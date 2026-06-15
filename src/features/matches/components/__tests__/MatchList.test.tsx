@@ -1,13 +1,27 @@
 // @vitest-environment jsdom
 /**
- * Testes do componente MatchList (TASK-04).
+ * Testes do componente MatchList (TASK-04 + TASK-03).
  *
  * Estratégia: mock de useMatchesList + useAuth (Firebase) no nível do hook.
- * Exercita os estados loading / error / empty / sucesso e o pipeline de filtros.
+ * Exercita os estados loading / error / empty / sucesso, pipeline de filtros
+ * e tabs temporais (TASK-03).
+ *
+ * Faketime fixado em 2026-06-14T12:00:00Z para determinar todayKey de forma
+ * estável. Isso alinha com as fixtures cujas datas são 2026-06-13/14/15.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Fixa o relógio para que toUtcDateKey(new Date()) retorne "2026-06-14" determinísticamente.
+beforeAll(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-06-14T12:00:00.000Z"));
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 // ── mocks declarados antes dos imports do módulo ────────────────────────────
 
@@ -56,6 +70,7 @@ function makeItem(overrides: Partial<MatchListItem> = {}): MatchListItem {
     homeTeam: { name: "Brasil", flagUrl: undefined },
     awayTeam: { name: "França", flagUrl: undefined },
     predictionStatus: "pendente",
+    userPrediction: null,
     ...overrides,
   };
 }
@@ -92,6 +107,27 @@ const espanhaJapao = makeItem({
   awayScore: 1,
 });
 
+// Jogo de ontem (bucket "anteriores" com todayKey="2026-06-14")
+const paraguaiPortugal = makeItem({
+  id: "match-000",
+  kickoffAt: "2026-06-13T16:00:00Z",
+  groupId: "Grupo A",
+  homeTeamId: "team-par",
+  awayTeamId: "team-por",
+  homeTeam: { name: "Paraguai", flagUrl: undefined },
+  awayTeam: { name: "Portugal", flagUrl: undefined },
+  predictionStatus: "bloqueado",
+  status: "finished",
+  homeScore: 1,
+  awayScore: 3,
+});
+
+const yesterdaySection: MatchListItemDaySection = {
+  label: "13 de junho de 2026",
+  date: "2026-06-13",
+  matches: [paraguaiPortugal],
+};
+
 const todaySection: MatchListItemDaySection = {
   label: "Hoje",
   date: "2026-06-14",
@@ -108,6 +144,18 @@ function makeSuccessState(overrides: Partial<MatchesListData> = {}): MatchesList
   return {
     groups: [todaySection, tomorrowSection],
     flatList: [brasilFranca, argentinaAlemanha, espanhaJapao],
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
+  };
+}
+
+/** Fixture com itens nos três buckets temporais (ontem + hoje + amanhã). */
+function makeSuccessStateWithAllBuckets(overrides: Partial<MatchesListData> = {}): MatchesListData {
+  return {
+    groups: [yesterdaySection, todaySection, tomorrowSection],
+    flatList: [paraguaiPortugal, brasilFranca, argentinaAlemanha, espanhaJapao],
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -212,9 +260,10 @@ describe("MatchList — estado vazio", () => {
     mockUseMatchesList.mockReturnValue(emptyState);
   });
 
-  it("T9: exibe 'Nenhum jogo encontrado' quando lista vazia", () => {
+  it("T9: exibe mensagem de empty-state por aba quando lista vazia (default='anteriores' sem dados)", () => {
     render(<MatchList />);
-    expect(screen.getByText("Nenhum jogo encontrado")).toBeTruthy();
+    // flatList=[] → defaultTab="anteriores" → mensagem do bucket
+    expect(screen.getByText("Nenhum jogo anterior")).toBeTruthy();
   });
 
   it("T10: não exibe subtitle de filtros ativos quando lista simplesmente vazia", () => {
@@ -229,20 +278,24 @@ describe("MatchList — estado de sucesso", () => {
     expect(screen.getByRole("heading", { name: "Jogos" })).toBeTruthy();
   });
 
-  it("T12: renderiza seções de dia com labels 'Hoje' e 'Amanhã'", () => {
+  it("T12: na aba 'Hoje' (default) renderiza seção 'Hoje' mas não 'Amanhã'", () => {
     render(<MatchList />);
-    expect(screen.getByText("Hoje")).toBeTruthy();
-    expect(screen.getByText("Amanhã")).toBeTruthy();
+    // "Hoje" aparece tanto na aba quanto no cabeçalho de seção — getAll
+    const hojeOccurrences = screen.getAllByText("Hoje");
+    expect(hojeOccurrences.length).toBeGreaterThanOrEqual(1);
+    // "Amanhã" só aparece na aba "proximos" — invisível por default
+    expect(screen.queryByText("Amanhã")).toBeNull();
   });
 
-  it("T13: renderiza nome dos times nos cards", () => {
+  it("T13a: na aba 'Hoje' (default) renderiza times do dia corrente", () => {
     render(<MatchList />);
     expect(screen.getByText("Brasil")).toBeTruthy();
     expect(screen.getByText("França")).toBeTruthy();
     expect(screen.getByText("Argentina")).toBeTruthy();
     expect(screen.getByText("Alemanha")).toBeTruthy();
-    expect(screen.getByText("Espanha")).toBeTruthy();
-    expect(screen.getByText("Japão")).toBeTruthy();
+    // Times de amanhã não aparecem na aba hoje
+    expect(screen.queryByText("Espanha")).toBeNull();
+    expect(screen.queryByText("Japão")).toBeNull();
   });
 
   it("T14: cards são links com href para /matches/{id}", () => {
@@ -298,49 +351,57 @@ describe("MatchList — busca por seleção", () => {
     expect(screen.getByText("Brasil")).toBeTruthy();
   });
 
-  it("T21: busca sem resultado exibe 'Nenhum jogo encontrado' com subtitle", () => {
+  it("T21: busca sem resultado exibe mensagem da aba atual com subtitle", () => {
     render(<MatchList />);
     const input = screen.getByLabelText("Buscar jogos por seleção");
     fireEvent.change(input, { target: { value: "Zêlandia" } });
-    expect(screen.getByText("Nenhum jogo encontrado")).toBeTruthy();
+    // Default tab "hoje" → "Nenhum jogo hoje"
+    expect(screen.getByText("Nenhum jogo hoje")).toBeTruthy();
     expect(screen.getByText("Tente limpar os filtros")).toBeTruthy();
   });
 
-  it("T22: limpar busca restaura todos os jogos", () => {
+  it("T22: limpar busca restaura todos os jogos da aba ativa (hoje)", () => {
     render(<MatchList />);
     const input = screen.getByLabelText("Buscar jogos por seleção");
     fireEvent.change(input, { target: { value: "Brasil" } });
     fireEvent.change(input, { target: { value: "" } });
+    // Aba "hoje": Brasil + Argentina visíveis; Espanha é "proximos"
     expect(screen.getByText("Argentina")).toBeTruthy();
-    expect(screen.getByText("Espanha")).toBeTruthy();
+    expect(screen.getByText("Brasil")).toBeTruthy();
+    expect(screen.queryByText("Espanha")).toBeNull();
   });
 });
 
 describe("MatchList — filtro de fase (Stage)", () => {
-  it("T23: selecionar 'Fase de Grupos' não filtra nada (todos são grupos no fixture)", () => {
+  it("T23: selecionar 'Fase de Grupos' não filtra nada (todos são grupos na aba hoje)", () => {
     render(<MatchList />);
     fireEvent.click(screen.getByRole("button", { name: "Fase de Grupos" }));
-    // Todos os jogos do fixture são stage=grupos
+    // Todos os jogos do fixture são stage=grupos; aba "hoje" tem Brasil + Argentina
     expect(screen.getByText("Brasil")).toBeTruthy();
     expect(screen.getByText("Argentina")).toBeTruthy();
-    expect(screen.getByText("Espanha")).toBeTruthy();
+    // Espanha é aba "proximos" — não aparece aqui
+    expect(screen.queryByText("Espanha")).toBeNull();
   });
 
   it("T24: selecionar 'Oitavas' não retorna nenhum jogo do fixture (todos são grupos)", () => {
     render(<MatchList />);
     fireEvent.click(screen.getByRole("button", { name: "Oitavas" }));
     expect(screen.queryByText("Brasil")).toBeNull();
-    expect(screen.getByText("Nenhum jogo encontrado")).toBeTruthy();
+    // Mensagem é por aba (default "hoje")
+    expect(screen.getByText("Nenhum jogo hoje")).toBeTruthy();
     // Com filtro ativo: exibe subtitle
     expect(screen.getByText("Tente limpar os filtros")).toBeTruthy();
   });
 
-  it("T25: clicar em 'Todas as fases' restaura lista completa após filtrar", () => {
+  it("T25: clicar em 'Todas as fases' restaura jogos da aba ativa (hoje)", () => {
     render(<MatchList />);
     fireEvent.click(screen.getByRole("button", { name: "Oitavas" }));
     fireEvent.click(screen.getByRole("button", { name: "Todas as fases" }));
+    // Aba "hoje" ativa: Brasil + Argentina visíveis
     expect(screen.getByText("Brasil")).toBeTruthy();
-    expect(screen.getByText("Espanha")).toBeTruthy();
+    expect(screen.getByText("Argentina")).toBeTruthy();
+    // Espanha é da aba "proximos" — não aparece aqui
+    expect(screen.queryByText("Espanha")).toBeNull();
   });
 });
 
@@ -360,20 +421,232 @@ describe("MatchList — filtro de status de palpite", () => {
     expect(screen.queryByText("Argentina")).toBeNull();
   });
 
-  it("T28: filtrar por 'Bloqueados' mostra apenas Espanha vs Japão", () => {
+  it("T28: filtrar por 'Bloqueados' na aba Próximos mostra Espanha vs Japão", () => {
     render(<MatchList />);
+    // Espanha está no bucket "proximos"; troca de aba primeiro (limpa filtros)
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    // Agora aplica filtro Bloqueados
     fireEvent.click(screen.getByRole("button", { name: "Bloqueados" }));
     expect(screen.getByText("Espanha")).toBeTruthy();
     expect(screen.queryByText("Brasil")).toBeNull();
     expect(screen.queryByText("Argentina")).toBeNull();
   });
 
-  it("T29: clicar em 'Todos' restaura lista completa", () => {
+  it("T29: clicar em 'Todos' na aba Próximos restaura Espanha", () => {
     render(<MatchList />);
-    fireEvent.click(screen.getByRole("button", { name: "Enviados" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bloqueados" }));
     fireEvent.click(screen.getByRole("button", { name: "Todos" }));
+    expect(screen.getByText("Espanha")).toBeTruthy();
+    // Brasil/Argentina são da aba "hoje", não aparecem em "proximos"
+    expect(screen.queryByText("Brasil")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TASK-03 — Tabs temporais
+// ---------------------------------------------------------------------------
+
+describe("MatchList — TASK-03: tabs temporais renderizadas", () => {
+  it("T30: renderiza as três abas (Anteriores, Hoje, Próximos)", () => {
+    render(<MatchList />);
+    expect(screen.getByRole("tab", { name: "Anteriores" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Hoje" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Próximos" })).toBeTruthy();
+  });
+
+  it("T31: tabs visíveis no estado de loading", () => {
+    mockUseMatchesList.mockReturnValue(loadingState);
+    render(<MatchList />);
+    expect(screen.getByRole("tab", { name: "Hoje" })).toBeTruthy();
+  });
+
+  it("T32: tabs visíveis no estado de erro", () => {
+    mockUseMatchesList.mockReturnValue(errorState);
+    render(<MatchList />);
+    expect(screen.getByRole("tab", { name: "Anteriores" })).toBeTruthy();
+  });
+});
+
+describe("MatchList — TASK-03: default tab derivado dos dados", () => {
+  it("T33: default 'hoje' quando há jogos no dia corrente", () => {
+    // makeSuccessState tem jogos em 2026-06-14 (=today) e 2026-06-15
+    render(<MatchList />);
+    // Aba "hoje" ativa por default → Brasil visível
+    expect(screen.getByText("Brasil")).toBeTruthy();
+    // Espanha (proximos) não visível
+    expect(screen.queryByText("Espanha")).toBeNull();
+  });
+
+  it("T34: default 'proximos' quando não há jogos hoje mas há futuros", () => {
+    mockUseMatchesList.mockReturnValue({
+      groups: [tomorrowSection],
+      flatList: [espanhaJapao],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MatchList />);
+    // defaultTab="proximos" → Espanha visível
+    expect(screen.getByText("Espanha")).toBeTruthy();
+  });
+
+  it("T35: default 'anteriores' como fallback final (sem hoje nem proximos)", () => {
+    mockUseMatchesList.mockReturnValue({
+      groups: [yesterdaySection],
+      flatList: [paraguaiPortugal],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MatchList />);
+    // defaultTab="anteriores" → Paraguai visível
+    expect(screen.getByText("Paraguai")).toBeTruthy();
+  });
+});
+
+describe("MatchList — TASK-03: filtro temporal por aba", () => {
+  beforeEach(() => {
+    mockUseMatchesList.mockReturnValue(makeSuccessStateWithAllBuckets());
+  });
+
+  it("T36: aba 'Hoje' exibe apenas jogos do dia corrente", () => {
+    render(<MatchList />);
+    // Default já é "hoje" (flatList tem itens hoje)
     expect(screen.getByText("Brasil")).toBeTruthy();
     expect(screen.getByText("Argentina")).toBeTruthy();
+    // Itens de outros buckets não aparecem
+    expect(screen.queryByText("Paraguai")).toBeNull();
+    expect(screen.queryByText("Espanha")).toBeNull();
+  });
+
+  it("T37: aba 'Próximos' exibe apenas jogos futuros", () => {
+    render(<MatchList />);
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
     expect(screen.getByText("Espanha")).toBeTruthy();
+    expect(screen.queryByText("Brasil")).toBeNull();
+    expect(screen.queryByText("Paraguai")).toBeNull();
+  });
+
+  it("T38: aba 'Anteriores' exibe apenas jogos passados", () => {
+    render(<MatchList />);
+    fireEvent.click(screen.getByRole("tab", { name: "Anteriores" }));
+    expect(screen.getByText("Paraguai")).toBeTruthy();
+    expect(screen.queryByText("Brasil")).toBeNull();
+    expect(screen.queryByText("Espanha")).toBeNull();
+  });
+
+  it("T39: seção de dia correta aparece por aba (Amanhã na aba Próximos)", () => {
+    render(<MatchList />);
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    expect(screen.getByText("Amanhã")).toBeTruthy();
+  });
+});
+
+describe("MatchList — TASK-03: troca de aba limpa filtros", () => {
+  it("T40: trocar aba limpa busca", () => {
+    render(<MatchList />);
+    const input = screen.getByLabelText("Buscar jogos por seleção");
+    fireEvent.change(input, { target: { value: "Brasil" } });
+    expect((input as HTMLInputElement).value).toBe("Brasil");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    expect((input as HTMLInputElement).value).toBe("");
+  });
+
+  it("T41: trocar aba limpa filtro de fase", () => {
+    render(<MatchList />);
+    fireEvent.click(screen.getByRole("button", { name: "Fase de Grupos" }));
+    // Filtro ativo: filtersCount > 0
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    // Após troca, filtro de fase limpo — Espanha (grupos) aparece em proximos
+    expect(screen.getByText("Espanha")).toBeTruthy();
+  });
+
+  it("T42: trocar aba limpa filtro de predictionStatus", () => {
+    render(<MatchList />);
+    fireEvent.click(screen.getByRole("button", { name: "Enviados" }));
+    // Na aba "hoje" com Enviados: só Argentina
+    expect(screen.getByText("Argentina")).toBeTruthy();
+    expect(screen.queryByText("Brasil")).toBeNull();
+
+    // Trocar aba limpa filtro → "Próximos" sem filtro mostra Espanha
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    expect(screen.getByText("Espanha")).toBeTruthy();
+  });
+});
+
+describe("MatchList — TASK-03: empty-state por aba", () => {
+  it("T43: empty-state 'Nenhum jogo hoje' na aba Hoje sem jogos", () => {
+    mockUseMatchesList.mockReturnValue({
+      groups: [tomorrowSection],
+      flatList: [espanhaJapao], // apenas jogos futuros
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MatchList />);
+    // Default: "hoje" (não há itens hoje → "proximos" → mas vamos checar aba hoje explicitamente)
+    // Na verdade: defaultTab="proximos" aqui, então clicamos em "Hoje"
+    fireEvent.click(screen.getByRole("tab", { name: "Hoje" }));
+    expect(screen.getByText("Nenhum jogo hoje")).toBeTruthy();
+  });
+
+  it("T44: empty-state 'Nenhum jogo próximo' na aba Próximos sem jogos", () => {
+    mockUseMatchesList.mockReturnValue({
+      groups: [yesterdaySection],
+      flatList: [paraguaiPortugal], // apenas jogos passados
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MatchList />);
+    // Default: "anteriores"; clica em "Próximos"
+    fireEvent.click(screen.getByRole("tab", { name: "Próximos" }));
+    expect(screen.getByText("Nenhum jogo próximo")).toBeTruthy();
+  });
+
+  it("T45: empty-state mostra subtitle quando há filtro ativo na aba vazia", () => {
+    render(<MatchList />);
+    // Na aba "hoje", filtrar por "Oitavas" → nenhum jogo hoje é oitavas
+    fireEvent.click(screen.getByRole("button", { name: "Oitavas" }));
+    expect(screen.getByText("Nenhum jogo hoje")).toBeTruthy();
+    expect(screen.getByText("Tente limpar os filtros")).toBeTruthy();
+  });
+});
+
+describe("MatchList — TASK-03: userPrediction passado ao MatchCard", () => {
+  it("T46: exibe palpite do usuário no card quando userPrediction está preenchido", () => {
+    const itemComPalpite = makeItem({
+      id: "match-palpite",
+      kickoffAt: "2026-06-14T20:00:00Z", // hoje
+      status: "scheduled",
+      predictionStatus: "enviado",
+      userPrediction: { homeScore: 2, awayScore: 1 },
+      homeTeam: { name: "Uruguai", flagUrl: undefined },
+      awayTeam: { name: "Itália", flagUrl: undefined },
+    });
+    const section: MatchListItemDaySection = {
+      label: "Hoje",
+      date: "2026-06-14",
+      matches: [itemComPalpite],
+    };
+    mockUseMatchesList.mockReturnValue({
+      groups: [section],
+      flatList: [itemComPalpite],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MatchList />);
+    // MatchCard renderiza "Seu palpite: 2 x 1" para jogos não-encerrados com palpite
+    expect(screen.getByText(/Seu palpite/)).toBeTruthy();
+    expect(screen.getByText(/2.*x.*1/)).toBeTruthy();
+  });
+
+  it("T47: não exibe palpite quando userPrediction é null", () => {
+    render(<MatchList />);
+    // brasilFranca tem userPrediction: null
+    expect(screen.queryByText(/Seu palpite/)).toBeNull();
   });
 });

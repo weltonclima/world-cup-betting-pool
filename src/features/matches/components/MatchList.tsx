@@ -20,11 +20,14 @@
  * Contrato visual: ai/screen/jogos-task-04.md + ai/screen/jogos-task-05.md
  */
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MatchWithId } from "@/types";
 import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
 import type { Stage } from "@/types";
+
+import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
+import { classifyDateKey, toUtcDateKey, type TemporalBucket } from "../lib";
 
 import { useMatchesList } from "@/features/matches/hooks/useMatchesList";
 import type {
@@ -104,6 +107,12 @@ function toMatchWithId(item: MatchListItem): MatchWithId {
 // Componente principal
 // ---------------------------------------------------------------------------
 
+const emptyMessageByTab: Record<TemporalBucket, string> = {
+  anteriores: "Nenhum jogo anterior",
+  hoje: "Nenhum jogo hoje",
+  proximos: "Nenhum jogo próximo",
+};
+
 export function MatchList() {
   // Estado local de busca e filtros
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,6 +128,43 @@ export function MatchList() {
 
   // View-model do compositor (TASK-02)
   const { groups, flatList, isLoading, isError, refetch } = useMatchesList();
+
+  // ---------------------------------------------------------------------------
+  // Tabs temporais (TASK-03)
+  // ---------------------------------------------------------------------------
+
+  // Chave UTC do dia corrente — estável durante o render, reavaliada por sessão.
+  const todayKey = useMemo(() => toUtcDateKey(new Date().toISOString()), []);
+
+  // Default derivado dos dados: Hoje → Próximos → Anteriores.
+  const defaultTab = useMemo((): TemporalBucket => {
+    if (flatList.some((item) => classifyDateKey(toUtcDateKey(item.kickoffAt), todayKey) === "hoje"))
+      return "hoje";
+    if (
+      flatList.some((item) => classifyDateKey(toUtcDateKey(item.kickoffAt), todayKey) === "proximos")
+    )
+      return "proximos";
+    return "anteriores";
+  }, [flatList, todayKey]);
+
+  const [activeTab, setActiveTab] = useState<TemporalBucket>(defaultTab);
+
+  // Sincroniza activeTab quando flatList transita de vazio para populado (carga inicial).
+  const prevFlatListLengthRef = useRef(flatList.length);
+  useEffect(() => {
+    if (prevFlatListLengthRef.current === 0 && flatList.length > 0) {
+      setActiveTab(defaultTab);
+    }
+    prevFlatListLengthRef.current = flatList.length;
+  }, [flatList.length, defaultTab]);
+
+  function handleTabChange(value: string) {
+    setActiveTab(value as TemporalBucket);
+    setSearchQuery("");
+    setSelectedStage(undefined);
+    setSelectedPredictionStatus(undefined);
+    setSelectedTeamId(undefined);
+  }
 
   // ---------------------------------------------------------------------------
   // Pipeline de filtro client-side
@@ -143,12 +189,17 @@ export function MatchList() {
         );
 
   // 4. Filtro de status de palpite
-  const filteredList =
+  const afterPrediction =
     selectedPredictionStatus === undefined
       ? afterTeamId
       : afterTeamId.filter((item) => item.predictionStatus === selectedPredictionStatus);
 
-  // 5. Re-agrupa preservando labels pt-BR dos grupos originais
+  // 5. Filtro de bucket temporal — última etapa, usa aba ativa (TASK-03)
+  const filteredList = afterPrediction.filter(
+    (item) => classifyDateKey(toUtcDateKey(item.kickoffAt), todayKey) === activeTab,
+  );
+
+  // 6. Re-agrupa preservando labels pt-BR dos grupos originais
   const filteredIds = new Set(filteredList.map((item) => item.id));
   const filteredGroups = regroupFilteredItems(filteredIds, groups);
 
@@ -183,28 +234,46 @@ export function MatchList() {
         filtersCount={filtersCount}
       />
 
-      {/* Estado: carregando */}
-      {isLoading && <MatchListSkeleton count={5} />}
+      {/* Tabs temporais (TASK-03) */}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="w-full md:w-auto">
+          <TabsTab value="anteriores" className="flex-1 md:flex-none">
+            Anteriores
+          </TabsTab>
+          <TabsTab value="hoje" className="flex-1 md:flex-none">
+            Hoje
+          </TabsTab>
+          <TabsTab value="proximos" className="flex-1 md:flex-none">
+            Próximos
+          </TabsTab>
+        </TabsList>
+      </Tabs>
 
-      {/* Estado: erro */}
-      {isError && !isLoading && <MatchesErrorState onRetry={refetch} />}
+      {/* Conteúdo filtrado pela aba ativa — fora de TabsPanel para preservar estados */}
+      <div aria-label={`Jogos ${activeTab}`} aria-live="polite">
+        {/* Estado: carregando */}
+        {isLoading && <MatchListSkeleton count={5} />}
 
-      {/* Estado: lista vazia */}
-      {!isLoading && !isError && filteredGroups.length === 0 && (
-        <MatchesEmptyState
-          message="Nenhum jogo encontrado"
-          subtitle={hasActiveFilters ? "Tente limpar os filtros" : undefined}
-        />
-      )}
+        {/* Estado: erro */}
+        {isError && !isLoading && <MatchesErrorState onRetry={refetch} />}
 
-      {/* Lista agrupada por dia */}
-      {!isLoading && !isError && filteredGroups.length > 0 && (
-        <div className="flex flex-col gap-6" aria-label="Jogos agrupados por dia">
-          {filteredGroups.map((group) => (
-            <DaySection key={group.date} group={group} />
-          ))}
-        </div>
-      )}
+        {/* Estado: lista vazia */}
+        {!isLoading && !isError && filteredGroups.length === 0 && (
+          <MatchesEmptyState
+            message={emptyMessageByTab[activeTab]}
+            subtitle={hasActiveFilters ? "Tente limpar os filtros" : undefined}
+          />
+        )}
+
+        {/* Lista agrupada por dia */}
+        {!isLoading && !isError && filteredGroups.length > 0 && (
+          <div className="flex flex-col gap-6" aria-label="Jogos agrupados por dia">
+            {filteredGroups.map((group) => (
+              <DaySection key={group.date} group={group} />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Sheet de filtros avançados (TASK-05) */}
       <MatchFiltersSheet
@@ -255,6 +324,7 @@ function DaySection({ group }: DaySectionProps) {
             homeTeam={item.homeTeam}
             awayTeam={item.awayTeam}
             predictionStatus={item.predictionStatus}
+            userPrediction={item.userPrediction}
             detailHref={`/matches/${item.id}`}
           />
         ))}

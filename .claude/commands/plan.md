@@ -200,9 +200,27 @@ For each task use this exact structure:
   - implement: <model/effort>
   - test: <model/effort>
   - review: <model/effort>
+- Status: pending
+- Phases done: (none)
 - Notes:
 
 Repeat for all tasks.
+
+### Status tracking fields
+Two fields make each task self-tracking so a re-run does **not**
+reprocess finished work:
+
+- **Status** — lifecycle of the whole task. Always write it as one
+  of exactly: `pending` · `in-progress` · `done`. Every task starts
+  `pending` at plan time.
+- **Phases done** — which skills have already run for this task,
+  appended in execution order, e.g.
+  `spec, implement, test, review`. Starts `(none)`. This lets a
+  resumed task skip the phases already completed, not just whole
+  tasks.
+
+`/plan` only seeds these (`pending` / `(none)`); the flow
+orchestrator is what updates them as it executes.
 
 ## 4. Dependency map
 A readable summary of which tasks depend on which.

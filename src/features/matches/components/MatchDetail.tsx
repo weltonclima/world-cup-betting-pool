@@ -88,7 +88,7 @@ function TeamFlag({ team, size = "md" }: { team: ResolvedTeam; size?: "md" | "lg
         height={56}
         loading="lazy"
         decoding="async"
-        className={`${sizeClass} rounded object-contain`}
+        className={`${sizeClass} rounded object-cover border border-border`}
       />
     );
   }

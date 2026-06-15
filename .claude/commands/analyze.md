@@ -106,11 +106,20 @@ How the area works today and what is wrong.
 What the refactored area should look like.
 
 ## 4. Incremental refactor units
-Ordered list of units, each with:
+Ordered list of units. Number them `UNIT-01`, `UNIT-02`, … and
+give each:
 - scope
 - what changes
 - behavior preservation check
 - dependencies
+- Status: pending
+- Phases done: (none)
+
+`Status` is one of exactly `pending` · `in-progress` · `done`
+and `Phases done` lists which skills already ran for the unit
+(e.g. `refactor, test, review`). `/analyze` seeds them as
+`pending` / `(none)`; `/flow-refactor` updates them during
+execution so a re-run does not reprocess finished units.
 
 ## 5. Test coverage assessment
 Current coverage and areas at risk.

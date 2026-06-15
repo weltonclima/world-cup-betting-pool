@@ -11,12 +11,10 @@ import {
 import {
   editMatch,
   listAdminMatches,
-  syncWorldCup,
   type AdminMatchView,
   type MatchEditInput,
   type MatchFilters,
 } from "@/services/superAdmin";
-import type { SyncLog } from "@/schemas/syncLogs";
 import { superAdminKeys } from "./superAdminKeys";
 
 /** Lista filtrada de partidas (PRD11-07). */
@@ -40,15 +38,6 @@ function useInvalidateMatches(): () => void {
     void queryClient.invalidateQueries({ queryKey: ["admin-matches"] });
     void queryClient.invalidateQueries({ queryKey: superAdminKeys.dashboard() });
   };
-}
-
-/** Sincroniza partidas openfootball → Firestore (PRD-11 TASK-02). */
-export function useSyncWorldCup(): UseMutationResult<SyncLog, Error, void> {
-  const invalidate = useInvalidateMatches();
-  return useMutation<SyncLog, Error, void>({
-    mutationFn: () => syncWorldCup(),
-    onSuccess: invalidate,
-  });
 }
 
 export interface EditMatchVars {

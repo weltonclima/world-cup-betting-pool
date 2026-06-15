@@ -75,13 +75,32 @@ Process skills for this stage:
 
 For each task, follow this exact order:
 
-### 3.0 Read execution cost profile
-Before starting a task, read its `Execution cost` from `ai/
-plan/feature.md`.
-Use the declared model/effort for each phase of this task.
+### 3.0 Read status + execution cost profile
+Before starting a task, read both its `Status` and its
+`Execution cost` from `ai/plan/feature.md`.
+
+**Status gate (prevents reprocessing):**
+- `Status: done` → **skip the task entirely.** Announce
+  "TASK-XX — skipped (already done)" and move to the next task.
+- `Status: in-progress` → **resume**, not restart. Read
+  `Phases done` and skip every phase listed there; continue from
+  the first phase not yet recorded.
+- `Status: pending` → run the full cycle from 3.1.
+
+When you actually start (or resume) a task, set its `Status` to
+`in-progress` in `ai/plan/feature.md` before running any phase.
+
+Then use the declared model/effort for each phase of this task.
 Announce at the start of each task: "TASK-XX — using:
 spec=model/effort, implement=model/effort, test=model/effort,
 review=model/effort"
+
+**After each phase below completes successfully, append that
+skill's name to the task's `Phases done` list in
+`ai/plan/feature.md`** (e.g. `spec` → then `spec, ui-spec` →
+…). This is the per-skill record of what already ran. Use the
+skill name as it appears in the workflow (`spec`, `ui-spec`,
+`tdd`, `implement`, `test`, `review`, `ui-review`).
 
 ### 3.1 SPEC
 - run `/spec` for the selected task (using the model/effort
@@ -146,6 +165,10 @@ If not frontend:
 After review:
 - summarize outcome
 - state verdict
+- mark the task complete: set its `Status` to `done` in
+  `ai/plan/feature.md` (only when the review verdict passes —
+  a failing review leaves `Status: in-progress` so the task is
+  picked up again, not skipped)
 - ask whether to continue to the next task
 
 Approval question example:

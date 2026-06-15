@@ -78,6 +78,22 @@ export function parseKickoffAt(date: string, time: string | undefined): string {
 // ─── buildMatchId ────────────────────────────────────────────────────────────
 
 /**
+ * Slug determinístico de nome de seleção: lowercase, não-alfanuméricos viram
+ * "-", colapsa repetições e apara as bordas.
+ *
+ * Exportado para reuso pelo gerador de matchId ESPN (TASK-02), que DEVE produzir
+ * IDs byte-idênticos aos do openfootball — a paridade depende desta fórmula
+ * única. Ex.: "Curaçao" → "cura-ao"; "Bosnia & Herzegovina" → "bosnia-herzegovina".
+ */
+export function slugifyTeamName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/**
  * Gera o matchId estável para uma partida openfootball.
  *
  * Mata-mata (com `num`): "m{num}" — ex.: "m73", "m104".
@@ -88,13 +104,7 @@ export function buildMatchId(match: OpenFootballMatch): string {
   if (match.num !== undefined) {
     return `m${match.num}`;
   }
-  const slugify = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  return `${match.date}-${slugify(match.team1)}-${slugify(match.team2)}`;
+  return `${match.date}-${slugifyTeamName(match.team1)}-${slugifyTeamName(match.team2)}`;
 }
 
 // ─── resolveTeamId ───────────────────────────────────────────────────────────

@@ -329,3 +329,43 @@ describe("useMatchesList — agrupamento por dia", () => {
     expect(item).toHaveProperty("predictionStatus");
   });
 });
+
+describe("useMatchesList — userPrediction (TASK-01 matches-tabs-prediction)", () => {
+  it("popula userPrediction com homeScore/awayScore quando há palpite para o match", () => {
+    setupMocks({
+      matchesData: [makeScheduledMatch("m1")],
+      predictionsData: [{ uid: "user-01", matchId: "m1", homeScore: 2, awayScore: 1 }],
+    });
+    const { result } = renderHook(() => useMatchesList());
+    expect(result.current.flatList[0]?.userPrediction).toEqual({ homeScore: 2, awayScore: 1 });
+  });
+
+  it("userPrediction = null quando não há palpite para o match", () => {
+    setupMocks({
+      matchesData: [makeScheduledMatch("m1")],
+      predictionsData: [],
+    });
+    const { result } = renderHook(() => useMatchesList());
+    expect(result.current.flatList[0]?.userPrediction).toBeNull();
+  });
+
+  it("predictions vazio → todos os items com userPrediction = null", () => {
+    setupMocks({
+      matchesData: [makeScheduledMatch("m1"), makeScheduledMatch("m2")],
+      predictionsData: [],
+    });
+    const { result } = renderHook(() => useMatchesList());
+    expect(result.current.flatList.every((i) => i.userPrediction === null)).toBe(true);
+  });
+
+  it("lookup por matchId byte-idêntico: só o match com palpite recebe userPrediction", () => {
+    setupMocks({
+      matchesData: [makeScheduledMatch("m1"), makeScheduledMatch("m2")],
+      predictionsData: [{ uid: "user-01", matchId: "m2", homeScore: 0, awayScore: 3 }],
+    });
+    const { result } = renderHook(() => useMatchesList());
+    const byId = new Map(result.current.flatList.map((i) => [i.id, i]));
+    expect(byId.get("m1")?.userPrediction).toBeNull();
+    expect(byId.get("m2")?.userPrediction).toEqual({ homeScore: 0, awayScore: 3 });
+  });
+});

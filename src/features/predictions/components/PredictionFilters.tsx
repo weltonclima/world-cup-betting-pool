@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * PredictionFilters — chips de filtro single-select para a lista de palpites (TASK-08).
+ * PredictionFilters — chips de filtro single-select para a lista de palpites.
  *
- * 5 chips: Todos · Pendentes · Acertos · Erros · Bloqueados.
+ * 7 chips: Todos · Pendentes · Acertos · Vencedor · Empates · Erros · Bloqueados.
  * - Persistência em localStorage (key "predictions_filter") com try/catch SSR safety.
  * - Acessibilidade: role="group" no wrapper + aria-pressed em cada chip.
  * - Touch mínimo: min-h-[44px] (WCAG 2.5.5).
@@ -35,6 +35,7 @@ const CHIPS: { value: FilterChip; label: string }[] = [
   { value: "pendente", label: "Pendentes" },
   { value: "acertou", label: "Acertos" },
   { value: "acertou_vencedor", label: "Vencedor" },
+  { value: "acertou_empate", label: "Empates" },
   { value: "errou", label: "Erros" },
   { value: "bloqueado", label: "Bloqueados" },
 ];
@@ -51,6 +52,7 @@ export function readStoredFilter(): FilterChip {
       raw === "pendente" ||
       raw === "acertou" ||
       raw === "acertou_vencedor" ||
+      raw === "acertou_empate" ||
       raw === "errou" ||
       raw === "bloqueado"
     ) {

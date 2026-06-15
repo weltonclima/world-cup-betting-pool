@@ -1,41 +1,45 @@
 /**
- * Testes da estratégia OVERLAY de partidas efetivas (PRD-11 TASK-01).
+ * Testes da pipeline INVERTIDA de partidas efetivas (PRD-13 TASK-05).
  *
- * `getEffectiveMatches` = openfootball (base) + overrides manuais persistidos.
- * Garantias críticas (sem regressão):
- *  1. coleção vazia → base inalterada (comportamento idêntico ao de hoje);
- *  2. override `isManualOverride === true` SEMPRE vence a base;
- *  3. doc persistido SEM override (sync puro) NÃO sobrescreve a base;
- *  4. falha lendo o Firestore → cai para a base ao vivo (resiliente);
- *  5. override de partida ausente da base é preservado (append defensivo);
- *  6. doc malformado é ignorado (não derruba o merge).
+ * `getEffectiveMatches` = ESPN (base) → fallback openfootball → overrides manuais.
+ * Precedência: `manual > ESPN > openfootball-fallback`.
  *
- * Mocks: `fetchAllMatches` (base), `getAdminFirestore` (coleção persistida),
- * `server-only`. O `matchSchema` é REAL — exercita o parse de verdade.
+ * Garantias críticas:
+ *  1. ESPN ok → base = mapEspnEventsToMatches(fetchSchedule()); openfootball NÃO é chamado;
+ *  2. ESPN falha (fetch OU mapping) → fallback fetchAllMatches() (openfootball);
+ *  3. override `isManualOverride === true` SEMPRE vence a base (qualquer fonte);
+ *  4. doc SEM override NÃO sobrescreve a base;
+ *  5. Firestore-down → base (ESPN ou openfootball) sem overrides, não lança;
+ *  6. override de partida ausente da base é preservado (append defensivo);
+ *  7. doc malformado é ignorado.
+ *
+ * Mocks: barrel `@/server/copaData` (fetchAllMatches + EspnScoreClient +
+ * mapEspnEventsToMatches) num único namespace — evita o conflito vitest de mockar
+ * barrel + submódulo. `getAdminFirestore`, `server-only`. `matchSchema` é REAL.
+ * EspnScoreClient é `class {}` (não `vi.fn(() => obj)`) — ver memória.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { fetchAllMatchesMock, getFirestoreMock, fetchScoreboardMock, buildEspnPatchMapMock } =
-  vi.hoisted(() => ({
-    fetchAllMatchesMock: vi.fn(),
-    getFirestoreMock: vi.fn(),
-    fetchScoreboardMock: vi.fn(),
-    buildEspnPatchMapMock: vi.fn(),
-  }));
+const {
+  fetchAllMatchesMock,
+  getFirestoreMock,
+  fetchScheduleMock,
+  mapEspnEventsToMatchesMock,
+} = vi.hoisted(() => ({
+  fetchAllMatchesMock: vi.fn(),
+  getFirestoreMock: vi.fn(),
+  fetchScheduleMock: vi.fn(),
+  mapEspnEventsToMatchesMock: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
-// Barrel copaData: fetchAllMatches + pipeline ESPN (cliente HTTP e matcher)
-// mockados juntos — sem rede, sem teamRegistry real. Um único mock para o
-// namespace evita o conflito vitest de mockar barrel + submódulo simultaneamente.
 vi.mock("@/server/copaData", () => ({
   fetchAllMatches: fetchAllMatchesMock,
-  // Classe real (não `vi.fn(() => obj)`): com `new`, a fábrica vi.fn não
-  // propaga o objeto retornado, deixando a instância sem `fetchScoreboard`.
   EspnScoreClient: class {
-    fetchScoreboard = fetchScoreboardMock;
+    fetchSchedule = fetchScheduleMock;
   },
-  buildEspnPatchMap: buildEspnPatchMapMock,
+  mapEspnEventsToMatches: mapEspnEventsToMatchesMock,
 }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
 
@@ -67,28 +71,38 @@ function mockPersisted(docs: ReturnType<typeof persistedDoc>[]): void {
   });
 }
 
+function mockFirestoreDown(): void {
+  getFirestoreMock.mockReturnValue({
+    collection: () => ({
+      get: async () => {
+        throw new Error("firestore down");
+      },
+    }),
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  // Defaults ESPN: sem eventos / patch vazio → base inalterada (não interfere
-  // nos testes de overlay manual existentes).
-  fetchScoreboardMock.mockResolvedValue({ events: [] });
-  buildEspnPatchMapMock.mockReturnValue(new Map());
+  // Defaults: ESPN ok com 1 evento mapeado; openfootball não configurado de
+  // propósito (só é usado no fallback — testes que o exercitam configuram).
+  fetchScheduleMock.mockResolvedValue([{ id: "e1" }]);
+  mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1")]);
 });
 
-describe("getEffectiveMatches (overlay)", () => {
-  it("coleção vazia → retorna a base inalterada", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1"), baseMatch("m2")]);
+describe("getEffectiveMatches — ESPN como base (TASK-05)", () => {
+  it("T1: ESPN ok, sem overrides → base ESPN, openfootball não chamado", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("e1"), baseMatch("e2")]);
     mockPersisted([]);
 
     const result = await getEffectiveMatches();
 
-    expect(result).toHaveLength(2);
-    expect(result.map((m) => m.id)).toEqual(["m1", "m2"]);
-    expect(result[0]!.status).toBe("scheduled");
+    expect(result.map((m) => m.id)).toEqual(["e1", "e2"]);
+    expect(fetchScheduleMock).toHaveBeenCalledTimes(1);
+    expect(fetchAllMatchesMock).not.toHaveBeenCalled();
   });
 
-  it("override isManualOverride=true vence a base", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1"), baseMatch("m2")]);
+  it("T2: ESPN ok, override isManualOverride=true vence a base", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1"), baseMatch("m2")]);
     mockPersisted([
       persistedDoc("m1", {
         homeTeamId: "BRA",
@@ -108,12 +122,13 @@ describe("getEffectiveMatches (overlay)", () => {
     expect(m1.status).toBe("finished");
     expect(m1.homeScore).toBe(3);
     expect(m1.awayScore).toBe(1);
-    // m2 segue da base.
     expect(result.find((m) => m.id === "m2")!.status).toBe("scheduled");
   });
 
-  it("doc persistido SEM override (sync puro) NÃO sobrescreve a base", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1", { status: "live", homeScore: 0, awayScore: 0 })]);
+  it("T3: ESPN ok, doc sem override (isManualOverride=false) → base ESPN preservada", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([
+      baseMatch("m1", { status: "live", homeScore: 0, awayScore: 0 }),
+    ]);
     mockPersisted([
       persistedDoc("m1", {
         homeTeamId: "BRA",
@@ -129,29 +144,82 @@ describe("getEffectiveMatches (overlay)", () => {
 
     const result = await getEffectiveMatches();
 
-    // Base ao vivo (live 0x0) preservada — o doc sem override é ignorado.
     expect(result[0]!.status).toBe("live");
     expect(result[0]!.homeScore).toBe(0);
   });
 
-  it("falha lendo o Firestore → cai para a base ao vivo", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
-    getFirestoreMock.mockReturnValue({
-      collection: () => ({
-        get: async () => {
-          throw new Error("firestore down");
-        },
-      }),
-    });
+  it("T4: ESPN falha (fetchSchedule rejeita) → fallback openfootball, console.error 1×", async () => {
+    fetchScheduleMock.mockRejectedValue(new Error("espn down"));
+    fetchAllMatchesMock.mockResolvedValue([baseMatch("of1")]);
+    mockPersisted([]);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await getEffectiveMatches();
 
-    expect(result).toHaveLength(1);
-    expect(result[0]!.id).toBe("m1");
+    expect(result.map((m) => m.id)).toEqual(["of1"]);
+    expect(fetchScheduleMock).toHaveBeenCalledTimes(1);
+    expect(fetchAllMatchesMock).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
   });
 
-  it("override de partida ausente da base é preservado (append defensivo)", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
+  it("T5: ESPN falha + override manual → fallback openfootball + override aplicado", async () => {
+    fetchScheduleMock.mockRejectedValue(new Error("espn down"));
+    fetchAllMatchesMock.mockResolvedValue([baseMatch("of1"), baseMatch("of2")]);
+    mockPersisted([
+      persistedDoc("of1", {
+        homeTeamId: "BRA",
+        awayTeamId: "ARG",
+        kickoffAt: "2026-06-11T12:00:00Z",
+        stage: "grupos",
+        status: "finished",
+        homeScore: 2,
+        awayScore: 0,
+        isManualOverride: true,
+      }),
+    ]);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await getEffectiveMatches();
+
+    const of1 = result.find((m) => m.id === "of1")!;
+    expect(of1.status).toBe("finished");
+    expect(of1.homeScore).toBe(2);
+    expect(result.find((m) => m.id === "of2")!.status).toBe("scheduled");
+    errSpy.mockRestore();
+  });
+
+  it("T6: ESPN falha + Firestore down → base openfootball, console.error 2×", async () => {
+    fetchScheduleMock.mockRejectedValue(new Error("espn down"));
+    fetchAllMatchesMock.mockResolvedValue([baseMatch("of1")]);
+    mockFirestoreDown();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await getEffectiveMatches();
+
+    expect(result.map((m) => m.id)).toEqual(["of1"]);
+    expect(errSpy).toHaveBeenCalledTimes(2); // ESPN + Firestore
+    errSpy.mockRestore();
+  });
+
+  it("T7: ESPN ok + Firestore down → base ESPN, console.error 1×", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([
+      baseMatch("m1", { status: "live", homeScore: 1, awayScore: 1 }),
+    ]);
+    mockFirestoreDown();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await getEffectiveMatches();
+
+    expect(result[0]!.status).toBe("live");
+    expect(result[0]!.homeScore).toBe(1);
+    expect(fetchAllMatchesMock).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
+  });
+
+  it("T8: override de partida ausente da base é preservado (append defensivo)", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1")]);
     mockPersisted([
       persistedDoc("ghost", {
         homeTeamId: "FRA",
@@ -170,198 +238,32 @@ describe("getEffectiveMatches (overlay)", () => {
     expect(result.map((m) => m.id).sort()).toEqual(["ghost", "m1"]);
   });
 
-  it("doc malformado é ignorado, não derruba o merge", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
+  it("T9: doc malformado no Firestore é ignorado, base ESPN mantida", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1")]);
     mockPersisted([
       persistedDoc("m1", { status: "finished" /* faltam campos obrigatórios */ }),
     ]);
 
     const result = await getEffectiveMatches();
 
-    // Override inválido descartado → base mantida.
     expect(result[0]!.status).toBe("scheduled");
   });
-});
 
-describe("getEffectiveMatches (merge ESPN — TASK-06)", () => {
-  it("ESPN OK, match sem override → aplica patch e preserva os demais campos", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
+  it("T10: REGRESSÃO — mapEspnEventsToMatches lança → fallback openfootball", async () => {
+    // Mapping fail é uma falha ESPN tanto quanto fetch fail: deve cair no fallback.
+    fetchScheduleMock.mockResolvedValue([{ id: "e1" }]);
+    mapEspnEventsToMatchesMock.mockImplementation(() => {
+      throw new Error("stage desconhecido");
+    });
+    fetchAllMatchesMock.mockResolvedValue([baseMatch("of1")]);
     mockPersisted([]);
-    buildEspnPatchMapMock.mockReturnValue(
-      new Map([["m1", { status: "live", homeScore: 1, awayScore: 0 }]]),
-    );
-
-    const result = await getEffectiveMatches();
-
-    const m1 = result.find((m) => m.id === "m1")!;
-    // Patch aplicado.
-    expect(m1.status).toBe("live");
-    expect(m1.homeScore).toBe(1);
-    expect(m1.awayScore).toBe(0);
-    // Demais campos da base intactos — ESPN só toca status/placar.
-    expect(m1.kickoffAt).toBe("2026-06-11T12:00:00Z");
-    expect(m1.stage).toBe("grupos");
-    expect(m1.homeTeamId).toBe("BRA");
-    expect(m1.awayTeamId).toBe("ARG");
-  });
-
-  it("override manual vence o patch ESPN", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
-    mockPersisted([
-      persistedDoc("m1", {
-        homeTeamId: "BRA",
-        awayTeamId: "ARG",
-        kickoffAt: "2026-06-11T12:00:00Z",
-        stage: "grupos",
-        status: "finished",
-        homeScore: 3,
-        awayScore: 1,
-        isManualOverride: true,
-      }),
-    ]);
-    // ESPN tenta sobrescrever — deve ser ignorado.
-    buildEspnPatchMapMock.mockReturnValue(
-      new Map([["m1", { status: "live", homeScore: 5, awayScore: 5 }]]),
-    );
-
-    const result = await getEffectiveMatches();
-
-    const m1 = result.find((m) => m.id === "m1")!;
-    expect(m1.status).toBe("finished");
-    expect(m1.homeScore).toBe(3);
-    expect(m1.awayScore).toBe(1);
-  });
-
-  it("matchId ausente do patchMap → base inalterada", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
-    mockPersisted([]);
-    buildEspnPatchMapMock.mockReturnValue(
-      new Map([["outro", { status: "live", homeScore: 2, awayScore: 2 }]]),
-    );
-
-    const result = await getEffectiveMatches();
-
-    expect(result[0]!.status).toBe("scheduled");
-    expect(result[0]!.homeScore).toBeNull();
-  });
-
-  it("ESPN falha (fetch rejeita) → base preservada, console.error chamado, não lança", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
-    mockPersisted([]);
-    fetchScoreboardMock.mockRejectedValue(new Error("espn down"));
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await getEffectiveMatches();
 
-    expect(result).toHaveLength(1);
-    expect(result[0]!.status).toBe("scheduled");
+    expect(result.map((m) => m.id)).toEqual(["of1"]);
+    expect(fetchAllMatchesMock).toHaveBeenCalledTimes(1);
     expect(errSpy).toHaveBeenCalledTimes(1);
     errSpy.mockRestore();
-  });
-
-  it("REGRESSÃO: ESPN down + override manual → saída idêntica ao comportamento atual", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1"), baseMatch("m2")]);
-    mockPersisted([
-      persistedDoc("m1", {
-        homeTeamId: "BRA",
-        awayTeamId: "ARG",
-        kickoffAt: "2026-06-11T12:00:00Z",
-        stage: "grupos",
-        status: "finished",
-        homeScore: 2,
-        awayScore: 0,
-        isManualOverride: true,
-      }),
-    ]);
-    fetchScoreboardMock.mockRejectedValue(new Error("espn down"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const result = await getEffectiveMatches();
-
-    // Override manual aplicado, m2 da base — exatamente como sem ESPN.
-    const m1 = result.find((m) => m.id === "m1")!;
-    expect(m1.status).toBe("finished");
-    expect(m1.homeScore).toBe(2);
-    expect(result.find((m) => m.id === "m2")!.status).toBe("scheduled");
-    errSpy.mockRestore();
-  });
-
-  it("ESPN up + Firestore down → base com patch ESPN aplicado (degradação resiliente)", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
-    getFirestoreMock.mockReturnValue({
-      collection: () => ({
-        get: async () => {
-          throw new Error("firestore down");
-        },
-      }),
-    });
-    buildEspnPatchMapMock.mockReturnValue(
-      new Map([["m1", { status: "live", homeScore: 1, awayScore: 1 }]]),
-    );
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const result = await getEffectiveMatches();
-
-    // Firestore caiu, mas o live score da ESPN segue aplicado sobre a base.
-    expect(result[0]!.status).toBe("live");
-    expect(result[0]!.homeScore).toBe(1);
-    errSpy.mockRestore();
-  });
-
-  it("ESPN up porém sem evento casável (patchMap vazio) → base inalterada", async () => {
-    // Distinto de 'ESPN falha': o cliente respondeu OK, mas nenhum evento casou.
-    fetchAllMatchesMock.mockResolvedValue([
-      baseMatch("m1", { status: "live", homeScore: 0, awayScore: 0 }),
-    ]);
-    mockPersisted([]);
-    buildEspnPatchMapMock.mockReturnValue(new Map());
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const result = await getEffectiveMatches();
-
-    // Branch size===0 de applyEspnPatches: base devolvida intacta, sem erro.
-    expect(result[0]!.status).toBe("live");
-    expect(result[0]!.homeScore).toBe(0);
-    expect(errSpy).not.toHaveBeenCalled();
-    errSpy.mockRestore();
-  });
-
-  it("patch ESPN é seletivo: só os matchIds presentes no mapa mudam", async () => {
-    fetchAllMatchesMock.mockResolvedValue([
-      baseMatch("m1"),
-      baseMatch("m2"),
-      baseMatch("m3"),
-    ]);
-    mockPersisted([]);
-    buildEspnPatchMapMock.mockReturnValue(
-      new Map([
-        ["m1", { status: "live", homeScore: 2, awayScore: 1 }],
-        ["m3", { status: "finished", homeScore: 0, awayScore: 0 }],
-      ]),
-    );
-
-    const result = await getEffectiveMatches();
-
-    const byId = Object.fromEntries(result.map((m) => [m.id, m]));
-    expect(byId.m1!.status).toBe("live");
-    expect(byId.m1!.homeScore).toBe(2);
-    expect(byId.m3!.status).toBe("finished");
-    // m2 ausente do mapa → permanece da base.
-    expect(byId.m2!.status).toBe("scheduled");
-    expect(byId.m2!.homeScore).toBeNull();
-  });
-
-  it("scoreboard buscado com a data UTC de hoje no formato YYYYMMDD (acceptance #6)", async () => {
-    fetchAllMatchesMock.mockResolvedValue([baseMatch("m1")]);
-    mockPersisted([]);
-
-    await getEffectiveMatches();
-
-    expect(fetchScoreboardMock).toHaveBeenCalledTimes(1);
-    const arg = fetchScoreboardMock.mock.calls[0]![0] as string;
-    expect(arg).toMatch(/^\d{8}$/);
-    // Coerente com a data UTC atual (sem acoplar a um dia fixo).
-    const expected = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    expect(arg).toBe(expected);
   });
 });

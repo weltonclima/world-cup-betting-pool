@@ -14,8 +14,8 @@ import { NextResponse } from "next/server";
 import { copaDataErrorResponse } from "../_lib/copaDataError";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
 
-// Cache de segmento: 1h — dados mudam quando score.ft é populado ou há edição manual.
-export const revalidate = 3600;
+// Cache de segmento: 5min — alinhado ao ciclo ESPN (fonte primária, PRD-13).
+export const revalidate = 300;
 
 export async function GET(): Promise<NextResponse> {
   try {

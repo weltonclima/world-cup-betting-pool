@@ -86,6 +86,7 @@ function makeOpenItem(id: string, overrides: Partial<MatchListItem> = {}): Match
     homeTeam: { name: "Brasil", flagUrl: undefined },
     awayTeam: { name: "Argentina", flagUrl: undefined },
     predictionStatus: "pendente",
+    userPrediction: null,
     ...overrides,
   };
 }

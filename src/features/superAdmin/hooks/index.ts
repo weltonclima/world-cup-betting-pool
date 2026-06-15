@@ -20,7 +20,6 @@ export { useAdminAdmins } from "./useAdminAdmins";
 export { usePoolMembers } from "./usePoolMembers";
 export {
   useAdminMatches,
-  useSyncWorldCup,
   useEditMatch,
   type EditMatchVars,
 } from "./useAdminMatches";

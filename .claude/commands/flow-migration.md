@@ -54,6 +54,22 @@ with step 1?"
 ## Stage 2 — Per-step execution
 For each migration step, follow this exact order:
 
+### 2.0 Status gate (prevents reprocessing)
+Before starting a step, read its `Status` from the assessment
+file (`ai/migration/...`):
+- `Status: done` → **skip the step entirely.** Announce
+  "STEP-XX — skipped (already done)" and move to the next step.
+- `Status: in-progress` → **resume**: read `Phases done` and skip
+  every phase already listed; continue from the first phase not
+  recorded.
+- `Status: pending` → run the full cycle from 2.1.
+
+When you start (or resume) a step, set its `Status` to
+`in-progress` in the assessment file before running any phase.
+**After each phase below completes, append that skill's name to
+the step's `Phases done` list** (`migrate`, `validate`, `test`,
+`review`).
+
 ### 2.1 MIGRATE
 - run `/migrate` for the current step
 
@@ -70,6 +86,10 @@ For each migration step, follow this exact order:
 - if the migration step touches frontend/UI code and `ai/
 ui-spec/task-{prd}-{NN}.md` exists, also run `/ui-review`
 - summarize outcome and outcome
+- if the review verdict passes, mark the step complete: set its
+  `Status` to `done` in the assessment file (a failing review
+  leaves `Status: in-progress` so the step is retried, not
+  skipped)
 - stop and ask whether to continue to the next step
 
 Approval question example:
