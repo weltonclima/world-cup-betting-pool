@@ -19,6 +19,7 @@ import { use, useCallback, useMemo } from "react";
 import { notFound } from "next/navigation";
 import { toast } from "sonner";
 
+import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import { buildTeamMap, resolveTeam } from "@/features/matches/lib/matchesHelpers";
@@ -33,10 +34,7 @@ import {
   type KnockoutSection,
   type BracketScores,
 } from "@/features/predictions/components";
-import {
-  buildBracketFromFixtures,
-  computeProgress,
-} from "@/features/predictions/lib";
+import { buildBracketFromFixtures } from "@/features/predictions/lib";
 import { isPredictionLocked } from "@/features/predictions/lib/predictionsHelpers";
 import type { MatchWithId, Stage } from "@/types";
 import type { UpsertPredictionInput } from "@/services/predictions";
@@ -69,6 +67,10 @@ const KNOCKOUT_CONFIG: Record<KnockoutSlug, KnockoutStageConfig> = {
   "dezesseis-avos": {
     stages: ["dezesseis-avos"],
     title: "16 avos de final",
+    // Gate A6: 16 avos abre só quando os jogos REAIS da fase de grupos terminam
+    // (confrontos do mata-mata dependem dos classificados). Sem prevSlug pois
+    // grupos não é uma fase de chave (sem nav prev/next de mata-mata).
+    prevStage: "grupos",
     nextSlug: "oitavas",
   },
   oitavas: {
@@ -217,21 +219,15 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
     );
   }, [phaseMatches]);
 
-  // Bloqueio A6: a fase anterior precisa estar 100% preenchida (draft ou salvo).
+  // Bloqueio A6: os jogos REAIS da fase anterior precisam ter terminado
+  // (só então os confrontos reais desta fase são conhecidos). Fail-open quando
+  // ainda não há fixtures da anterior (dados não carregados → isLoading cobre).
   const isBlocked = useMemo(() => {
     if (!config.prevStage) return false;
     const prevMatches = allMatches.filter((m) => m.stage === config.prevStage);
-    if (prevMatches.length === 0) return false; // sem fixtures da anterior → não bloqueia
-    const filledIds = new Set<string>([
-      ...(predictionsQuery.data ?? []).map((p) => p.matchId),
-      ...Object.keys(draft.allDrafts),
-    ]);
-    const filledPredictions = prevMatches
-      .filter((m) => filledIds.has(m.id))
-      .map((m) => ({ uid: uid ?? "", matchId: m.id, homeScore: 0, awayScore: 0 }));
-    const progress = computeProgress(filledPredictions, prevMatches);
-    return progress.global.percentage < 100;
-  }, [config.prevStage, allMatches, predictionsQuery.data, draft.allDrafts, uid]);
+    if (prevMatches.length === 0) return false;
+    return !prevMatches.every((m) => m.status === "finished");
+  }, [config.prevStage, allMatches]);
 
   const hasSavable = useMemo(
     () =>
@@ -302,6 +298,7 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
 
   return (
     <div className="palpites-theme mx-auto flex max-w-3xl flex-col gap-6 pb-20 md:pb-4">
+      <BackButton />
       <KnockoutPhaseScreen
         phaseTitle={config.title}
         sections={sections}

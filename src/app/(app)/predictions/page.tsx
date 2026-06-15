@@ -25,6 +25,7 @@ import {
   type PhaseHubItem,
 } from "@/features/predictions/components";
 import { computeProgress } from "@/features/predictions/lib";
+import { isStageComplete } from "@/features/predictions/lib/predictionsHelpers";
 import type { Stage } from "@/types";
 
 /**
@@ -70,21 +71,30 @@ export default function PredictionsHubPage() {
   );
 
   const phases = useMemo<PhaseHubItem[]>(() => {
+    const matches = matchesQuery.data ?? [];
     const inputs: HubPhaseInput[] = HUB_PHASES.map((p) => {
       const stageMetrics = progress.byStage[p.stage];
       // O card "Final" agrega final + terceiro (3º lugar é preenchido na mesma rota).
       const extra =
         p.stage === "final" ? progress.byStage["terceiro"] : undefined;
+      // Gate A6: fase concluída pelos jogos REAIS (não pelo preenchimento).
+      // A "final" só conta como terminada quando final E terceiro terminam.
+      const isFinished =
+        p.stage === "final"
+          ? isStageComplete(matches, "final") &&
+            isStageComplete(matches, "terceiro")
+          : isStageComplete(matches, p.stage);
       return {
         stage: p.stage,
         title: p.title,
         href: p.href,
         gamesCount: (stageMetrics?.total ?? 0) + (extra?.total ?? 0),
         filledCount: (stageMetrics?.filled ?? 0) + (extra?.filled ?? 0),
+        isFinished,
       };
     });
     return buildHubPhases(inputs);
-  }, [progress.byStage]);
+  }, [progress.byStage, matchesQuery.data]);
 
   const isComplete = progress.global.total > 0 && progress.global.filled === progress.global.total;
 

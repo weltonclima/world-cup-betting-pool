@@ -23,6 +23,7 @@ import { ListOrdered } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useGroupMatches, useTeams } from "@/features/matches/hooks";
 import {
@@ -162,6 +163,7 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
 
   return (
     <div className="palpites-theme mx-auto flex max-w-2xl flex-col gap-6 pb-20 md:pb-4">
+      <BackButton />
       <GroupQuickFill
         groupId={groupId}
         items={group.items}

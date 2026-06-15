@@ -17,6 +17,7 @@
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
+import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import {
@@ -140,7 +141,8 @@ export default function ResumoFinalPage() {
   }, [matchesQuery, teamsQuery, predictionsQuery]);
 
   return (
-    <div className="palpites-theme mx-auto flex max-w-2xl flex-col pb-20 md:pb-4">
+    <div className="palpites-theme mx-auto flex max-w-2xl flex-col gap-4 pb-20 md:pb-4">
+      <BackButton />
       <FinalSummary
         finalists={finalists}
         filled={progress.global.filled}

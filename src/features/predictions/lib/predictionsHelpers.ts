@@ -4,7 +4,7 @@
  * Consumidas pelos Route Handlers (TASK-03/04) e pela UI (TASK-07/08/09).
  */
 
-import type { MatchWithId, Prediction } from "@/types";
+import type { MatchWithId, Prediction, Stage } from "@/types";
 
 // ---------------------------------------------------------------------------
 // 0. predictionDocId (consolidado de predictionHelpers.ts — TASK-01)
@@ -90,6 +90,26 @@ export function selectLockedMatches(
   now: Date,
 ): MatchWithId[] {
   return matches.filter((match) => isPredictionLocked(match, now));
+}
+
+/**
+ * Verifica se uma fase está concluída pelos jogos REAIS: tem jogos E todos
+ * terminaram (`status === "finished"`).
+ *
+ * Base do gate de liberação das fases eliminatórias: uma fase de mata-mata só
+ * abre para palpite quando os jogos reais da fase anterior terminam — só então
+ * os confrontos reais (quem se classificou) são conhecidos. Substitui o antigo
+ * critério "todos os palpites preenchidos" (que liberava cedo demais).
+ *
+ * Fase sem jogos na lista → `false` (ainda não concluída; não destrava a seguinte).
+ *
+ * @param matches - Lista de partidas (`useMatches()`).
+ * @param stage   - Fase alvo.
+ */
+export function isStageComplete(matches: MatchWithId[], stage: Stage): boolean {
+  const stageMatches = matches.filter((match) => match.stage === stage);
+  if (stageMatches.length === 0) return false;
+  return stageMatches.every((match) => match.status === "finished");
 }
 
 // ---------------------------------------------------------------------------

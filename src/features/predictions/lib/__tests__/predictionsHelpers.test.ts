@@ -13,6 +13,7 @@ type MatchWithId = Match & { id: string };
 import {
   derivePredictionDisplayStatus,
   isPredictionLocked,
+  isStageComplete,
   scorePrediction,
   selectLockedMatches,
 } from "@/features/predictions/lib";
@@ -195,6 +196,57 @@ describe("selectLockedMatches", () => {
     const copy = [...input];
     selectLockedMatches(input, now);
     expect(input).toEqual(copy);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1c. isStageComplete (gate eliminatório — jogos REAIS da fase terminados)
+// ---------------------------------------------------------------------------
+
+describe("isStageComplete (bugfix: gate por jogos reais finished)", () => {
+  it("todos os jogos da stage finished → true", () => {
+    const matches = [
+      makeFinishedMatch({ id: "g1", stage: "grupos" }),
+      makeFinishedMatch({ id: "g2", stage: "grupos" }),
+    ];
+    expect(isStageComplete(matches, "grupos")).toBe(true);
+  });
+
+  it("um jogo da stage ainda scheduled → false", () => {
+    const matches = [
+      makeFinishedMatch({ id: "g1", stage: "grupos" }),
+      makeScheduledMatch({ id: "g2", stage: "grupos" }),
+    ];
+    expect(isStageComplete(matches, "grupos")).toBe(false);
+  });
+
+  it("um jogo da stage live → false (status !== finished)", () => {
+    const matches = [
+      makeFinishedMatch({ id: "g1", stage: "grupos" }),
+      makeScheduledMatch({ id: "g2", stage: "grupos", status: "live" }),
+    ];
+    expect(isStageComplete(matches, "grupos")).toBe(false);
+  });
+
+  it("nenhum jogo da stage → false (conservador: não destrava)", () => {
+    const matches = [makeFinishedMatch({ id: "g1", stage: "grupos" })];
+    expect(isStageComplete(matches, "dezesseis-avos")).toBe(false);
+  });
+
+  it("lista vazia → false", () => {
+    expect(isStageComplete([], "grupos")).toBe(false);
+  });
+
+  it("ignora jogos de outras stages ao avaliar a stage alvo", () => {
+    // grupos todos finished; 16 avos ainda scheduled. Avaliar grupos → true,
+    // mesmo havendo jogos não-finished de outra stage na lista.
+    const matches = [
+      makeFinishedMatch({ id: "g1", stage: "grupos" }),
+      makeFinishedMatch({ id: "g2", stage: "grupos" }),
+      makeScheduledMatch({ id: "k1", stage: "dezesseis-avos" }),
+    ];
+    expect(isStageComplete(matches, "grupos")).toBe(true);
+    expect(isStageComplete(matches, "dezesseis-avos")).toBe(false);
   });
 });
 

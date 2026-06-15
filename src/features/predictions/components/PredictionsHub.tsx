@@ -34,6 +34,12 @@ export interface HubPhaseInput {
   gamesCount: number;
   /** Palpites já preenchidos na fase. */
   filledCount: number;
+  /**
+   * true quando todos os jogos REAIS desta fase já terminaram (status
+   * "finished"). É o que destrava a fase seguinte (A6) — não o preenchimento
+   * de palpites.
+   */
+  isFinished: boolean;
 }
 
 /** Fase já com status e bloqueio (A6) resolvidos, pronta para render. */
@@ -60,15 +66,19 @@ export interface PredictionsHubProps {
 
 /**
  * Resolve status de cada fase e aplica o bloqueio de fase futura (A6):
- * uma fase posterior fica `bloqueado` enquanto a fase imediatamente anterior
- * não estiver `concluido`. A primeira fase nunca bloqueia. Fases com 0 jogos
- * contam como NÃO concluídas (não destravam a seguinte).
+ * uma fase posterior fica `bloqueado` enquanto os jogos REAIS da fase
+ * imediatamente anterior não terminarem (`isFinished`). A primeira fase nunca
+ * bloqueia. Fases sem jogos reais terminados não destravam a seguinte.
+ *
+ * O badge `concluido` (preenchimento de palpites) é independente do gate: uma
+ * fase pode estar com todos os palpites enviados (`concluido`) e ainda assim a
+ * fase seguinte continuar `bloqueado` até os jogos reais desta acabarem.
  *
  * Função pura — testável sem React.
  */
 export function buildHubPhases(inputs: HubPhaseInput[]): PhaseHubItem[] {
   const result: PhaseHubItem[] = [];
-  let previousConcluded = true; // a primeira fase está sempre "desbloqueada"
+  let previousFinished = true; // a primeira fase está sempre "desbloqueada"
 
   for (const input of inputs) {
     const pendingCount = Math.max(input.gamesCount - input.filledCount, 0);
@@ -76,7 +86,7 @@ export function buildHubPhases(inputs: HubPhaseInput[]): PhaseHubItem[] {
       input.gamesCount > 0 && pendingCount === 0;
 
     let status: PhaseStatus;
-    if (!previousConcluded) {
+    if (!previousFinished) {
       status = "bloqueado";
     } else if (derivedConcluded) {
       status = "concluido";
@@ -87,7 +97,7 @@ export function buildHubPhases(inputs: HubPhaseInput[]): PhaseHubItem[] {
     }
 
     result.push({ ...input, pendingCount, status });
-    previousConcluded = derivedConcluded;
+    previousFinished = input.isFinished;
   }
 
   return result;
