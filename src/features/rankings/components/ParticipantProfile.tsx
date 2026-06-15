@@ -99,6 +99,14 @@ export function ParticipantProfile({
     () => derivePredictionsCount(items, allMatches, new Date()),
     [items, allMatches],
   );
+  const wins = useMemo(
+    () => items.filter((i) => i.prediction.homeScore !== i.prediction.awayScore).length,
+    [items],
+  );
+  const draws = useMemo(
+    () => items.filter((i) => i.prediction.homeScore === i.prediction.awayScore).length,
+    [items],
+  );
 
   if (isLoading) return <RankingSkeleton />;
   if (isError) {
@@ -145,7 +153,7 @@ export function ParticipantProfile({
         position={entry.position}
         total={rankingQuery.data?.entries.length ?? 0}
       />
-      <ProfileStatsGrid entry={entry} stats={stats} />
+      <ProfileStatsGrid entry={entry} wins={wins} draws={draws} longestStreak={stats?.longestStreak} />
       <StagePerformance stats={stats} />
 
       {isSelf && <BettorDnaCard dna={dna} />}
@@ -231,19 +239,19 @@ function CurrentPositionCard({
 
 function ProfileStatsGrid({
   entry,
-  stats,
+  wins,
+  draws,
+  longestStreak,
 }: {
   entry: RankingEntry;
-  stats: Statistics | null;
+  wins: number;
+  draws: number;
+  longestStreak?: number | null;
 }): JSX.Element {
-  const erros = entry.wrong ?? stats?.totalWrong;
   const metrics: ReadonlyArray<{ label: string; value: string }> = [
     { label: "Acertos", value: String(entry.points) },
-    { label: "Erros", value: erros === undefined ? "—" : String(erros) },
-    {
-      label: "Aproveitamento",
-      value: entry.accuracy === undefined ? "—" : `${entry.accuracy}%`,
-    },
+    { label: "Vitórias", value: String(wins) },
+    { label: "Empates", value: String(draws) },
   ];
 
   return (
@@ -269,11 +277,11 @@ function ProfileStatsGrid({
           </div>
         ))}
       </dl>
-      {stats && (
+      {longestStreak != null && (
         <p className="text-sm text-muted-foreground">
           Sequência Máx.:{" "}
           <span className="font-semibold tabular-nums text-foreground">
-            {stats.longestStreak}
+            {longestStreak}
           </span>
         </p>
       )}
