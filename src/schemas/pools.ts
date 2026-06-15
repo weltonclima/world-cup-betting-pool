@@ -35,6 +35,10 @@ export const poolSchema = z
     // = sem limite; `allowInvites` ausente = `true`.
     maxParticipants: z.int().min(1).optional(), // limite de participantes (PRD10-05)
     allowInvites: z.boolean().optional(), // flag "permitir convites" (PRD10-05)
+    // NET-NEW lock de palpites (TASK-01) — aditivo optional. Default NA LEITURA:
+    // `undefined` = palpites liberados (sem `.default(false)` no schema). `true` =
+    // bloqueado p/ todos os participantes do pool. Enforcement server-side em TASK-02.
+    predictionsLocked: z.boolean().optional(),
   })
   .strict();
 
@@ -64,6 +68,7 @@ export const poolEditSchema = z
     photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH),
     maxParticipants: z.int().min(1).nullable(),
     allowInvites: z.boolean(),
+    predictionsLocked: z.boolean(), // toggle lock de palpites (TASK-01); `.partial()` abaixo o torna opcional no patch
   })
   .partial()
   .refine((obj) => Object.keys(obj).length > 0, {

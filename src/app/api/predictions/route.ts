@@ -66,6 +66,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // ─── 2.5. Pool lock: rejeitar se palpites do grupo estão bloqueados ────────
+  const groupId = userData?.groupId as string | undefined;
+  if (groupId) {
+    try {
+      const poolSnap = await db.collection("pools").doc(groupId).get();
+      if (poolSnap.exists && poolSnap.data()?.predictionsLocked === true) {
+        return NextResponse.json(
+          { error: "Os palpites deste grupo estão bloqueados." },
+          { status: 423 },
+        );
+      }
+    } catch {
+      // Fail-open: erro transitório no read do pool não bloqueia o participante.
+    }
+  }
+
   // ─── 3. Validação do body ─────────────────────────────────────────────────
   let json: unknown;
   try {

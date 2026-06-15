@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   MAX_POOL_PHOTO_BASE64_LENGTH,
+  poolEditSchema,
   poolInputSchema,
   poolSchema,
   poolStatusSchema,
@@ -120,6 +121,23 @@ describe("pools › poolSchema", () => {
     void _status;
     expect(poolSchema.safeParse(semStatus).success).toBe(false);
   });
+
+  it("predictionsLocked: ausente → parse ok (default-na-leitura = liberado)", () => {
+    // Pools criados antes do feature de lock não têm o campo → backward-compat.
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("predictionsLocked: aceita true e false, rejeita não-boolean", () => {
+    expect(
+      poolSchema.safeParse({ ...valid, predictionsLocked: true }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, predictionsLocked: false }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, predictionsLocked: "true" }).success,
+    ).toBe(false);
+  });
 });
 
 describe("pools › poolStatusSchema", () => {
@@ -169,12 +187,36 @@ describe("pools › poolInputSchema", () => {
   });
 });
 
+describe("pools › poolEditSchema", () => {
+  it("aceita patch só com predictionsLocked (true/false)", () => {
+    expect(poolEditSchema.safeParse({ predictionsLocked: true }).success).toBe(
+      true,
+    );
+    expect(poolEditSchema.safeParse({ predictionsLocked: false }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejeita predictionsLocked não-boolean", () => {
+    expect(
+      poolEditSchema.safeParse({ predictionsLocked: "sim" }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita patch vazio (refine — ao menos um campo)", () => {
+    expect(poolEditSchema.safeParse({}).success).toBe(false);
+  });
+});
+
 describe("pools › inferência de tipos", () => {
   it("tipos derivados batem com os schemas", () => {
     expectTypeOf<PoolStatus>().toEqualTypeOf<"pending" | "active" | "blocked">();
     expectTypeOf<Pool["description"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<Pool["photoBase64"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<Pool["status"]>().toEqualTypeOf<PoolStatus>();
+    expectTypeOf<Pool["predictionsLocked"]>().toEqualTypeOf<
+      boolean | undefined
+    >();
     expectTypeOf<PoolInput["name"]>().toEqualTypeOf<string>();
   });
 });

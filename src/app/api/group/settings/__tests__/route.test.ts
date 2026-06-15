@@ -142,4 +142,36 @@ describe("PATCH /api/group/settings", () => {
     const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(patch["maxParticipants"]).toBe(50);
   });
+
+  it("200 predictionsLocked true → persiste true", async () => {
+    mockDb({ data: pool({ predictionsLocked: true }) });
+    const res = await PATCH(makeReq({ body: { predictionsLocked: true } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["predictionsLocked"]).toBe(true);
+  });
+
+  it("200 predictionsLocked false → persiste false (destravar)", async () => {
+    mockDb({ data: pool({ predictionsLocked: false }) });
+    const res = await PATCH(makeReq({ body: { predictionsLocked: false } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["predictionsLocked"]).toBe(false);
+  });
+
+  it("200 sem predictionsLocked → campo ausente no patch (não toca o valor existente)", async () => {
+    mockDb({ data: pool({ predictionsLocked: true }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("predictionsLocked" in patch).toBe(false);
+  });
+
+  it("422 predictionsLocked string → rejeitado (strict type)", async () => {
+    const res = await PATCH(makeReq({ body: { predictionsLocked: "yes" } }));
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["error"]).toBe("Dados inválidos.");
+    expect(body["issues"]).toBeUndefined();
+  });
 });

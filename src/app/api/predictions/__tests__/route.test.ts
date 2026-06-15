@@ -223,6 +223,55 @@ function postRequest(body: unknown): NextRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers: pool lock (TASK-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cria mock da coleção `pools` para testes de pool lock.
+ * Retorna um collectionMock que responde a `.doc(groupId).get()`.
+ */
+function makePoolCollectionMock({
+  poolExists = true,
+  predictionsLocked = undefined as boolean | undefined,
+}: {
+  poolExists?: boolean;
+  predictionsLocked?: boolean | undefined;
+} = {}) {
+  const poolGetMock = vi.fn().mockResolvedValue({
+    exists: poolExists,
+    data: () => (poolExists ? { predictionsLocked } : undefined),
+  });
+  const poolDocMock = vi.fn().mockReturnValue({ get: poolGetMock });
+  return vi.fn().mockReturnValue({ doc: poolDocMock });
+}
+
+/**
+ * Variante de setupSession que inclui groupId no doc do usuário.
+ * Necessário para testes de pool lock (TASK-02), onde o route handler
+ * lê `userData.groupId` para montar `pools/{groupId}`.
+ */
+function setupSessionWithGroup({
+  groupId = "group-abc",
+  userStatus = "approved" as "approved" | "pending" | "blocked",
+} = {}) {
+  const cookieGetMock = vi.fn().mockReturnValue({
+    name: SESSION_COOKIE_NAME,
+    value: MOCK_SESSION_COOKIE,
+  });
+  cookiesMock.mockResolvedValue({ get: cookieGetMock });
+  verifySessionCookieMock.mockResolvedValue({ uid: MOCK_UID });
+
+  const userDocGetMock = vi.fn().mockResolvedValue({
+    exists: true,
+    data: () => ({ status: userStatus, groupId }),
+  });
+  const userDocMock = vi.fn().mockReturnValue({ get: userDocGetMock });
+  const userCollectionMock = vi.fn().mockReturnValue({ doc: userDocMock });
+
+  return { userCollectionMock };
+}
+
+// ---------------------------------------------------------------------------
 // Suites de testes
 // ---------------------------------------------------------------------------
 
@@ -592,6 +641,165 @@ describe("POST /api/predictions", () => {
 
       const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Erro ao salvar o palpite.");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 11. Pool lock — predictionsLocked (TASK-02)
+  // Casos A-F: RED antes da implementação, GREEN após.
+  // -------------------------------------------------------------------------
+
+  describe("pool lock (predictionsLocked)", () => {
+    // Case A: pool locked → 423
+    it("retorna 423 com mensagem de pool lock quando predictionsLocked é true", async () => {
+      const { userCollectionMock } = setupSessionWithGroup({ groupId: "group-abc" });
+      const poolCollectionMock = makePoolCollectionMock({
+        poolExists: true,
+        predictionsLocked: true,
+      });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return { doc: vi.fn() }; // predictions não é alcançado
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      expect(response.status).toBe(423);
+
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toBe("Os palpites deste grupo estão bloqueados.");
+    });
+
+    // Case B: predictionsLocked: false → passa normalmente
+    it("prossegue normalmente quando predictionsLocked é false", async () => {
+      const { userCollectionMock } = setupSessionWithGroup({ groupId: "group-abc" });
+      const poolCollectionMock = makePoolCollectionMock({
+        poolExists: true,
+        predictionsLocked: false,
+      });
+      const { collectionMock } = makeFirestoreMock({ docExists: false });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return collectionMock();
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      expect(response.status).toBe(201);
+    });
+
+    // Case C: predictionsLocked ausente → fail-open
+    it("prossegue normalmente quando predictionsLocked está ausente no doc do pool", async () => {
+      const { userCollectionMock } = setupSessionWithGroup({ groupId: "group-abc" });
+      const poolCollectionMock = makePoolCollectionMock({
+        poolExists: true,
+        predictionsLocked: undefined,
+      });
+      const { collectionMock } = makeFirestoreMock({ docExists: false });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return collectionMock();
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      expect(response.status).toBe(201);
+    });
+
+    // Case D: pool doc não existe → fail-open
+    it("prossegue normalmente quando o doc do pool não existe no Firestore", async () => {
+      const { userCollectionMock } = setupSessionWithGroup({ groupId: "group-abc" });
+      const poolCollectionMock = makePoolCollectionMock({ poolExists: false });
+      const { collectionMock } = makeFirestoreMock({ docExists: false });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return collectionMock();
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      expect(response.status).toBe(201);
+    });
+
+    // Case E: groupId ausente no user doc → skip pool check, sem query em pools/undefined
+    it("prossegue normalmente e não consulta pools quando groupId está ausente no doc do usuário", async () => {
+      // setupSession sem groupId simula usuário em transição (TASK-12 backfill pendente)
+      const { userCollectionMock } = setupSession({ userStatus: "approved" });
+      const poolDocSpy = vi.fn();
+      const poolCollectionMock = vi.fn().mockReturnValue({ doc: poolDocSpy });
+      const { collectionMock } = makeFirestoreMock({ docExists: false });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return collectionMock();
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      expect(response.status).toBe(201);
+      // Confirma ausência de query em pools/undefined
+      expect(poolDocSpy).not.toHaveBeenCalled();
+    });
+
+    // Case F: pool lock executa antes de buscar partida — fetchAllMatches não é chamado
+    it("retorna pool-lock 423 antes de buscar partida — fetchAllMatches não é invocado", async () => {
+      const { userCollectionMock } = setupSessionWithGroup({ groupId: "group-abc" });
+      const poolCollectionMock = makePoolCollectionMock({
+        poolExists: true,
+        predictionsLocked: true,
+      });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return { doc: vi.fn() };
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      expect(response.status).toBe(423);
+
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toBe("Os palpites deste grupo estão bloqueados.");
+      // Pool lock retorna antes de fetchAllMatches — confirma ordem de verificação
+      expect(fetchAllMatchesMock).not.toHaveBeenCalled();
+    });
+
+    // Case G: erro no read do pool → fail-open (não bloqueia o palpite)
+    it("prossegue normalmente quando pools.doc().get() lança (fail-open por erro de leitura)", async () => {
+      const { userCollectionMock } = setupSessionWithGroup({ groupId: "group-abc" });
+      const { collectionMock } = makeFirestoreMock({ docExists: false });
+
+      const poolGetMock = vi.fn().mockRejectedValue(new Error("Firestore pool read failed"));
+      const poolDocMock = vi.fn().mockReturnValue({ get: poolGetMock });
+      const poolCollectionMock = vi.fn().mockReturnValue({ doc: poolDocMock });
+
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          if (name === "pools") return poolCollectionMock();
+          return collectionMock();
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+      // Erro no read do pool não deve bloquear o participante — fail-open
+      expect(response.status).toBe(201);
     });
   });
 });

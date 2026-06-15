@@ -1,12 +1,16 @@
 "use client";
 
-import type { JSX } from "react";
+import { useState, type JSX } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   AlertCircle,
   ChevronRight,
   Clock,
   Link2,
+  LoaderCircle,
+  Lock,
+  LockOpen,
   Pencil,
   Settings,
   Shield,
@@ -15,6 +19,15 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -22,7 +35,10 @@ import {
   getAvatarVariant,
   getInitials,
 } from "@/features/admin/components/userAvatar";
-import { useGroupDashboard } from "@/features/groupAdmin/hooks";
+import {
+  useGroupDashboard,
+  useUpdateGroupSettings,
+} from "@/features/groupAdmin/hooks";
 import type { GroupDashboard as GroupDashboardData } from "@/services/group";
 
 import { GroupAdminSubHeader } from "./GroupAdminSubHeader";
@@ -181,9 +197,103 @@ function DashboardContent({ data }: { data: GroupDashboardData }): JSX.Element {
             icon={<Pencil size={20} aria-hidden="true" />}
             label="Palpites"
           />
+          <PredictionsLockAction locked={Boolean(pool.predictionsLocked)} />
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * Botão de bloqueio/desbloqueio de palpites do pool (TASK-04). Espelha o visual
+ * de `QuickAction` mas é uma ação (abre dialog de confirmação), não navegação.
+ * `undefined` em `predictionsLocked` = liberado. Toggle persiste via
+ * `useUpdateGroupSettings` (PATCH /api/group/settings) que invalida o dashboard.
+ */
+function PredictionsLockAction({ locked }: { locked: boolean }): JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { mutate, isPending } = useUpdateGroupSettings();
+
+  const handleConfirm = (): void => {
+    mutate(
+      { predictionsLocked: !locked },
+      {
+        onSuccess: () => setDialogOpen(false),
+        onError: () =>
+          toast.error("Não foi possível alterar o bloqueio de palpites."),
+      },
+    );
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setDialogOpen(true)}
+        className={cn(
+          buttonVariants({ variant: "outline" }),
+          "h-auto min-h-[44px] flex-col gap-1.5 py-3",
+        )}
+      >
+        <span className="text-foreground">
+          {locked ? (
+            <Lock size={20} aria-hidden="true" />
+          ) : (
+            <LockOpen size={20} aria-hidden="true" />
+          )}
+        </span>
+        <span className="text-xs font-medium">
+          {locked ? "Palpite Bloqueado" : "Palpite Liberado"}
+        </span>
+      </button>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(next) => {
+          if (isPending) return;
+          setDialogOpen(next);
+        }}
+      >
+        <DialogContent showCloseButton={!isPending}>
+          <DialogHeader>
+            <DialogTitle>
+              {locked ? "Liberar palpites?" : "Bloquear palpites?"}
+            </DialogTitle>
+            <DialogDescription>
+              {locked
+                ? "Todos os participantes do grupo voltarão a poder criar e editar palpites (respeitando o bloqueio por horário de cada jogo)."
+                : "Todos os participantes do grupo ficarão impedidos de criar ou editar palpites em qualquer jogo."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              disabled={isPending}
+              render={
+                <Button variant="outline" className="h-11">
+                  Cancelar
+                </Button>
+              }
+            />
+            <Button
+              variant={locked ? "default" : "destructive"}
+              className="h-11"
+              disabled={isPending}
+              aria-busy={isPending}
+              onClick={handleConfirm}
+            >
+              {isPending ? (
+                <LoaderCircle
+                  size={16}
+                  aria-hidden="true"
+                  className="animate-spin motion-reduce:animate-none"
+                />
+              ) : null}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
