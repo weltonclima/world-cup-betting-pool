@@ -1,17 +1,33 @@
 "use client";
 
-import { type JSX } from "react";
+import { useMemo, type JSX } from "react";
 
-import { useParticipantProfile, usePoolRanking } from "@/features/rankings";
-import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useMatches } from "@/features/matches/hooks";
+import {
+  groupProfilePredictions,
+  deriveBettorDna,
+  deriveProfileComparison,
+  derivePredictionsCount,
+  type PredictionPhaseBucket,
+} from "@/features/rankings/lib";
+import {
+  useParticipantProfile,
+  usePoolRanking,
+  useProfilePredictions,
+} from "@/features/rankings/hooks";
+import { useAuth } from "@/hooks/useAuth";
 import type { RankingEntry, Statistics } from "@/types";
 
-import { RankingSkeleton } from "./RankingSkeleton";
 import { RankingEmptyState } from "./RankingEmptyState";
 import { RankingErrorState } from "./RankingErrorState";
+import { RankingSkeleton } from "./RankingSkeleton";
+import {
+  BettorDnaCard,
+  ProfileComparisonCard,
+  ProfilePredictionsList,
+} from "./profile";
 
-/** Fases de ranking exibidas em "Desempenho por Fase" (exclui "geral", "dezesseis-avos", "terceiro"). */
 const STAGE_LABELS = [
   { scope: "grupos", label: "Fase de Grupos" },
   { scope: "oitavas", label: "Oitavas de Final" },
@@ -20,7 +36,6 @@ const STAGE_LABELS = [
   { scope: "final", label: "Final" },
 ] as const;
 
-/** Iniciais p/ fallback de avatar (sem foto no schema). */
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -29,85 +44,171 @@ function initials(name: string): string {
     .join("");
 }
 
+function deriveOpenPhase(
+  buckets: PredictionPhaseBucket[],
+): "grupos" | "eliminatoria" {
+  for (const b of buckets) {
+    if (b.subBuckets.some((sb) => sb.items.some((i) => i.matchStatus === "live"))) {
+      return b.phase;
+    }
+  }
+  if (buckets.some((b) => b.phase === "eliminatoria" && b.totalItems > 0)) {
+    return "eliminatoria";
+  }
+  return "grupos";
+}
+
 interface ParticipantProfileProps {
   uid: string;
 }
 
-/** Tela 05 — Perfil do Participante (PRD-05, TASK-12). Somente-leitura, dados de outro participante. */
 export function ParticipantProfile({
   uid,
 }: ParticipantProfileProps): JSX.Element {
-  // Fechado por pool (PRD-09): identidade/posição vêm do ranking do PRÓPRIO pool
-  // do espectador. uid de outro pool não está nas entries → "não encontrado".
-  const myGroupId = useAuth().profile?.groupId;
+  const { profile } = useAuth();
+  const currentUid = profile?.uid;
+  const isSelf = currentUid === uid;
+
+  const myGroupId = profile?.groupId;
   const rankingQuery = usePoolRanking(myGroupId);
   const statsQuery = useParticipantProfile(uid);
+  const predictionsQuery = useProfilePredictions(uid, isSelf);
+  // Own predictions only needed for ProfileComparisonCard when viewing another profile
+  const myPredictionsQuery = useProfilePredictions(
+    isSelf ? undefined : currentUid,
+    true,
+  );
+  const matchesQuery = useMatches();
 
-  if (rankingQuery.isLoading || statsQuery.isLoading) {
-    return <RankingSkeleton />;
-  }
-  if (rankingQuery.isError || statsQuery.isError) {
+  const isLoading =
+    rankingQuery.isLoading ||
+    statsQuery.isLoading ||
+    predictionsQuery.isLoading;
+  const isError =
+    rankingQuery.isError ||
+    statsQuery.isError ||
+    predictionsQuery.isError;
+
+  const items = predictionsQuery.items;
+  const allMatches = matchesQuery.data ?? [];
+
+  const buckets = useMemo(() => groupProfilePredictions(items), [items]);
+  const openPhase = useMemo(() => deriveOpenPhase(buckets), [buckets]);
+  const dna = useMemo(() => deriveBettorDna(items), [items]);
+  const predictionsCount = useMemo(
+    () => derivePredictionsCount(items, allMatches, new Date()),
+    [items, allMatches],
+  );
+
+  if (isLoading) return <RankingSkeleton />;
+  if (isError) {
     return (
       <RankingErrorState
         onRetry={() => {
           void rankingQuery.refetch();
           void statsQuery.refetch();
+          void predictionsQuery.refetch();
         }}
       />
     );
   }
 
-  const entry =
-    rankingQuery.data?.entries.find((e) => e.uid === uid) ?? null;
-  // Sem entry no ranking geral = participante não presente (posição/identidade vêm daí).
-  if (!entry) {
-    return <RankingEmptyState message="Participante não encontrado" />;
-  }
+  const entry = rankingQuery.data?.entries.find((e) => e.uid === uid) ?? null;
+  if (!entry) return <RankingEmptyState message="Participante não encontrado" />;
 
   const stats = statsQuery.data ?? null;
   const displayName = entry.name ?? entry.nickname;
 
+  const myEntry = !isSelf
+    ? (rankingQuery.data?.entries.find((e) => e.uid === currentUid) ?? null)
+    : null;
+
+  const myFinished = myPredictionsQuery.items.filter(
+    (i) => i.matchStatus === "finished",
+  );
+  const otherFinished = items.filter((i) => i.matchStatus === "finished");
+
+  const comparison =
+    myEntry && !isSelf
+      ? deriveProfileComparison(myEntry, entry, myFinished, otherFinished)
+      : null;
+
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
-      <ProfileIdentity entry={entry} displayName={displayName} />
+      <ProfileIdentity
+        entry={entry}
+        displayName={isSelf ? "Meu Perfil" : displayName}
+        nickname={entry.nickname}
+        isSelf={isSelf}
+      />
       <CurrentPositionCard
         position={entry.position}
         total={rankingQuery.data?.entries.length ?? 0}
       />
       <ProfileStatsGrid entry={entry} stats={stats} />
       <StagePerformance stats={stats} />
-      {/*
-        A5 (bloqueador de produto, RESOLVIDO = privado): histórico de palpites de
-        OUTRO participante NÃO é exibido. Botão "Ver histórico de palpites" omitido.
-        Não renderizar navegação/destino. Rules negam leitura cruzada (TASK-14).
-      */}
+
+      {isSelf && <BettorDnaCard dna={dna} />}
+
+      {!isSelf && myEntry && comparison && (
+        <ProfileComparisonCard
+          myEntry={myEntry}
+          otherEntry={entry}
+          comparison={comparison}
+          displayName={displayName}
+          isLoading={myPredictionsQuery.isLoading}
+        />
+      )}
+
+      {items.length > 0 && (
+        <ProfilePredictionsList
+          buckets={buckets}
+          isSelf={isSelf}
+          openPhase={openPhase}
+          predictionsCount={predictionsCount}
+        />
+      )}
     </div>
   );
 }
 
-// ───────────────────────── Identidade ─────────────────────────
+// ──────────────────────────────────────────────────────────────────
+// Sub-components (internal — not exported from barrel)
+// ──────────────────────────────────────────────────────────────────
+
 function ProfileIdentity({
   entry,
   displayName,
+  nickname,
+  isSelf,
 }: {
   entry: RankingEntry;
   displayName: string;
+  nickname: string;
+  isSelf: boolean;
 }): JSX.Element {
   return (
     <section className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
       <Avatar className="h-20 w-20" role="img" aria-label={displayName}>
         <AvatarImage src={entry.avatarUrl} alt="" />
         <AvatarFallback className="text-lg font-semibold">
-          {initials(displayName)}
+          {initials(isSelf ? (entry.name ?? entry.nickname) : displayName)}
         </AvatarFallback>
       </Avatar>
       <h2 className="text-xl font-semibold text-foreground">{displayName}</h2>
-      <p className="text-sm text-muted-foreground">@{entry.nickname}</p>
+      <p className="text-sm text-muted-foreground">@{nickname}</p>
+      {!isSelf && (
+        <p
+          role="status"
+          className="rounded-full bg-muted px-3 py-0.5 text-xs text-muted-foreground"
+        >
+          Apenas jogos encerrados
+        </p>
+      )}
     </section>
   );
 }
 
-// ───────────────────────── Posição atual ─────────────────────────
 function CurrentPositionCard({
   position,
   total,
@@ -121,14 +222,13 @@ function CurrentPositionCard({
       <p className="text-4xl font-bold tabular-nums text-primary">
         #{position}
       </p>
-      <p className="text-sm text-muted-foreground tabular-nums">
+      <p className="text-sm tabular-nums text-muted-foreground">
         de {total} participantes
       </p>
     </section>
   );
 }
 
-// ───────────────────────── Grid de métricas ─────────────────────────
 function ProfileStatsGrid({
   entry,
   stats,
@@ -138,8 +238,6 @@ function ProfileStatsGrid({
 }): JSX.Element {
   const erros = entry.wrong ?? stats?.totalWrong;
   const metrics: ReadonlyArray<{ label: string; value: string }> = [
-    // Binário: Pontos === Acertos (mesmo número). Mantém ambos rótulos por fidelidade ao layout.
-    { label: "Pontos", value: String(entry.points) },
     { label: "Acertos", value: String(entry.points) },
     { label: "Erros", value: erros === undefined ? "—" : String(erros) },
     {
@@ -149,38 +247,64 @@ function ProfileStatsGrid({
   ];
 
   return (
-    <dl className="grid grid-cols-2 gap-3">
-      {metrics.map((m) => (
-        <div
-          key={m.label}
-          className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm"
-        >
-          <dt className="text-sm font-medium text-muted-foreground">
-            {m.label}
-          </dt>
-          <dd className="text-3xl font-bold tabular-nums text-primary">
-            {m.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <section aria-labelledby="stats-heading" className="flex flex-col gap-2">
+      <h3
+        id="stats-heading"
+        className="sr-only"
+      >
+        Métricas
+      </h3>
+      <dl className="grid grid-cols-3 gap-3">
+        {metrics.map((m) => (
+          <div
+            key={m.label}
+            className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 shadow-sm"
+          >
+            <dt className="text-xs font-medium text-muted-foreground">
+              {m.label}
+            </dt>
+            <dd className="text-2xl font-bold tabular-nums text-primary">
+              {m.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {stats && (
+        <p className="text-sm text-muted-foreground">
+          Sequência Máx.:{" "}
+          <span className="font-semibold tabular-nums text-foreground">
+            {stats.longestStreak}
+          </span>
+        </p>
+      )}
+    </section>
   );
 }
 
-// ───────────────────────── Desempenho por fase ─────────────────────────
 function StagePerformance({
   stats,
 }: {
   stats: Statistics | null;
-}): JSX.Element {
+}): JSX.Element | null {
+  if (!stats) return null;
+
+  const visibleStages = STAGE_LABELS.filter(
+    ({ scope }) => (stats.correctByStage[scope] ?? 0) > 0,
+  );
+
+  if (visibleStages.length === 0) return null;
+
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-lg font-semibold text-foreground">
+    <section aria-labelledby="stage-perf-heading" className="flex flex-col gap-2">
+      <h3
+        id="stage-perf-heading"
+        className="text-lg font-semibold text-foreground"
+      >
         Desempenho por Fase
       </h3>
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {STAGE_LABELS.map(({ scope, label }) => {
-          const pts = stats ? (stats.correctByStage[scope] ?? 0) : null;
+        {visibleStages.map(({ scope, label }) => {
+          const pts = stats.correctByStage[scope] ?? 0;
           return (
             <li
               key={scope}
@@ -188,7 +312,7 @@ function StagePerformance({
             >
               <span className="text-xs text-muted-foreground">{label}</span>
               <span className="text-base font-bold tabular-nums text-primary">
-                {pts === null ? "—" : `${pts} pts`}
+                {pts} pts
               </span>
             </li>
           );

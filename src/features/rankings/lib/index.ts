@@ -1,4 +1,17 @@
-// Barrel dos helpers puros de ranking (TASK-02).
+// Barrel dos helpers puros de ranking.
+export type { ProfilePredictionItem, ResolvedTeam } from "./profileTypes";
+export {
+  groupProfilePredictions,
+  type PredictionPhaseBucket,
+  type PredictionSubBucket,
+} from "./profilePredictionsGrouping";
+export { deriveBettorDna, type BettorDna } from "./bettorDna";
+export {
+  deriveProfileComparison,
+  derivePredictionsCount,
+  type ProfileComparison,
+  type PredictionsCount,
+} from "./profileComparison";
 export {
   compareRanking,
   rankParticipants,
