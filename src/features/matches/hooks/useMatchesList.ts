@@ -49,7 +49,7 @@ export interface MatchListItem {
 export interface MatchListItemDaySection {
   /** "Hoje" | "Amanhã" | "22 de junho de 2026" */
   label: string;
-  /** "yyyy-MM-dd" UTC — chave estável para React key */
+  /** "yyyy-MM-dd" local — chave estável para React key */
   date: string;
   matches: MatchListItem[];
 }

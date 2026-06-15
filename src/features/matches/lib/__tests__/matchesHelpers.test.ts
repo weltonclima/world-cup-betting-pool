@@ -20,7 +20,7 @@ import {
   groupMatchesByDay,
   resolveTeam,
   searchMatchesByCountry,
-  toUtcDateKey,
+  toLocalDateKey,
 } from "@/features/matches/lib/matchesHelpers";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +237,19 @@ describe("groupMatchesByDay", () => {
     const result = groupMatchesByDay([mAmanha, mHoje], now);
     expect(result[0]!.date).toBe("2026-06-20");
     expect(result[1]!.date).toBe("2026-06-21");
+  });
+
+  it("REGRESSÃO: jogo noturno (cruza meia-noite UTC) agrupa no dia local, não no UTC seguinte", () => {
+    // now = 07:00 BRT do dia 20. Jogo diurno 11:00 BRT e jogo noturno 23:00 BRT
+    // — ambos do dia 20 LOCAL. O noturno é 02:00 UTC do dia 21 (cairia em "Amanhã"
+    // pelo dia UTC). Devem ficar juntos na seção "Hoje".
+    const mDia = makeScheduledMatch({ id: "dia", kickoffAt: "2026-06-20T14:00:00.000Z" }); // 11:00 BRT
+    const mNoite = makeScheduledMatch({ id: "noite", kickoffAt: "2026-06-21T02:00:00.000Z" }); // 23:00 BRT dia 20
+    const result = groupMatchesByDay([mNoite, mDia], now);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.label).toBe("Hoje");
+    expect(result[0]!.date).toBe("2026-06-20");
+    expect(result[0]!.matches.map((m) => m.id)).toEqual(["dia", "noite"]);
   });
 });
 
@@ -526,20 +539,29 @@ describe("deriveGameStatusLabel", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. toUtcDateKey — promovida a export (TASK-01 matches-tabs-prediction)
+// 8. toLocalDateKey — dia no fuso LOCAL (bugfix home-screen-data-bugs)
+// TZ dos testes fixado em America/Sao_Paulo (UTC−3) via vitest.config.
 // ---------------------------------------------------------------------------
 
-describe("toUtcDateKey", () => {
-  it("extrai 'yyyy-MM-dd' UTC de uma ISO string", () => {
-    expect(toUtcDateKey("2026-06-20T18:00:00.000Z")).toBe("2026-06-20");
+describe("toLocalDateKey", () => {
+  it("extrai 'yyyy-MM-dd' no fuso local de uma ISO string", () => {
+    // 18:00 UTC = 15:00 BRT → mesmo dia
+    expect(toLocalDateKey("2026-06-20T18:00:00.000Z")).toBe("2026-06-20");
   });
 
-  it("não desloca o dia para horários no fim do dia UTC", () => {
-    expect(toUtcDateKey("2026-06-20T23:59:59.000Z")).toBe("2026-06-20");
+  it("usa o dia LOCAL, não o UTC, quando o horário UTC já virou o dia", () => {
+    // 00:00 UTC do dia 21 = 21:00 BRT do dia 20 → dia local é 20, não 21
+    expect(toLocalDateKey("2026-06-21T00:00:00.000Z")).toBe("2026-06-20");
   });
 
-  it("não desloca o dia para meia-noite UTC", () => {
-    expect(toUtcDateKey("2026-06-21T00:00:00.000Z")).toBe("2026-06-21");
+  it("REGRESSÃO: jogo noturno que cruza a meia-noite UTC fica no dia local correto", () => {
+    // Jogo 23:00 BRT do dia 14 = 02:00 UTC do dia 15.
+    // Pelo dia UTC cairia no dia 15 (bug). Pelo dia local: dia 14.
+    expect(toLocalDateKey("2026-06-15T02:00:00.000Z")).toBe("2026-06-14");
+  });
+
+  it("início do dia local (00:00 BRT) = 03:00 UTC → mesmo dia local", () => {
+    expect(toLocalDateKey("2026-06-20T03:00:00.000Z")).toBe("2026-06-20");
   });
 });
 

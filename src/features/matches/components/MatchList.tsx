@@ -27,7 +27,7 @@ import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelper
 import type { Stage } from "@/types";
 
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs";
-import { classifyDateKey, toUtcDateKey, type TemporalBucket } from "../lib";
+import { classifyDateKey, toLocalDateKey, type TemporalBucket } from "../lib";
 
 import { useMatchesList } from "@/features/matches/hooks/useMatchesList";
 import type {
@@ -133,15 +133,15 @@ export function MatchList() {
   // Tabs temporais (TASK-03)
   // ---------------------------------------------------------------------------
 
-  // Chave UTC do dia corrente — estável durante o render, reavaliada por sessão.
-  const todayKey = useMemo(() => toUtcDateKey(new Date().toISOString()), []);
+  // Chave local do dia corrente — estável durante o render, reavaliada por sessão.
+  const todayKey = useMemo(() => toLocalDateKey(new Date().toISOString()), []);
 
   // Default derivado dos dados: Hoje → Próximos → Anteriores.
   const defaultTab = useMemo((): TemporalBucket => {
-    if (flatList.some((item) => classifyDateKey(toUtcDateKey(item.kickoffAt), todayKey) === "hoje"))
+    if (flatList.some((item) => classifyDateKey(toLocalDateKey(item.kickoffAt), todayKey) === "hoje"))
       return "hoje";
     if (
-      flatList.some((item) => classifyDateKey(toUtcDateKey(item.kickoffAt), todayKey) === "proximos")
+      flatList.some((item) => classifyDateKey(toLocalDateKey(item.kickoffAt), todayKey) === "proximos")
     )
       return "proximos";
     return "anteriores";
@@ -196,12 +196,22 @@ export function MatchList() {
 
   // 5. Filtro de bucket temporal — última etapa, usa aba ativa (TASK-03)
   const filteredList = afterPrediction.filter(
-    (item) => classifyDateKey(toUtcDateKey(item.kickoffAt), todayKey) === activeTab,
+    (item) => classifyDateKey(toLocalDateKey(item.kickoffAt), todayKey) === activeTab,
   );
 
   // 6. Re-agrupa preservando labels pt-BR dos grupos originais
   const filteredIds = new Set(filteredList.map((item) => item.id));
   const filteredGroups = regroupFilteredItems(filteredIds, groups);
+
+  // 7. Ordem de exibição: "anteriores" mostra os mais recentes primeiro (DESC) —
+  // inverte seções e jogos dentro de cada seção. Hoje/Próximos seguem ASC.
+  const orderedGroups =
+    activeTab === "anteriores"
+      ? filteredGroups
+          .slice()
+          .reverse()
+          .map((group) => ({ ...group, matches: group.matches.slice().reverse() }))
+      : filteredGroups;
 
   // Flag auxiliar para empty-state com ou sem filtros ativos
   const hasActiveFilters =
@@ -266,9 +276,9 @@ export function MatchList() {
         )}
 
         {/* Lista agrupada por dia */}
-        {!isLoading && !isError && filteredGroups.length > 0 && (
+        {!isLoading && !isError && orderedGroups.length > 0 && (
           <div className="flex flex-col gap-6" aria-label="Jogos agrupados por dia">
-            {filteredGroups.map((group) => (
+            {orderedGroups.map((group) => (
               <DaySection key={group.date} group={group} />
             ))}
           </div>

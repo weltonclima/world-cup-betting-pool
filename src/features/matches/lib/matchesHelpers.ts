@@ -29,7 +29,7 @@ export type GameStatusLabel = "Agendado" | "Ao Vivo" | "Encerrado" | "Adiado" | 
 export interface MatchDaySection {
   /** "Hoje" | "Amanhã" | "15 de junho de 2026" */
   label: string;
-  /** "yyyy-MM-dd" UTC — chave estável para React key */
+  /** "yyyy-MM-dd" no fuso local — chave estável para React key */
   date: string;
   matches: MatchWithId[];
 }
@@ -79,25 +79,28 @@ export function resolveTeam(teamId: string, teamMap: Map<string, TeamWithId>): R
 // ---------------------------------------------------------------------------
 
 /**
- * Extrai a data UTC no formato "yyyy-MM-dd" de uma string ISO 8601.
- * Comparação de dia usa a data UTC do kickoff vs a data UTC de now (sem conversão de fuso).
+ * Extrai a data no formato "yyyy-MM-dd" no FUSO LOCAL do dispositivo a partir
+ * de uma string ISO 8601.
+ *
+ * O dia é o que o usuário percebe no relógio dele — não o dia UTC. Isso evita
+ * que jogos noturnos (que cruzam a meia-noite UTC) caiam no dia errado em fusos
+ * atrás de UTC (ex.: BRT, UTC−3). date-fns/format já opera no fuso local.
  *
  * Exportada para reuso no compositor de tabs temporais (classificação por dateKey).
  */
-export function toUtcDateKey(isoString: string): string {
-  // Pega os 10 primeiros caracteres de uma data ISO normalizada para UTC.
-  return new Date(isoString).toISOString().slice(0, 10);
+export function toLocalDateKey(isoString: string): string {
+  return format(new Date(isoString), "yyyy-MM-dd");
 }
 
 /**
- * Classifica um dateKey ("yyyy-MM-dd" UTC) em um bucket temporal relativo a todayKey.
+ * Classifica um dateKey ("yyyy-MM-dd" local) em um bucket temporal relativo a todayKey.
  *
  * Comparação lexicográfica de strings ISO date == comparação cronológica:
  * - dateKey < todayKey  → "anteriores"
  * - dateKey === todayKey → "hoje"
  * - dateKey > todayKey  → "proximos"
  *
- * Ambas as chaves devem vir de toUtcDateKey (mesmo formato/fuso UTC).
+ * Ambas as chaves devem vir de toLocalDateKey (mesmo formato/fuso local).
  *
  * @param dateKey  - Data UTC da partida ("yyyy-MM-dd").
  * @param todayKey - Data UTC de referência ("yyyy-MM-dd").
@@ -109,7 +112,7 @@ export function classifyDateKey(dateKey: string, todayKey: string): TemporalBuck
 }
 
 /**
- * Agrupa partidas por dia (data UTC do kickoff) e gera rótulos em pt-BR.
+ * Agrupa partidas por dia (data local do kickoff) e gera rótulos em pt-BR.
  *
  * - Ordena globalmente por kickoffAt ASC antes de agrupar.
  * - Rótulo: "Hoje" | "Amanhã" | data por extenso (date-fns pt-BR).
@@ -122,11 +125,12 @@ export function classifyDateKey(dateKey: string, todayKey: string): TemporalBuck
 export function groupMatchesByDay(matches: MatchWithId[], now: Date): MatchDaySection[] {
   if (matches.length === 0) return [];
 
-  const nowDateKey = toUtcDateKey(now.toISOString());
-  const nowMs = now.getTime();
-  // "Amanhã" em UTC: avança 1 dia do nowDateKey
-  const tomorrowDate = new Date(nowMs + 24 * 60 * 60 * 1000);
-  const tomorrowDateKey = toUtcDateKey(tomorrowDate.toISOString());
+  const nowDateKey = toLocalDateKey(now.toISOString());
+  // "Amanhã": avança 1 dia no calendário local (setDate respeita DST, ao
+  // contrário de somar 24h em ms).
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowDateKey = toLocalDateKey(tomorrowDate.toISOString());
 
   // Ordena por kickoffAt ASC
   const sorted = [...matches].sort(
@@ -136,7 +140,7 @@ export function groupMatchesByDay(matches: MatchWithId[], now: Date): MatchDaySe
   // Agrupa por dateKey (preservando a ordem)
   const sectionMap = new Map<string, MatchWithId[]>();
   for (const match of sorted) {
-    const dateKey = toUtcDateKey(match.kickoffAt);
+    const dateKey = toLocalDateKey(match.kickoffAt);
     const existing = sectionMap.get(dateKey);
     if (existing) {
       existing.push(match);
@@ -155,8 +159,8 @@ export function groupMatchesByDay(matches: MatchWithId[], now: Date): MatchDaySe
       label = "Amanhã";
     } else {
       // Ex.: "22 de junho de 2026"
-      // dateKey é "yyyy-MM-dd" (UTC). Parseamos os componentes e criamos uma Date local
-      // para que date-fns/format não desloque o dia ao converter UTC → fuso local.
+      // dateKey é "yyyy-MM-dd" (local). Parseamos os componentes e criamos uma Date local
+      // (meia-noite local) para o format por extenso — sem deslocamento de fuso.
       const [year, month, day] = dateKey.split("-").map(Number);
       // new Date(y, m-1, d) cria meia-noite local — sem risco de deslocamento de fuso.
       const dateObj = new Date(year!, month! - 1, day!);

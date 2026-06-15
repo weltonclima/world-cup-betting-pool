@@ -19,6 +19,11 @@ export default defineConfig({
     // Ambiente padrão "node" (testes de schema, maioria). Testes de
     // componente (*.test.tsx) declaram `// @vitest-environment jsdom` no topo.
     environment: "node",
+    // Fuso fixo para testes de data determinísticos. A lógica de dia (Hoje/
+    // Amanhã/agrupamento) opera no fuso LOCAL do dispositivo; sem pin, o
+    // resultado dependeria do TZ da máquina/CI. America/Sao_Paulo = UTC−3
+    // (sem horário de verão desde 2019), o fuso real dos usuários.
+    env: { TZ: "America/Sao_Paulo" },
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });
