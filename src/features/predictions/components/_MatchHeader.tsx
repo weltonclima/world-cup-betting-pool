@@ -29,7 +29,7 @@ export function TeamFlag({ team }: { team: ResolvedTeam }) {
         height={44}
         loading="lazy"
         decoding="async"
-        className="w-16 h-11 rounded object-contain"
+        className="w-16 h-11 rounded object-cover border border-border"
       />
     );
   }

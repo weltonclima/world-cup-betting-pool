@@ -368,7 +368,7 @@ describe("MatchCard — fallback de bandeira", () => {
 // ---------------------------------------------------------------------------
 
 describe("MatchCard — borda de bandeira (TASK-02)", () => {
-  it("T23: img da bandeira tem ring-1 (borda sutil)", () => {
+  it("T23: img da bandeira tem borda visível", () => {
     render(
       <MatchCard
         match={baseMatch}
@@ -379,10 +379,10 @@ describe("MatchCard — borda de bandeira (TASK-02)", () => {
       />,
     );
     const imgs = screen.getAllByRole("img");
-    expect(imgs.every((img) => img.className.includes("ring-1"))).toBe(true);
+    expect(imgs.every((img) => img.className.includes("border"))).toBe(true);
   });
 
-  it("T24: fallback de iniciais NÃO recebe ring", () => {
+  it("T24: fallback de iniciais NÃO recebe borda de bandeira", () => {
     const teamSemBandeira: ResolvedTeam = { name: "Brasil", flagUrl: undefined };
     render(
       <MatchCard
@@ -394,7 +394,7 @@ describe("MatchCard — borda de bandeira (TASK-02)", () => {
       />,
     );
     const fallback = screen.getByLabelText("Brasil");
-    expect(fallback.className).not.toContain("ring-1");
+    expect(fallback.className).not.toContain("border");
   });
 });
 

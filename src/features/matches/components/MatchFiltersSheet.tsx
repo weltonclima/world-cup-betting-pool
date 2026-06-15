@@ -353,7 +353,7 @@ export function MatchFiltersSheet({
                         src={team.flagUrl}
                         alt=""
                         aria-hidden="true"
-                        className="w-5 h-4 object-cover rounded-sm shrink-0"
+                        className="w-5 h-4 object-cover rounded-sm shrink-0 border border-border"
                       />
                     ) : (
                       <div

@@ -64,7 +64,7 @@ function TeamFlag({ name, flagUrl }: TeamFlagProps) {
         alt={name}
         loading="lazy"
         decoding="async"
-        className="w-7 h-5 rounded-sm object-contain"
+        className="w-7 h-5 rounded-sm object-cover border border-border"
       />
     );
   }

@@ -52,7 +52,7 @@ function SideFlag({ side }: { side: KnockoutSide }) {
         alt={side.name}
         loading="lazy"
         decoding="async"
-        className="w-8 h-6 shrink-0 rounded-sm object-contain"
+        className="w-8 h-6 shrink-0 rounded-sm object-cover border border-border"
       />
     );
   }

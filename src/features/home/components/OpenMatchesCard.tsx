@@ -73,7 +73,7 @@ function TeamFlag({ team }: { team: ResolvedTeam }) {
       <img
         src={team.flagUrl}
         alt={team.name}
-        className="size-6 shrink-0 rounded-sm object-contain"
+        className="size-6 shrink-0 rounded-sm object-cover border border-border"
       />
     );
   }

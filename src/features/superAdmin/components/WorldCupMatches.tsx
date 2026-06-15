@@ -348,7 +348,7 @@ function TeamSide({
         <img
           src={team.flagUrl}
           alt=""
-          className="size-7 shrink-0 rounded-sm object-cover"
+          className="size-7 shrink-0 rounded-sm object-cover border border-border"
         />
       ) : (
         <span

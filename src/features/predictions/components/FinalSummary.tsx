@@ -240,7 +240,7 @@ function FinalistCard({
           height={32}
           loading="lazy"
           decoding="async"
-          className="h-8 w-12 rounded-sm object-cover"
+          className="h-8 w-12 rounded-sm object-cover border border-border"
         />
       ) : null}
       <span
