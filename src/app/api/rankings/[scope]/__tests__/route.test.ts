@@ -45,13 +45,26 @@ function rankingDoc(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Firestore mock: rankings/{scope}.get() → snap controlável. */
-function mockDb(snap: { exists: boolean; data: () => unknown }) {
+/**
+ * Firestore mock: rankings/{scope}.get() → snap controlável; `getAll` serve os
+ * users vivos da hidratação (default: nenhum → entries mantêm o snapshot).
+ */
+function mockDb(
+  snap: { exists: boolean; data: () => unknown },
+  liveUsers: Record<string, Record<string, unknown>> = {},
+) {
   const getDoc = vi.fn().mockResolvedValue(snap);
+  const getAll = vi.fn(async (...refs: Array<{ uid?: string }>) =>
+    refs.map((r) => {
+      const data = r.uid ? liveUsers[r.uid] : undefined;
+      return { id: r.uid, exists: data !== undefined, data: () => data };
+    }),
+  );
   getFirestoreMock.mockReturnValue({
-    collection: vi.fn(() => ({ doc: vi.fn(() => ({ get: getDoc })) })),
+    collection: vi.fn(() => ({ doc: vi.fn((uid?: string) => ({ uid, get: getDoc })) })),
+    getAll,
   });
-  return { getDoc };
+  return { getDoc, getAll };
 }
 
 function req(..._ignored: unknown[]): Request {
@@ -104,10 +117,23 @@ describe("GET /api/rankings/{scope}", () => {
       return { exists: true, data: () => rankingDoc() };
     });
     getFirestoreMock.mockReturnValue({
-      collection: vi.fn(() => ({ doc: vi.fn(() => ({ get: getDoc })) })),
+      collection: vi.fn(() => ({ doc: vi.fn((uid?: string) => ({ uid, get: getDoc })) })),
+      getAll: vi.fn(async (...refs: unknown[]) => refs.map(() => ({ exists: false, data: () => undefined }))),
     });
     await GET(req("geral"), ctx("geral"));
     expect(order).toEqual(["ensureFresh", "getDoc"]);
+  });
+
+  it("hidrata foto/apelido/nome AO VIVO (sobrescreve o snapshot do recalc)", async () => {
+    mockDb({ exists: true, data: () => rankingDoc({ scope: "geral" }) }, {
+      u1: { avatarUrl: "data:image/jpeg;base64,NEW", nickname: "ana2", name: "Ana Nova" },
+    });
+    const res = await GET(req("geral"), ctx("geral"));
+    const body = await res.json();
+    const u1 = body.entries.find((e: { uid: string }) => e.uid === "u1");
+    expect(u1.avatarUrl).toBe("data:image/jpeg;base64,NEW");
+    expect(u1.nickname).toBe("ana2");
+    expect(u1.name).toBe("Ana Nova");
   });
 
   it("doc ausente → 200 com body null", async () => {

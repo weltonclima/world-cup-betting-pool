@@ -39,12 +39,15 @@ function rankingDoc(overrides: Record<string, unknown> = {}) {
 function mockDb(opts: {
   groupId?: string;
   poolSnap?: { exists: boolean; data: () => unknown };
+  // users vivos para a hidratação (uid → campos). Default: vazio (mantém snapshot).
+  liveUsers?: Record<string, Record<string, unknown>>;
 }) {
   const poolGet = vi
     .fn()
     .mockResolvedValue(opts.poolSnap ?? { exists: true, data: () => rankingDoc() });
   const collection = vi.fn((name: string) => ({
-    doc: vi.fn(() => ({
+    doc: vi.fn((uid?: string) => ({
+      uid,
       get: vi.fn().mockResolvedValue(
         name === "users"
           ? { exists: true, data: () => (opts.groupId ? { groupId: opts.groupId } : {}) }
@@ -54,8 +57,15 @@ function mockDb(opts: {
       ...(name === "rankings" ? { get: poolGet } : {}),
     })),
   }));
-  getFirestoreMock.mockReturnValue({ collection });
-  return { poolGet };
+  // getAll: hidratação das entries → snaps de users vivos por uid.
+  const getAll = vi.fn(async (...refs: Array<{ uid?: string }>) =>
+    refs.map((r) => {
+      const data = r.uid ? opts.liveUsers?.[r.uid] : undefined;
+      return { id: r.uid, exists: data !== undefined, data: () => data };
+    }),
+  );
+  getFirestoreMock.mockReturnValue({ collection, getAll });
+  return { poolGet, getAll };
 }
 
 const approved = (uid = "u1") => requireApprovedMock.mockResolvedValue({ user: { uid } });
@@ -106,9 +116,23 @@ describe("GET /api/rankings/pool", () => {
             ? vi.fn(() => ({ get: vi.fn().mockResolvedValue({ exists: true, data: () => ({ groupId: "pool-42" }) }) }))
             : docFn,
       })),
+      // hidratação das entries não é o foco aqui → sem users vivos (mantém snapshot).
+      getAll: vi.fn(async (...refs: unknown[]) => refs.map(() => ({ exists: false, data: () => undefined }))),
     });
     await GET();
     expect(docFn).toHaveBeenCalledWith("pool-pool-42-geral");
+  });
+
+  it("hidrata a foto/apelido AO VIVO (sobrescreve o snapshot do recalc)", async () => {
+    approved("u1");
+    mockDb({
+      groupId: "pool-1",
+      liveUsers: { u1: { avatarUrl: "data:image/jpeg;base64,NEW", nickname: "novo" } },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.entries[0].avatarUrl).toBe("data:image/jpeg;base64,NEW");
+    expect(body.entries[0].nickname).toBe("novo");
   });
 
   it("doc do pool ausente → 200 null", async () => {
