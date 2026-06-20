@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { BackButton } from "@/components/layout/BackButton";
 import { useAuth } from "@/hooks/useAuth";
+import { useGroupDetail } from "@/features/groups/hooks";
 import { useGroupMatches, useTeams } from "@/features/matches/hooks";
 import {
   buildTeamMap,
@@ -58,11 +59,18 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
   const { groupId } = use(params);
   const router = useRouter();
 
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 
   const group = useGroupPredictions(groupId);
   const batch = useUpsertPredictionsBatch(uid ?? "");
+
+  // Bloqueio no nível do POOL do usuário (toggle do admin —
+  // pools/{poolId}.predictionsLocked). `profile.groupId` é o ID do bolão do
+  // usuário, NÃO o `groupId` (A–L) da rota. Quando true, a tela trava a edição
+  // (inputs + Salvar) — o servidor (batch route) também rejeita por garantia.
+  const poolDetail = useGroupDetail(profile?.groupId ?? "");
+  const poolLocked = poolDetail.data?.pool.predictionsLocked === true;
 
   // Fontes brutas para a classificação prevista (TASK-10): matches do grupo +
   // mapa de times. As predictions são montadas dos currentScores dos items.
@@ -170,6 +178,7 @@ export default function GroupFillPage({ params }: GroupFillPageProps) {
         isLoading={isLoading}
         isError={group.isError}
         isSaving={batch.isPending}
+        locked={poolLocked}
         onRetry={group.refetch}
         onScoreChange={group.setScore}
         onSave={handleSave}

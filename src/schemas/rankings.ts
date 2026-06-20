@@ -20,6 +20,12 @@ export const rankingEntrySchema = z
     name: nonEmptyString.optional(), // nome completo desnormalizado (users.name)
     position: z.int().min(1), // posição
     points: z.int().min(0), // total de pontos ponderados (5/10) no escopo
+    // Decomposição dos acertos por tipo (exibida na Tela 01 no lugar do %).
+    // Opcionais p/ compat retroativa: docs gravados antes deste campo seguem
+    // válidos; a UI cai em 0. Preenchidos sempre pelo recalc (geral + pool).
+    correct: z.int().min(0).optional(), // placares EXATOS (10 pts)
+    winner: z.int().min(0).optional(), // acertou o vencedor sem placar (5 pts)
+    draw: z.int().min(0).optional(), // acertou o empate sem placar (5 pts)
     wrong: z.int().min(0).optional(), // palpites errados (partidas finalizadas) no escopo
     accuracy: percentageSchema.optional(), // aproveitamento 0–100
     // Foto de perfil (PRD-06, data URL base64). Aditivo/opcional — propagado pelo

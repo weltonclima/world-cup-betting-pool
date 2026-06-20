@@ -231,10 +231,21 @@ describe("deriveHeroSummary — tendência", () => {
 // ---------------------------------------------------------------------------
 
 describe("deriveHeroSummary — aproveitamento/denominador", () => {
-  it("denominador = totalCorrect + totalWrong quando totalWrong presente", () => {
+  it("denominador = totalCorrect + totalWrong quando sem parciais", () => {
     const r = deriveHeroSummary(null, makeStatistics({ totalCorrect: 18, totalWrong: 7 }), null, UID);
     expect(r.denominator).toBe(25);
     expect(r.totalCorrect).toBe(18);
+  });
+
+  it("denominador inclui PARCIAIS (exatos + parciais + erros)", () => {
+    const r = deriveHeroSummary(
+      null,
+      makeStatistics({ totalCorrect: 18, totalPartial: 9, totalWrong: 7 }),
+      null,
+      UID,
+    );
+    expect(r.denominator).toBe(34); // 18 + 9 + 7
+    expect(r.totalCorrect).toBe(18); // numerador segue só exatos
   });
 
   it("denominador null quando totalWrong ausente (fallback = omitir)", () => {

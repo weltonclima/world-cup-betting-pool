@@ -96,6 +96,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // ─── 2.5. Pool lock: rejeitar o lote se os palpites do grupo estão bloqueados.
+  //          Espelha o handler single (/api/predictions) — sem isto o mass-fill
+  //          burlava o lock do admin (toggle predictionsLocked do pool). ────────
+  const groupId = userData?.groupId as string | undefined;
+  if (groupId) {
+    try {
+      const poolSnap = await db.collection("pools").doc(groupId).get();
+      if (poolSnap.exists && poolSnap.data()?.predictionsLocked === true) {
+        return NextResponse.json(
+          { error: "Os palpites deste grupo estão bloqueados." },
+          { status: 423 },
+        );
+      }
+    } catch {
+      // Fail-open: erro transitório no read do pool não bloqueia o participante.
+    }
+  }
+
   // ─── 3. Parsear body ──────────────────────────────────────────────────────
   let json: unknown;
   try {

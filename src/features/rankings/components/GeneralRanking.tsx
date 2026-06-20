@@ -30,8 +30,61 @@ function initials(entry: RankingEntry): string {
     .join("");
 }
 
-function accuracyLabel(entry: RankingEntry): string {
-  return entry.accuracy === undefined ? "—" : `${entry.accuracy}%`;
+/** Decomposição dos acertos (default 0 p/ entries gravadas antes do campo). */
+function hitCounts(entry: RankingEntry): { a: number; v: number; e: number } {
+  return {
+    a: entry.correct ?? 0, // placares exatos (10)
+    v: entry.winner ?? 0, // acertou vencedor sem placar (5)
+    e: entry.draw ?? 0, // acertou empate sem placar (5)
+  };
+}
+
+/** Frase a11y da decomposição (lida por leitor de tela no lugar de "A.. V.. E.."). */
+function hitLabel(entry: RankingEntry): string {
+  const { a, v, e } = hitCounts(entry);
+  return `${a} placares exatos, ${v} acertos de vencedor, ${e} acertos de empate`;
+}
+
+/**
+ * Mostra a decomposição dos acertos como "A{n} V{n} E{n}" (1ª letra + valor) no
+ * lugar do aproveitamento. Letra em destaque; cor herdada via `className` (p/
+ * contraste no card primário do pódio).
+ *
+ * a11y: `role="img"` + aria-label dá a frase cheia ao leitor de tela. No pódio,
+ * passar `decorative` (o `aria-label` do `<Link>` pai já inclui a mesma frase →
+ * evita leitura dupla); na linha da lista é a única fonte, então fica anunciado.
+ */
+function HitBreakdown({
+  entry,
+  className,
+  decorative = false,
+}: {
+  entry: RankingEntry;
+  className?: string;
+  decorative?: boolean;
+}) {
+  const { a, v, e } = hitCounts(entry);
+  return (
+    <span
+      {...(decorative
+        ? { "aria-hidden": true }
+        : { role: "img", "aria-label": hitLabel(entry) })}
+      className={cn("inline-flex items-center gap-1.5 tabular-nums", className)}
+    >
+      <span aria-hidden="true">
+        <span className="font-semibold">A</span>
+        {a}
+      </span>
+      <span aria-hidden="true">
+        <span className="font-semibold">V</span>
+        {v}
+      </span>
+      <span aria-hidden="true">
+        <span className="font-semibold">E</span>
+        {e}
+      </span>
+    </span>
+  );
 }
 
 /** Conectores de sobrenome ignorados na abreviação (preposições/artigos PT-BR). */
@@ -153,7 +206,7 @@ function RankingPodium({
           <li key={entry.uid} className={cn("min-w-0 flex-1", visualOrder[i])}>
             <Link
               href={`/rankings/profile/${entry.uid}`}
-              aria-label={`${entry.position}º lugar: ${name}, ${entry.points} pontos, ${accuracyLabel(entry)} de aproveitamento${you ? " (você)" : ""}`}
+              aria-label={`${entry.position}º lugar: ${name}, ${entry.points} pontos, ${hitLabel(entry)}${you ? " (você)" : ""}`}
               className={cn(
                 "flex flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center sm:gap-2 sm:p-3",
                 "transition-colors transition-transform duration-200 ease-out",
@@ -185,16 +238,16 @@ function RankingPodium({
               <span className="text-base font-bold tabular-nums sm:text-lg">
                 {entry.points} pts
               </span>
-              <span
+              <HitBreakdown
+                entry={entry}
+                decorative
                 className={cn(
-                  "text-xs tabular-nums",
+                  "text-xs",
                   isFirst
                     ? "text-primary-foreground/80"
                     : "text-muted-foreground",
                 )}
-              >
-                {accuracyLabel(entry)}
-              </span>
+              />
               {you && (
                 <Badge className="bg-primary text-primary-foreground">
                   Você
@@ -250,9 +303,10 @@ function RankingRow({
             pts
           </span>
         </span>
-        <span className="w-12 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
-          {accuracyLabel(entry)}
-        </span>
+        <HitBreakdown
+          entry={entry}
+          className="shrink-0 text-xs text-muted-foreground"
+        />
       </Link>
     </li>
   );

@@ -30,20 +30,23 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+// points (25) = PONDERADO; totalCorrect (12) = placares EXATOS. Distintos de
+// propósito: garante que o card "Acertos" usa totalCorrect, não points (fix).
 const entry: RankingEntry = {
   uid: "u-me",
   nickname: "voce",
   name: "Voce Mesmo",
   position: 4,
-  points: 12,
-  accuracy: 25,
+  points: 25,
+  accuracy: 20,
 };
 
 const statistics: Statistics = {
   uid: "u-me",
   totalCorrect: 12,
+  totalPartial: 10,
   totalWrong: 36,
-  accuracy: 25,
+  accuracy: 20,
   longestStreak: 3,
   correctByStage: {},
   positionHistory: [
@@ -82,14 +85,42 @@ describe("MyRanking", () => {
     expect(screen.getByText("Você")).toBeTruthy();
   });
 
-  it("grid mostra Pontos e Acertos com o mesmo valor (binário) + Aproveitamento", () => {
+  it("Pontos usa o ponderado; Acertos usa totalCorrect (não points)", () => {
     loaded();
     render(<MyRanking />, { wrapper });
     expect(screen.getByText("Pontos")).toBeTruthy();
     expect(screen.getByText("Acertos")).toBeTruthy();
-    // Pontos e Acertos compartilham o valor 12 (dois nós).
-    expect(screen.getAllByText("12").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("25%")).toBeTruthy();
+    // Pontos = 25 (ponderado); Acertos = 12 (exatos). Valores DISTINTOS.
+    expect(screen.getByText("25")).toBeTruthy(); // card Pontos
+    expect(screen.getByText("12")).toBeTruthy(); // card Acertos
+    // hint do card Acertos esclarece a pontuação ponderada (não "1 ponto").
+    expect(
+      screen.getByText(
+        "Placares exatos (10 pts). Acertar só o vencedor ou empate vale 5.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("20%")).toBeTruthy();
+    // Denominador = exatos(12) + parciais(10) + erros(36) = 58 jogos jogados.
+    expect(screen.getByText("12 de 58 jogos")).toBeTruthy();
+  });
+
+  it("Aproveitamento cai p/ exatos+erros quando stats não trazem totalPartial (retrocompat)", () => {
+    const legacy = { ...statistics };
+    delete (legacy as { totalPartial?: number }).totalPartial;
+    useMyRankingMock.mockReturnValue({
+      data: { entry, total: 28 },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useParticipantProfileMock.mockReturnValue({
+      data: legacy,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<MyRanking />, { wrapper });
+    // Sem totalPartial → parcial = 0 → 12 + 36 = 48 jogos (comportamento antigo).
     expect(screen.getByText("12 de 48 jogos")).toBeTruthy();
   });
 

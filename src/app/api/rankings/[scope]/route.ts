@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { requireApprovedUser } from "@/server/auth/requireApprovedUser";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { ensureRankingsFresh } from "@/server/rankings/recalc";
+import { hydrateRankingEntries } from "@/server/rankings/hydrateEntries";
 import { rankingSchema } from "@/schemas";
 import { rankingScopeSchema } from "@/schemas/shared";
 
@@ -51,5 +52,8 @@ export async function GET(
     return NextResponse.json(null, { status: 200 });
   }
 
-  return NextResponse.json(parsed.data, { status: 200 });
+  // Foto/nome de exibição resolvidos AO VIVO (não do snapshot do recalc): garante que
+  // trocar avatar/apelido reflita no ranking sem depender de um recalc disparar.
+  const entries = await hydrateRankingEntries(db, parsed.data.entries);
+  return NextResponse.json({ ...parsed.data, entries }, { status: 200 });
 }

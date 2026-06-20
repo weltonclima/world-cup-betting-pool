@@ -109,7 +109,7 @@ export interface HeroSummary {
   } | null;
   accuracy: number;           // 0–100 (0 sem statistics)
   totalCorrect: number;       // 0 sem statistics
-  /** totalCorrect + totalWrong; null quando totalWrong ausente. */
+  /** Jogos jogados = exatos + parciais + erros; null quando totalWrong ausente. */
   denominator: number | null;
   longestStreak: number;      // 0 sem statistics
   /** Posições por `at` (asc); null com <2 pontos. */
@@ -399,8 +399,12 @@ export function deriveHeroSummary(
   const accuracy = statistics?.accuracy ?? 0;
   const totalCorrect = statistics?.totalCorrect ?? 0;
   const longestStreak = statistics?.longestStreak ?? 0;
+  // Denominador = exatos + PARCIAIS (vencedor/empate) + erros. Parciais opcionais
+  // (retrocompat) → caem em 0; ainda gated por totalWrong (sinal de doc apurado).
   const denominator =
-    statistics?.totalWrong != null ? totalCorrect + statistics.totalWrong : null;
+    statistics?.totalWrong != null
+      ? totalCorrect + (statistics.totalPartial ?? 0) + statistics.totalWrong
+      : null;
 
   // Régua de percentil (bullet): só com poolStats e pontos do usuário.
   let ruler: HeroSummary["ruler"] = null;

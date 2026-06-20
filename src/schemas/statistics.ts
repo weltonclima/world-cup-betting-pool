@@ -24,7 +24,11 @@ export const positionHistoryEntrySchema = z
 export const statisticsSchema = z
   .object({
     uid: nonEmptyString, // dono das estatísticas
-    totalCorrect: z.int().min(0), // total de acertos
+    totalCorrect: z.int().min(0), // total de acertos EXATOS (placar cheio, 10 pts)
+    // Acertos PARCIAIS (vencedor/empate sem placar, 5 pts). Opcional p/ compat
+    // retroativa: docs gravados antes deste campo seguem válidos; a UI cai em 0.
+    // Compõe o denominador de jogos jogados na Tela 02 (exatos+parciais+erros).
+    totalPartial: z.int().min(0).optional(),
     totalWrong: z.int().min(0).optional(), // total de palpites errados (partidas finalizadas) — Telas 02/05
     accuracy: percentageSchema, // aproveitamento (%) 0–100 — fonte única de verdade em shared.ts
     longestStreak: z.int().min(0), // maior sequência de acertos

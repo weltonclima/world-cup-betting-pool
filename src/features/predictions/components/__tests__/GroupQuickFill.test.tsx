@@ -225,6 +225,53 @@ describe("GroupQuickFill — CTA salvar", () => {
   });
 });
 
+// ── GroupQuickFill — pool lock (bugfix) ───────────────────────────────────────────
+// `locked` = bloqueio no nível do POOL (toggle do admin), distinto de item.isLocked
+// (per-match por kickoff). Com pool bloqueado: TODOS os inputs travados, "Salvar
+// Grupo" desabilitado e banner explicativo — sem isso a tela deixava editar.
+
+describe("GroupQuickFill — pool lock", () => {
+  it("locked: desabilita todos os inputs de placar (mesmo jogos abertos)", () => {
+    renderFill({
+      items: [makeItem({ currentScores: { homeScore: 2, awayScore: 1 } })],
+      locked: true,
+    });
+    const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const input of inputs) {
+      expect(input.disabled).toBe(true);
+    }
+  });
+
+  it("locked: 'Salvar Grupo' desabilitado mesmo com par completo", () => {
+    renderFill({
+      items: [makeItem({ currentScores: { homeScore: 1, awayScore: 0 } })],
+      locked: true,
+    });
+    const btn = screen.getByRole("button", { name: "Salvar Grupo" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it("locked: exibe banner de bloqueio pelo organizador", () => {
+    renderFill({ locked: true });
+    expect(screen.getByText(/bloqueados pelo organizador/i)).toBeTruthy();
+  });
+
+  it("sem lock: inputs habilitados, CTA ativo (par completo) e sem banner", () => {
+    renderFill({
+      items: [makeItem({ currentScores: { homeScore: 1, awayScore: 0 } })],
+      locked: false,
+    });
+    const inputs = screen.getAllByRole("textbox") as HTMLInputElement[];
+    for (const input of inputs) {
+      expect(input.disabled).toBe(false);
+    }
+    const btn = screen.getByRole("button", { name: "Salvar Grupo" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    expect(screen.queryByText(/bloqueados pelo organizador/i)).toBeNull();
+  });
+});
+
 // ── GroupQuickFill — estados ──────────────────────────────────────────────────────
 
 describe("GroupQuickFill — estados", () => {

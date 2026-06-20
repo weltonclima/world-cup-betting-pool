@@ -10,6 +10,7 @@ import {
   computeAccuracy,
   rankParticipants,
   type RankableParticipant,
+  type RankedParticipant,
 } from "@/features/rankings/lib";
 import { predictionSchema, userSchema } from "@/schemas";
 import type { Match, RankingEntry } from "@/types";
@@ -78,21 +79,38 @@ type Stage = Match["stage"];
  * do ranking, e contagem de acertos EXATOS (`status === "correct"`) para
  * aproveitamento/streak/distribuição (D2/R3/R4). `partial` soma só ao primeiro.
  */
+/** Contagem por tipo de acerto num escopo (Tela 01). winner/draw = `partial` (5). */
+interface ScopeCounts {
+  points: number;
+  correct: number; // exatos (10)
+  winner: number; // acertou vencedor sem placar (partial, palpite ≠ empate)
+  draw: number; // acertou empate sem placar (partial, palpite = empate)
+  wrong: number;
+}
+
 interface UserAgg {
   pointsGeral: number; // ponderado (5/10) — ordena o ranking geral
   correctGeral: number; // exatos — alimenta accuracy/totalCorrect/distribution
+  winnerGeral: number; // vencedor sem placar (5) — Tela 01
+  drawGeral: number; // empate sem placar (5) — Tela 01
   wrongGeral: number;
   correctByStage: Partial<Record<Stage, number>>; // contagem de EXATOS por fase
-  byStageScope: Map<RankingStageScope, { points: number; correct: number; wrong: number }>;
-  byGroup: Map<string, { points: number; correct: number; wrong: number }>;
+  byStageScope: Map<RankingStageScope, ScopeCounts>;
+  byGroup: Map<string, ScopeCounts>;
   firstPredictionAt: string | undefined;
   finishedPreds: Array<{ kickoffAt: string; correct: boolean }>;
+}
+
+function emptyScopeCounts(): ScopeCounts {
+  return { points: 0, correct: 0, winner: 0, draw: 0, wrong: 0 };
 }
 
 function emptyAgg(): UserAgg {
   return {
     pointsGeral: 0,
     correctGeral: 0,
+    winnerGeral: 0,
+    drawGeral: 0,
     wrongGeral: 0,
     correctByStage: {},
     byStageScope: new Map(),
@@ -205,11 +223,16 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
 
       const { status, points } = scorePrediction(pred, match);
       const correct = status === "correct"; // EXATO (10). `partial` (5) NÃO é correct.
+      // `partial` (5): vencedor sem placar vs empate sem placar — split pelo PALPITE.
+      const isWinner = status === "partial" && pred.homeScore !== pred.awayScore;
+      const isDraw = status === "partial" && pred.homeScore === pred.awayScore;
       agg.finishedPreds.push({ kickoffAt: match.kickoffAt, correct });
 
       // Pontos PONDERADOS (5/10) somam ao escopo; acertos EXATOS contam à parte.
       agg.pointsGeral += points;
       if (correct) agg.correctGeral += 1;
+      if (isWinner) agg.winnerGeral += 1;
+      if (isDraw) agg.drawGeral += 1;
       if (status === "wrong") agg.wrongGeral += 1;
       // correctByStage = contagem de EXATOS por fase (D2); `partial` não entra.
       if (correct) {
@@ -218,17 +241,21 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
 
       if ((RANKING_STAGE_SCOPES as readonly string[]).includes(match.stage)) {
         const s = match.stage as RankingStageScope;
-        const cur = agg.byStageScope.get(s) ?? { points: 0, correct: 0, wrong: 0 };
+        const cur = agg.byStageScope.get(s) ?? emptyScopeCounts();
         cur.points += points;
         if (correct) cur.correct += 1;
+        if (isWinner) cur.winner += 1;
+        if (isDraw) cur.draw += 1;
         if (status === "wrong") cur.wrong += 1;
         agg.byStageScope.set(s, cur);
       }
 
       if (match.stage === "grupos" && match.groupId) {
-        const cur = agg.byGroup.get(match.groupId) ?? { points: 0, correct: 0, wrong: 0 };
+        const cur = agg.byGroup.get(match.groupId) ?? emptyScopeCounts();
         cur.points += points;
         if (correct) cur.correct += 1;
+        if (isWinner) cur.winner += 1;
+        if (isDraw) cur.draw += 1;
         if (status === "wrong") cur.wrong += 1;
         agg.byGroup.set(match.groupId, cur);
       }
@@ -238,7 +265,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   }
 
   const userByUid = new Map(approved.map((u) => [u.uid, u]));
-  const toEntry = (r: { uid: string; position: number; points: number; wrong: number; accuracy: number }): RankingEntry => {
+  const toEntry = (r: RankedParticipant): RankingEntry => {
     const u = userByUid.get(r.uid)!;
     return {
       uid: r.uid,
@@ -246,6 +273,11 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       name: u.name,
       position: r.position,
       points: r.points,
+      // Decomposição dos acertos (Tela 01). Default 0 — participante sem palpites
+      // no escopo grava 0, mantendo a entry consistente p/ a UI.
+      correct: r.correct ?? 0,
+      winner: r.winner ?? 0,
+      draw: r.draw ?? 0,
       wrong: r.wrong,
       accuracy: r.accuracy,
       // TASK-05: foto real (PRD-06). Incluída só quando o usuário tem avatar; o
@@ -258,7 +290,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
    * Monta as entries de um doc de ranking a partir dos participantes já rankeados
    * (ordenados por posição) e aplica o orçamento de avatares por documento (TASK-05).
    */
-  const toBudgetedEntries = (ranked: Array<{ uid: string; position: number; points: number; wrong: number; accuracy: number }>): RankingEntry[] =>
+  const toBudgetedEntries = (ranked: RankedParticipant[]): RankingEntry[] =>
     applyAvatarBudget(ranked.map(toEntry));
 
   const nowIso = new Date().toISOString();
@@ -272,6 +304,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       points: a.pointsGeral, // ponderado (ordena o ranking)
       accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
       wrong: a.wrongGeral,
+      correct: a.correctGeral,
+      winner: a.winnerGeral,
+      draw: a.drawGeral,
       firstPredictionAt: a.firstPredictionAt,
     };
   });
@@ -327,12 +362,15 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   for (const scope of RANKING_STAGE_SCOPES) {
     const denom = finishedByStage.get(scope) ?? 0;
     const participants: RankableParticipant[] = approved.map((u) => {
-      const a = aggByUid.get(u.uid)!.byStageScope.get(scope) ?? { points: 0, correct: 0, wrong: 0 };
+      const a = aggByUid.get(u.uid)!.byStageScope.get(scope) ?? emptyScopeCounts();
       return {
         uid: u.uid,
         points: a.points, // ponderado
         accuracy: computeAccuracy(a.correct, denom), // exatos
         wrong: a.wrong,
+        correct: a.correct,
+        winner: a.winner,
+        draw: a.draw,
         firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
       };
     });
@@ -350,12 +388,15 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   let groupsWritten = 0;
   for (const [groupId, denom] of finishedByGroup) {
     const participants: RankableParticipant[] = approved.map((u) => {
-      const a = aggByUid.get(u.uid)!.byGroup.get(groupId) ?? { points: 0, correct: 0, wrong: 0 };
+      const a = aggByUid.get(u.uid)!.byGroup.get(groupId) ?? emptyScopeCounts();
       return {
         uid: u.uid,
         points: a.points, // ponderado
         accuracy: computeAccuracy(a.correct, denom), // exatos
         wrong: a.wrong,
+        correct: a.correct,
+        winner: a.winner,
+        draw: a.draw,
         firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
       };
     });
@@ -407,6 +448,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       {
         uid: u.uid,
         totalCorrect: a.correctGeral, // EXATOS (não pontos ponderados)
+        totalPartial: a.winnerGeral + a.drawGeral, // parciais (vencedor + empate)
         totalWrong: a.wrongGeral,
         accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
         longestStreak: longestStreak(a.finishedPreds),
@@ -529,6 +571,8 @@ export async function recalcPoolRanking(
   const participants: RankableParticipant[] = members.map((u) => {
     let points = 0;
     let correct = 0; // exatos — alimenta o aproveitamento
+    let winner = 0; // acertou vencedor sem placar (5)
+    let draw = 0; // acertou empate sem placar (5)
     let wrong = 0;
     let firstPredictionAt: string | undefined;
     for (const pred of predsByUid.get(u.uid) ?? []) {
@@ -543,13 +587,19 @@ export async function recalcPoolRanking(
       const scored = scorePrediction(pred, match);
       points += scored.points; // ponderado (5/10)
       if (scored.status === "correct") correct += 1; // EXATO
-      if (scored.status === "wrong") wrong += 1;
+      else if (scored.status === "partial") {
+        if (pred.homeScore === pred.awayScore) draw += 1;
+        else winner += 1;
+      } else if (scored.status === "wrong") wrong += 1;
     }
     return {
       uid: u.uid,
       points,
       accuracy: computeAccuracy(correct, finishedGeral),
       wrong,
+      correct,
+      winner,
+      draw,
       firstPredictionAt,
     };
   });
@@ -565,6 +615,9 @@ export async function recalcPoolRanking(
         name: u.name,
         position: r.position,
         points: r.points,
+        correct: r.correct ?? 0,
+        winner: r.winner ?? 0,
+        draw: r.draw ?? 0,
         wrong: r.wrong,
         accuracy: r.accuracy,
         ...(u.avatarUrl !== undefined ? { avatarUrl: u.avatarUrl } : {}),

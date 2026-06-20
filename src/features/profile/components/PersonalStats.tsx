@@ -67,10 +67,14 @@ function PopulatedStats({
   total: number;
   statistics: Statistics;
 }): JSX.Element {
-  // Regra binária (A1): pontos === acertos exatos. "Acerto Vencedor" não existe.
+  // Pontos = total PONDERADO (placar exato 10, vencedor/empate 5). Acertos Exatos =
+  // só os placares cheios (totalCorrect) — distinto dos pontos.
   const points = entry.points;
+  const correct = statistics.totalCorrect;
+  const partial = statistics.totalPartial ?? 0; // parciais (vencedor/empate, 5)
   const wrong = statistics.totalWrong ?? 0;
-  const played = statistics.totalCorrect + wrong;
+  // Jogos jogados = exatos + parciais + erros (denominador real do aproveitamento).
+  const played = correct + partial + wrong;
   const accuracy = entry.accuracy ?? statistics.accuracy;
   const byStage = statistics.correctByStage ?? {};
   const maxStage = Math.max(
@@ -92,20 +96,20 @@ function PopulatedStats({
         </p>
       </div>
 
-      {/* Grid de métricas (binário) */}
+      {/* Grid de métricas (pontuação ponderada) */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Pontos" value={String(points)} icon={Trophy} />
-        <StatCard label="Acertos Exatos" value={String(points)} icon={Target} />
+        <StatCard label="Acertos Exatos" value={String(correct)} icon={Target} />
         <StatCard label="Erros" value={String(wrong)} icon={XCircle} />
         <StatCard
           label="Aproveitamento"
           value={`${accuracy}%`}
-          hint={`${statistics.totalCorrect} de ${played} jogos`}
+          hint={`${correct} de ${played} jogos`}
           icon={Percent}
         />
       </div>
       <p className="px-1 text-xs text-muted-foreground">
-        Pontuação por placar exato: cada acerto vale 1 ponto.
+        Placar exato vale 10 pontos. Acertar só o vencedor ou o empate vale 5.
       </p>
 
       {/* Desempenho por fase */}

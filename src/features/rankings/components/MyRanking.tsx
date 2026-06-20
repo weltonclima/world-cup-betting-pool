@@ -86,14 +86,19 @@ function PopulatedMyRanking({
   const rounds = roundsCount(geral);
   const average = averagePointsPerRound(entry.points, rounds);
 
-  // Pontos === Acertos (binário). Ver spec §6.1.
+  // Pontos = total PONDERADO (placar exato 10, vencedor/empate 5). Acertos =
+  // só os placares EXATOS (statistics.totalCorrect) — não confundir com pontos.
   const points = entry.points;
   const totalWrong = statistics.totalWrong;
   const errosValue = totalWrong === undefined ? "—" : String(totalWrong);
 
   const accuracy = entry.accuracy ?? statistics.accuracy;
   const correct = statistics.totalCorrect;
-  const playedGames = correct + (totalWrong ?? 0);
+  // Jogos jogados = exatos + PARCIAIS (vencedor/empate) + erros. Parciais entravam
+  // de fora antes (bug): aproveitamento conta só exatos, mas o denominador é todos
+  // os jogos apurados. totalPartial é opcional (retrocompat) → cai em 0.
+  const partial = statistics.totalPartial ?? 0;
+  const playedGames = correct + partial + (totalWrong ?? 0);
   const accuracyHint = `${correct} de ${playedGames} jogos`;
 
   const evolutionSummary =
@@ -111,8 +116,8 @@ function PopulatedMyRanking({
         <StatCard label="Pontos" value={String(points)} icon={Trophy} />
         <StatCard
           label="Acertos"
-          value={String(points)}
-          hint="Cada placar exato vale 1 ponto — pontos e acertos são o mesmo número."
+          value={String(correct)}
+          hint="Placares exatos (10 pts). Acertar só o vencedor ou empate vale 5."
           icon={Target}
         />
         <StatCard label="Erros" value={errosValue} icon={XCircle} />

@@ -211,6 +211,119 @@ describe("recalc — avatarUrl nas entries (TASK-05)", () => {
   });
 });
 
+// ── Decomposição A/V/E nas entries (fix Tela 01) ────────────────────────────
+/**
+ * Mock que serve usuários aprovados E predictions cruas (`predictions.get()`),
+ * capturando os payloads gravados. Exercita o scoring real do recalc geral.
+ */
+function makeScoringDb(
+  users: Array<Record<string, unknown>>,
+  preds: Array<Record<string, unknown>>,
+) {
+  const setPayloads = new Map<string, unknown>();
+  const collection = vi.fn((name: string) => {
+    if (name === "users") {
+      return {
+        where: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            docs: users.map((u) => ({ id: u["uid"], data: () => u })),
+          }),
+        }),
+        get: vi.fn().mockResolvedValue({ docs: [] }),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "predictions") {
+      return {
+        get: vi.fn().mockResolvedValue({
+          docs: preds.map((p, i) => ({ id: `p${i}`, data: () => p })),
+        }),
+        where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+        doc: vi.fn(),
+      };
+    }
+    return {
+      get: vi.fn().mockResolvedValue({ docs: [] }),
+      where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+      doc: vi.fn((id: string) => ({
+        get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
+        set: vi.fn(async (payload: unknown) => {
+          setPayloads.set(`${name}/${id}`, payload);
+        }),
+        ref: { delete: vi.fn() },
+      })),
+    };
+  });
+  return { db: { collection } as never, setPayloads };
+}
+
+describe("recalc — decomposição A/V/E (correct/winner/draw)", () => {
+  const match = (id: string, homeScore: number, awayScore: number) => ({
+    id,
+    status: "finished" as const,
+    homeScore,
+    awayScore,
+    stage: "grupos",
+    groupId: "A",
+    kickoffAt: "2026-06-11T13:00:00-06:00",
+  });
+  const pred = (matchId: string, homeScore: number, awayScore: number) => ({
+    uid: "u1",
+    matchId,
+    homeScore,
+    awayScore,
+  });
+
+  it("conta A=exato, V=vencedor-parcial, E=empate-parcial e ignora erro", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([
+      match("m1", 2, 0), // pred exato → A
+      match("m2", 2, 0), // pred 1-0: mesmo vencedor, placar errado → V
+      match("m3", 1, 1), // pred 2-2: empate previsto, placar errado → E
+      match("m4", 1, 0), // pred 0-1: vencedor errado → wrong
+    ] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1" })],
+      [
+        pred("m1", 2, 0),
+        pred("m2", 1, 0),
+        pred("m3", 2, 2),
+        pred("m4", 0, 1),
+      ],
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const geral = setPayloads.get("rankings/geral") as {
+      entries: Array<Record<string, unknown>>;
+    };
+    const e = geral.entries.find((x) => x["uid"] === "u1")!;
+    expect(e["correct"]).toBe(1); // A: placar exato (10)
+    expect(e["winner"]).toBe(1); // V: vencedor parcial (5)
+    expect(e["draw"]).toBe(1); // E: empate parcial (5)
+    expect(e["wrong"]).toBe(1);
+    expect(e["points"]).toBe(20); // 10 + 5 + 5 + 0
+
+    // statistics: totalPartial = V+E (parciais); totalCorrect = exatos.
+    const stats = setPayloads.get("statistics/u1") as Record<string, unknown>;
+    expect(stats["totalCorrect"]).toBe(1);
+    expect(stats["totalPartial"]).toBe(2); // 1 vencedor + 1 empate
+    expect(stats["totalWrong"]).toBe(1);
+  });
+
+  it("entry sem palpites grava A/V/E zerados", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", 2, 0)] as never);
+    const { db, setPayloads } = makeScoringDb([baseUser({ uid: "semPalpite" })], []);
+    await recalcRankingsBestEffort(db);
+    const geral = setPayloads.get("rankings/geral") as {
+      entries: Array<Record<string, unknown>>;
+    };
+    const e = geral.entries.find((x) => x["uid"] === "semPalpite")!;
+    expect(e["correct"]).toBe(0);
+    expect(e["winner"]).toBe(0);
+    expect(e["draw"]).toBe(0);
+  });
+});
+
 describe("recalc — doc de frescor (dirty-by-finish)", () => {
   it("grava rankings/_freshness com a assinatura dos finalizados", async () => {
     const finished = [

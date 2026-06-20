@@ -23,6 +23,8 @@ vi.mock("@/services", () => ({
 // Import por path direto p/ não cair no mock do barrel.
 import { GeneralRanking } from "@/features/rankings/components/GeneralRanking";
 
+// Contagens default A=4 V=3 E=2 (placar exato / vencedor / empate). Determinístico
+// → as assertions de A/V/E batem em todas as entries criadas pelo helper.
 function entry(
   uid: string,
   position: number,
@@ -37,9 +39,16 @@ function entry(
     position,
     points,
     accuracy: 50,
+    correct: 4,
+    winner: 3,
+    draw: 2,
     ...(avatarUrl !== undefined ? { avatarUrl } : {}),
   };
 }
+
+/** Frase a11y da decomposição A/V/E (igual ao hitLabel do componente). */
+const aveLabel = (a: number, v: number, e: number) =>
+  `${a} placares exatos, ${v} acertos de vencedor, ${e} acertos de empate`;
 
 const entries = [
   entry("u1", 1, 98, "Joao Silva"),
@@ -102,7 +111,7 @@ describe("GeneralRanking", () => {
     // a11y: aria-label preserva o nome completo.
     expect(
       screen.getByLabelText(
-        "1º lugar: Welton da Silva Lima, 98 pontos, 50% de aproveitamento",
+        `1º lugar: Welton da Silva Lima, 98 pontos, ${aveLabel(4, 3, 2)}`,
       ),
     ).toBeTruthy();
   });
@@ -141,16 +150,16 @@ describe("RankingPodium (TASK-06)", () => {
     expect(screen.getByText("3º")).toBeTruthy();
   });
 
-  it("expõe posição + nome + pontos + aproveitamento no aria-label do card", () => {
+  it("expõe posição + nome + pontos + decomposição A/V/E no aria-label do card", () => {
     render(<GeneralRanking />);
     expect(
       screen.getByLabelText(
-        "1º lugar: Joao Silva, 98 pontos, 50% de aproveitamento",
+        `1º lugar: Joao Silva, 98 pontos, ${aveLabel(4, 3, 2)}`,
       ),
     ).toBeTruthy();
     expect(
       screen.getByLabelText(
-        "2º lugar: Maria Souza, 95 pontos, 50% de aproveitamento",
+        `2º lugar: Maria Souza, 95 pontos, ${aveLabel(4, 3, 2)}`,
       ),
     ).toBeTruthy();
   });
@@ -180,10 +189,33 @@ describe("RankingPodium (TASK-06)", () => {
     expect(screen.getByText("Pedro L.")).toBeTruthy();
   });
 
-  it("exibe o aproveitamento no card do pódio", () => {
+  it("substitui o aproveitamento (%) pela decomposição A/V/E", () => {
     render(<GeneralRanking />);
-    // 3 cards do pódio + linhas #4/#5 também mostram 50%.
-    expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(3);
+    // % saiu da tela (pódio + linhas).
+    expect(screen.queryByText("50%")).toBeNull();
+    // role=img com a frase A/V/E só nas LINHAS (#4+); no pódio é decorativo
+    // (aria-hidden) pois o aria-label do card pai já inclui a frase.
+    const rows = entries.length - 3; // 3 vão pro pódio
+    expect(screen.getAllByLabelText(aveLabel(4, 3, 2)).length).toBe(rows);
+    // Letras A/V/E visíveis em TODAS as entries (pódio + linhas).
+    expect(screen.getAllByText("A").length).toBe(entries.length);
+    expect(screen.getAllByText("V").length).toBe(entries.length);
+    expect(screen.getAllByText("E").length).toBe(entries.length);
+  });
+
+  it("cai em A0 V0 E0 quando a entry não traz a decomposição (retrocompat)", () => {
+    // Entry no formato antigo: sem correct/winner/draw.
+    const legacy = [
+      { uid: "u1", nickname: "ana", name: "Ana", position: 1, points: 10 },
+    ];
+    usePoolRankingMock.mockReturnValue({
+      data: { scope: "geral", updatedAt: "x", entries: legacy },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<GeneralRanking />);
+    expect(screen.getByLabelText(`1º lugar: Ana, 10 pontos, ${aveLabel(0, 0, 0)}`)).toBeTruthy();
   });
 });
 
