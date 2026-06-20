@@ -42,6 +42,23 @@ import type { MatchWithId } from "@/types/matches";
 const FRESHNESS_DOC_ID = "_freshness";
 
 /**
+ * Versão do FORMATO persistido pelo recalc (entries de `rankings/*`, `statistics/*`,
+ * `pool_stats`). Faz par com a assinatura no gate de frescor: a assinatura detecta
+ * mudança de DADOS (novo placar finalizado); a versão detecta mudança de SHAPE
+ * (campos novos) num deploy que NÃO mexe em partida finalizada.
+ *
+ * Sem isso, um deploy que adiciona campos não invalida a assinatura → `ensureRankingsFresh`
+ * vira no-op → docs stale (sem o campo novo) seguem servidos → a UI cai em 0 (ex.: A/V/E
+ * no ranking, totalPartial no hero da Home). Bumpe esta constante ao mudar o shape: o
+ * próximo read força UM recalc que regrava tudo no formato novo, depois estabiliza.
+ *
+ * Histórico:
+ *  1 (implícito, docs sem o campo `version`) — formato base {uid,nickname,position,points,...}.
+ *  2 — + correct/winner/draw na entry (Tela 01) e totalPartial em statistics (commit 89eeca3).
+ */
+export const RECALC_VERSION = 2;
+
+/**
  * Assinatura determinística do conjunto de partidas FINALIZADAS, incluindo o
  * placar de cada uma. Muda quando um jogo novo finaliza (openfootball publica
  * `score.ft`) E também quando um placar já finalizado é corrigido (edição manual).
@@ -489,6 +506,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   writes.push(
     db.collection("rankings").doc(FRESHNESS_DOC_ID).set({
       signature: finishedSignature,
+      version: RECALC_VERSION, // marca o formato regravado (gate de shape, ver constante)
       updatedAt: nowIso,
     }),
   );
@@ -657,10 +675,12 @@ export async function recalcRankingsBestEffort(db: Firestore): Promise<void> {
  * publica um placar (`score.ft`) SEM edição manual (era o bug: o cold-start puro
  * deixava o ranking congelado após a 1ª população).
  *
- * Compara a assinatura dos finalizados atuais (`computeFinishedSignature`) com a
- * gravada no doc `rankings/_freshness` pelo último recalc:
- *  - doc ausente (cold start) OU assinatura divergente → recomputa tudo;
- *  - assinatura igual → no-op (pula a agregação cara; só pagou 1 fetch + 1 read).
+ * Compara a assinatura dos finalizados atuais (`computeFinishedSignature`) E a versão
+ * de formato (`RECALC_VERSION`) com o que foi gravado no doc `rankings/_freshness`
+ * pelo último recalc:
+ *  - doc ausente (cold start) OU assinatura divergente (placar novo) OU versão
+ *    divergente (deploy mudou o shape) → recomputa tudo;
+ *  - assinatura E versão iguais → no-op (pula a agregação cara; só pagou 1 fetch + 1 read).
  *
  * Best-effort: nunca lança. Falha lendo a fonte/Firestore → serve o que já existe.
  */
@@ -683,12 +703,18 @@ export async function ensureRankingsFresh(db: Firestore): Promise<void> {
     return;
   }
 
-  // Fresco só quando o doc existe E a assinatura bate — nada mudou desde o recalc.
-  if (freshSnap.exists && freshSnap.data()?.["signature"] === currentSignature) {
+  // Fresco só quando o doc existe, a assinatura bate (dados) E a versão bate (shape):
+  // nada mudou desde o recalc — nem placar novo, nem formato de saída. Docs gravados
+  // antes do campo `version` (formato 1) divergem de RECALC_VERSION → forçam 1 recalc.
+  const freshData = freshSnap.exists ? freshSnap.data() : undefined;
+  if (
+    freshData?.["signature"] === currentSignature &&
+    freshData?.["version"] === RECALC_VERSION
+  ) {
     return;
   }
 
-  // Cold start OU novo placar finalizado (openfootball/edição) → recomputa.
+  // Cold start OU novo placar finalizado (openfootball/edição) OU shape novo → recomputa.
   try {
     await recalcRankings(db);
   } catch (err) {

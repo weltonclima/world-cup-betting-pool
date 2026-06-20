@@ -23,6 +23,7 @@ import {
   computeFinishedSignature,
   ensureRankingsFresh,
   recalcRankingsBestEffort,
+  RECALC_VERSION as CURRENT_VERSION,
 } from "@/server/rankings/recalc";
 
 /**
@@ -60,9 +61,9 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("ensureRankingsFresh (dirty-by-finish)", () => {
-  it("assinatura bate → no-op (nada mudou desde o último recalc)", async () => {
+  it("assinatura E versão batem → no-op (nada mudou desde o último recalc)", async () => {
     const { db, writes } = makeDb({
-      fresh: { exists: true, data: () => ({ signature: EMPTY_SIG }) },
+      fresh: { exists: true, data: () => ({ signature: EMPTY_SIG, version: CURRENT_VERSION }) },
     });
     await ensureRankingsFresh(db);
     expect(getEffectiveMatchesMock).toHaveBeenCalledTimes(1); // só p/ a assinatura
@@ -78,7 +79,23 @@ describe("ensureRankingsFresh (dirty-by-finish)", () => {
 
   it("assinatura diverge (placar novo) → recalc", async () => {
     const { db, writes } = makeDb({
-      fresh: { exists: true, data: () => ({ signature: "stale-signature" }) },
+      fresh: { exists: true, data: () => ({ signature: "stale-signature", version: CURRENT_VERSION }) },
+    });
+    await ensureRankingsFresh(db);
+    expect(recalcRan(writes)).toBe(true);
+  });
+
+  it("assinatura bate mas SEM campo version (doc pré-deploy) → recalc (gate de shape)", async () => {
+    const { db, writes } = makeDb({
+      fresh: { exists: true, data: () => ({ signature: EMPTY_SIG }) },
+    });
+    await ensureRankingsFresh(db);
+    expect(recalcRan(writes)).toBe(true);
+  });
+
+  it("assinatura bate mas versão de formato diverge (deploy mudou shape) → recalc", async () => {
+    const { db, writes } = makeDb({
+      fresh: { exists: true, data: () => ({ signature: EMPTY_SIG, version: CURRENT_VERSION - 1 }) },
     });
     await ensureRankingsFresh(db);
     expect(recalcRan(writes)).toBe(true);
@@ -340,9 +357,13 @@ describe("recalc — doc de frescor (dirty-by-finish)", () => {
     getEffectiveMatchesMock.mockResolvedValue(finished);
     const { db, setPayloads } = makeUsersDb([baseUser({ uid: "u1" })]);
     await recalcRankingsBestEffort(db);
-    const fresh = setPayloads.get("rankings/_freshness") as { signature: string } | undefined;
+    const fresh = setPayloads.get("rankings/_freshness") as
+      | { signature: string; version: number }
+      | undefined;
     expect(fresh).toBeDefined();
     // Persistido === o que o guard recomputa ao ler → no-op enquanto nada mudar.
     expect(fresh!.signature).toBe(computeFinishedSignature(finished as never));
+    // Marca o formato regravado → guard só vira no-op com a MESMA versão de shape.
+    expect(fresh!.version).toBe(CURRENT_VERSION);
   });
 });
