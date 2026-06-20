@@ -15,6 +15,7 @@
  */
 
 import Link from "next/link";
+import { Lock } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -73,6 +74,13 @@ export interface GroupQuickFillProps {
   isLoading: boolean;
   isError: boolean;
   isSaving: boolean;
+  /**
+   * Bloqueio de palpites no nível do POOL do usuário (toggle do admin —
+   * pools/{groupId}.predictionsLocked). Diferente do lock per-match
+   * (item.isLocked, por kickoff): quando true, TODOS os jogos ficam travados
+   * e o "Salvar Grupo" é desabilitado. O servidor (batch route) também rejeita.
+   */
+  locked?: boolean;
   onRetry: () => void;
   onScoreChange: (
     matchId: string,
@@ -124,18 +132,22 @@ export function GroupQuickFill({
   isLoading,
   isError,
   isSaving,
+  locked = false,
   onRetry,
   onScoreChange,
   onSave,
 }: GroupQuickFillProps) {
   // Há ao menos um item preenchido (par completo) e desbloqueado?
-  const hasSavable = items.some(
-    (i) =>
-      !i.isLocked &&
-      i.currentScores !== undefined &&
-      Number.isFinite(i.currentScores.homeScore) &&
-      Number.isFinite(i.currentScores.awayScore),
-  );
+  // Com o pool bloqueado, nada é salvável (mesmo com pares completos no draft).
+  const hasSavable =
+    !locked &&
+    items.some(
+      (i) =>
+        !i.isLocked &&
+        i.currentScores !== undefined &&
+        Number.isFinite(i.currentScores.homeScore) &&
+        Number.isFinite(i.currentScores.awayScore),
+    );
 
   return (
     <div className="flex flex-col gap-4">
@@ -169,6 +181,19 @@ export function GroupQuickFill({
         </div>
       ) : (
         <>
+          {locked ? (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl border border-border bg-muted p-3 text-sm text-muted-foreground"
+            >
+              <Lock size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+              <span>
+                Os palpites deste grupo foram bloqueados pelo organizador. Você
+                pode ver seus palpites, mas não editá-los.
+              </span>
+            </div>
+          ) : null}
+
           <ul className="flex flex-col gap-2">
             {items.map((item) => (
               <li key={item.matchId}>
@@ -177,7 +202,7 @@ export function GroupQuickFill({
                   awayTeam={item.awayTeam}
                   homeScore={item.currentScores?.homeScore ?? null}
                   awayScore={item.currentScores?.awayScore ?? null}
-                  locked={item.isLocked}
+                  locked={item.isLocked || locked}
                   onHomeChange={(value) =>
                     onScoreChange(
                       item.matchId,
