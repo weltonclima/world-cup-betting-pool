@@ -19,6 +19,11 @@ export interface RankableParticipant {
   accuracy: number; // 0–100 (derivado de acertos exatos no escopo)
   wrong: number; // erros
   firstPredictionAt?: string; // ISO; ausente = sem palpites
+  // Decomposição dos acertos por tipo no escopo (Tela 01). Opcionais: não
+  // participam do desempate (já coberto por points/accuracy) — só carona até a entry.
+  correct?: number; // placares EXATOS (10 pts)
+  winner?: number; // acertou vencedor sem placar (5 pts)
+  draw?: number; // acertou empate sem placar (5 pts)
 }
 
 export interface RankedParticipant extends RankableParticipant {

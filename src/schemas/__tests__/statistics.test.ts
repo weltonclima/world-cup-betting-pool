@@ -159,6 +159,29 @@ describe("statistics", () => {
     ).toBe(false);
   });
 
+  // ── totalPartial (fix Tela 02 — denominador de jogos jogados) ─────────────
+  it("aceita statistics com totalPartial", () => {
+    expect(
+      statisticsSchema.safeParse({ ...valid, totalPartial: 6 }).success,
+    ).toBe(true);
+  });
+
+  it("aceita statistics sem totalPartial (compat retroativa)", () => {
+    expect(statisticsSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejeita totalPartial negativo", () => {
+    expect(
+      statisticsSchema.safeParse({ ...valid, totalPartial: -1 }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita totalPartial não inteiro", () => {
+    expect(
+      statisticsSchema.safeParse({ ...valid, totalPartial: 1.5 }).success,
+    ).toBe(false);
+  });
+
   // ── poolStatsSchema + distributionBucketSchema (TASK-01) ──────────────────
   it("faz parse de pool stats válido", () => {
     expect(poolStatsSchema.safeParse(validPoolStats).success).toBe(true);

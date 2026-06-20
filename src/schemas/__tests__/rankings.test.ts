@@ -150,6 +150,46 @@ describe("rankings", () => {
     >();
   });
 
+  // ── Decomposição de acertos correct/winner/draw (fix Tela 01) ─────────────
+  it("aceita entrada com correct/winner/draw", () => {
+    expect(
+      rankingEntrySchema.safeParse({
+        ...fullEntry,
+        correct: 4,
+        winner: 3,
+        draw: 2,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita entrada sem correct/winner/draw (retrocompat)", () => {
+    expect(rankingEntrySchema.safeParse(validEntry).success).toBe(true);
+  });
+
+  it.each(["correct", "winner", "draw"] as const)(
+    "rejeita %s negativo",
+    (field) => {
+      expect(
+        rankingEntrySchema.safeParse({ ...fullEntry, [field]: -1 }).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each(["correct", "winner", "draw"] as const)(
+    "rejeita %s não inteiro",
+    (field) => {
+      expect(
+        rankingEntrySchema.safeParse({ ...fullEntry, [field]: 1.5 }).success,
+      ).toBe(false);
+    },
+  );
+
+  it("expõe correct/winner/draw opcionais no tipo inferido", () => {
+    expectTypeOf<RankingEntry["correct"]>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RankingEntry["winner"]>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<RankingEntry["draw"]>().toEqualTypeOf<number | undefined>();
+  });
+
   // ── groupRankingSchema (TASK-01) ──────────────────────────────────────────
   it("faz parse de ranking por grupo válido", () => {
     expect(groupRankingSchema.safeParse(validGroupRanking).success).toBe(true);
