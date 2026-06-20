@@ -18,6 +18,8 @@ export {
   getPoolRanking,
   getRankingByScope,
   getGroupRanking,
+  getPoolRankingByScope,
+  getPoolGroupRanking,
   getUserRanking,
   getParticipantProfile,
   getPoolStats,

@@ -341,6 +341,80 @@ describe("recalc — decomposição A/V/E (correct/winner/draw)", () => {
   });
 });
 
+// ── Isolamento por pool na Tela 03 (fix vazamento entre pools) ──────────────
+/**
+ * Garante que fases e grupos da Copa ganham docs RECORTADOS por pool
+ * (`pool-{poolId}-{scope}`, `pool-{poolId}-grupo-{groupId}`) contendo só os membros
+ * daquele pool, enquanto os docs GLOBAIS seguem com todos — sem vazamento cruzado.
+ */
+describe("recalc — isolamento por pool (Tela 03)", () => {
+  const matchA = {
+    id: "mA",
+    status: "finished" as const,
+    homeScore: 2,
+    awayScore: 0,
+    stage: "grupos",
+    groupId: "A",
+    kickoffAt: "2026-06-11T13:00:00-06:00",
+  };
+  // u1 ∈ pool p1, u2 ∈ pool p2, u3 sem pool. Todos palpitam o MESMO jogo do grupo A.
+  const users = [
+    baseUser({ uid: "u1", groupId: "p1" }),
+    baseUser({ uid: "u2", groupId: "p2" }),
+    baseUser({ uid: "u3" }), // sem groupId → fora de qualquer pool
+  ];
+  const preds = [
+    { uid: "u1", matchId: "mA", homeScore: 2, awayScore: 0 }, // exato
+    { uid: "u2", matchId: "mA", homeScore: 1, awayScore: 0 }, // vencedor
+    { uid: "u3", matchId: "mA", homeScore: 0, awayScore: 1 }, // errado
+  ];
+  const uids = (payload: unknown) =>
+    (payload as { entries: Array<{ uid: string }> }).entries.map((e) => e.uid).sort();
+
+  it("grava docs de fase/grupo por pool só com membros do pool; global com todos", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([matchA] as never);
+    const { db, setPayloads } = makeScoringDb(users, preds);
+
+    await recalcRankingsBestEffort(db);
+
+    // Global: todos os 3 aprovados.
+    expect(uids(setPayloads.get("rankings/grupo-A"))).toEqual(["u1", "u2", "u3"]);
+    expect(uids(setPayloads.get("rankings/grupos"))).toEqual(["u1", "u2", "u3"]);
+
+    // Pool p1: só u1. Pool p2: só u2. Sem vazamento cruzado.
+    expect(uids(setPayloads.get("rankings/pool-p1-grupo-A"))).toEqual(["u1"]);
+    expect(uids(setPayloads.get("rankings/pool-p2-grupo-A"))).toEqual(["u2"]);
+    expect(uids(setPayloads.get("rankings/pool-p1-grupos"))).toEqual(["u1"]);
+    expect(uids(setPayloads.get("rankings/pool-p2-grupos"))).toEqual(["u2"]);
+  });
+
+  it("usuário sem pool não gera doc de pool próprio (só entra no global)", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([matchA] as never);
+    const { db, setPayloads } = makeScoringDb(users, preds);
+
+    await recalcRankingsBestEffort(db);
+
+    // u3 não tem pool → nenhum doc `pool-...` o referencia.
+    const poolDocPaths = [...setPayloads.keys()].filter((k) => k.startsWith("rankings/pool-"));
+    for (const path of poolDocPaths) {
+      expect(uids(setPayloads.get(path))).not.toContain("u3");
+    }
+  });
+
+  it("membro de pool é RE-RANKEADO em posição 1 dentro do próprio pool", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([matchA] as never);
+    const { db, setPayloads } = makeScoringDb(users, preds);
+
+    await recalcRankingsBestEffort(db);
+
+    // u2 é #2 no global (atrás de u1, exato), mas #1 isolado no seu pool p2.
+    const poolP2 = setPayloads.get("rankings/pool-p2-grupo-A") as {
+      entries: Array<{ uid: string; position: number }>;
+    };
+    expect(poolP2.entries.find((e) => e.uid === "u2")?.position).toBe(1);
+  });
+});
+
 describe("recalc — doc de frescor (dirty-by-finish)", () => {
   it("grava rankings/_freshness com a assinatura dos finalizados", async () => {
     const finished = [

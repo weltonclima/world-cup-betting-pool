@@ -99,6 +99,45 @@ export async function getGroupRanking(
   return groupRankingSchema.parse(snapshot.data());
 }
 
+/**
+ * Ranking de UMA FASE (uma das 5) recortado ao pool do usuário logado (PRD-09,
+ * Tela 03). Lê via `GET /api/rankings/pool/{scope}` — o servidor resolve o pool
+ * pela sessão e serve `rankings/pool-{groupId}-{scope}` (re-rankeado só com membros
+ * do pool). O client NUNCA passa o pool. Usuário sem pool → `null`. Status não-OK
+ * propaga como erro (React Query trata isError).
+ */
+export async function getPoolRankingByScope(
+  scope: RankingScope,
+): Promise<Ranking | null> {
+  const res = await fetch(`/api/rankings/pool/${scope}`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Falha ao carregar ranking da fase (${res.status}).`);
+  }
+  const json: unknown = await res.json();
+  if (json === null) return null;
+  return rankingSchema.parse(json);
+}
+
+/**
+ * Ranking de UM GRUPO da Copa (A–L) recortado ao pool do usuário logado (PRD-09,
+ * Tela 03). Lê via `GET /api/rankings/pool/grupo/{groupId}` — o servidor resolve o
+ * pool pela sessão e serve `rankings/pool-{poolId}-grupo-{groupId}`. O client passa
+ * só o grupo da Copa, NUNCA o pool. Usuário sem pool → `null`.
+ */
+export async function getPoolGroupRanking(
+  groupId: string,
+): Promise<GroupRanking | null> {
+  const res = await fetch(`/api/rankings/pool/grupo/${groupId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Falha ao carregar ranking do grupo (${res.status}).`);
+  }
+  const json: unknown = await res.json();
+  if (json === null) return null;
+  return groupRankingSchema.parse(json);
+}
+
 /** Linha do usuário no ranking geral + total de participantes (Tela 02). */
 export interface UserRankingResult {
   entry: RankingEntry;

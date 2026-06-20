@@ -12,7 +12,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { useRanking, useGroupRanking } from "@/features/rankings";
+import { usePoolRankingByScope, useGroupRanking } from "@/features/rankings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,7 +130,7 @@ function StageRankingCard({
   label: string;
   Icon: LucideIcon;
 }): JSX.Element {
-  const { data, isLoading, isError, refetch } = useRanking(scope);
+  const { data, isLoading, isError, refetch } = usePoolRankingByScope(scope);
   const currentUid = useAuth().firebaseUser?.uid;
 
   const entry = data?.entries.find((e) => e.uid === currentUid);
