@@ -34,7 +34,10 @@ Two axes: **status** (`pending|approved|blocked`) + **role** (`participant|group
 Separate package (own `package.json`, `tsconfig`, `vitest`). Triggers:
 - `promoteFirstAdmin` — `onCreate users/{uid}`: first user → admin.
 - `syncRoleClaimOnUserUpdate` — `onUpdate users/{uid}`: sync `role` custom claim.
-- **Removed:** old Copa→Firestore sync (`syncTeams` callable + `scheduledSync` cron). Copa data now via Route Handlers + cache. Ranking recalc cron (daily 02:00) planned to return without reintroducing matches/teams writes.
+- **Removed:** old Copa→Firestore sync (`syncTeams` callable + `scheduledSync` cron). Copa data now via Route Handlers + cache.
+
+## GitHub Actions cron (PRD-15)
+- `.github/workflows/score-cron.yml` — agendado (~30min), `POST /api/predictions/score` com header `x-cron-secret` (secret `SCORE_SECRET`). Não usa Firebase; é externo ao Spark tier. Dispara pipeline scoring → recalc → notificações automaticamente. `SCORE_SECRET` e `RANKINGS_SECRET` já suportados no código (`src/app/api/_lib/secret.ts`); precisam ser configurados nos secrets do repo.
 
 ## Deploy (npm scripts)
 - `deploy:hosting`, `deploy:functions`, `deploy:rules` (firestore:rules,indexes), `deploy:all` — all target `world-cup-betting-pool-8e93c`. SSR runtime served by App Hosting.

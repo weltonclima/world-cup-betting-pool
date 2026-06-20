@@ -62,7 +62,6 @@ describe("notificationPreferences", () => {
       system: true,
       games: true,
       ranking: true,
-      pool: true,
     });
   });
 
@@ -77,7 +76,7 @@ describe("notificationPreferences", () => {
       userId: "u1",
       system: true,
       games: true,
-      ranking: true,
+      // ranking ausente
     });
     expect(r.success).toBe(false);
   });

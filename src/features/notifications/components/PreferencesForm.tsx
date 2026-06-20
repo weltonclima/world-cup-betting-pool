@@ -4,7 +4,6 @@ import { useEffect, type JSX } from "react";
 import { useForm } from "react-hook-form";
 import {
   CalendarClock,
-  Flag,
   Info,
   ShieldCheck,
   Trophy,
@@ -48,12 +47,6 @@ const CATEGORIES: {
     description: "Notificações sobre atualizações e mudanças de posição.",
     icon: Trophy,
   },
-  {
-    key: "pool",
-    label: "Bolão",
-    description: "Notificações sobre fases e regras do bolão.",
-    icon: Flag,
-  },
 ];
 
 /** Tela 03 — Preferências de Notificação (PRD08-03). */
@@ -67,7 +60,6 @@ export function PreferencesForm(): JSX.Element {
           system: query.data.system,
           games: query.data.games,
           ranking: query.data.ranking,
-          pool: query.data.pool,
         }
       : undefined,
   });
@@ -79,7 +71,6 @@ export function PreferencesForm(): JSX.Element {
         system: query.data.system,
         games: query.data.games,
         ranking: query.data.ranking,
-        pool: query.data.pool,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -35,3 +35,4 @@ ai/spec/
 ai/ui-spec/
 .vscode/launch.json
 .claude/settings.local.json
+EMS/

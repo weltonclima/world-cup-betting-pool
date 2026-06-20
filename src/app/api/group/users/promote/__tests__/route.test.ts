@@ -14,9 +14,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeMock, getFirestoreMock } = vi.hoisted(() => ({
+const { authorizeMock, getFirestoreMock, writeNotificationsMock } = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   getFirestoreMock: vi.fn(),
+  writeNotificationsMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -24,6 +25,11 @@ vi.mock("@/app/api/group/_authorize", () => ({
   authorizeGroupAdminOfPool: authorizeMock,
 }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
+// `notifyPromotion` REAL (valida a copy S5); `writeNotifications` espiada.
+vi.mock("@/server/notifications", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/notifications")>();
+  return { ...actual, writeNotifications: writeNotificationsMock };
+});
 
 import { NextResponse } from "next/server";
 
@@ -152,5 +158,31 @@ describe("POST /api/group/users/promote", () => {
     expect(calls.some((p) => p["adminId"] === "u2")).toBe(true);
     expect(calls.some((p) => p["role"] === "group_admin")).toBe(true);
     expect(calls.some((p) => p["role"] === "participant")).toBe(true);
+  });
+
+  it("200 notifica o promovido `system` com o nome do pool (S5)", async () => {
+    mockDb({
+      poolData: pool({ name: "Bolão FC" }),
+      target: { status: "approved", groupId: "pool-1", role: "participant" },
+      oldAdmin: { role: "group_admin" },
+    });
+    const res = await POST(makeReq({ body: okBody }));
+    expect(res.status).toBe(200);
+    expect(writeNotificationsMock).toHaveBeenCalledTimes(1);
+    const items = writeNotificationsMock.mock.calls[0]![1] as Record<string, unknown>[];
+    const notif = items[0]!;
+    expect(notif["userId"]).toBe("u2");
+    expect(notif["type"]).toBe("system");
+    expect(notif["message"]).toContain("Bolão FC");
+  });
+
+  it("best-effort: falha da notificação NÃO derruba a promoção (200)", async () => {
+    mockDb({
+      target: { status: "approved", groupId: "pool-1", role: "participant" },
+      oldAdmin: { role: "group_admin" },
+    });
+    writeNotificationsMock.mockRejectedValueOnce(new Error("admin sdk down"));
+    const res = await POST(makeReq({ body: okBody }));
+    expect(res.status).toBe(200);
   });
 });

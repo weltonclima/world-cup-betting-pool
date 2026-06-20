@@ -1,6 +1,5 @@
 import {
   CalendarClock,
-  Flag,
   ShieldCheck,
   Trophy,
   type LucideIcon,
@@ -20,7 +19,6 @@ export const NOTIFICATION_META: Record<NotificationType, NotificationMeta> = {
   system: { label: "Sistema", icon: ShieldCheck },
   games: { label: "Jogos", icon: CalendarClock },
   ranking: { label: "Ranking", icon: Trophy },
-  pool: { label: "Bolão", icon: Flag },
 };
 
 /** Ação contextual da tela de detalhe (PRD08-02), conforme o tipo. */

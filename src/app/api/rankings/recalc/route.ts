@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 import { recalcRankings } from "@/server/rankings/recalc";
+import { notifyRankingUps } from "@/server/notifications";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
 import { safeSecretEqual } from "../../_lib/secret";
 
@@ -55,7 +56,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // ─── 2. Recálculo (fonte de dados pode lançar → 502/504) ───────────────────
   try {
     const summary = await recalcRankings(db);
-    return NextResponse.json(summary, { status: 200 });
+    // TASK-05: disparo best-effort das notificações `ranking` (subida/pódio). Este
+    // é o caminho automático (cron → /score → chainRecalc → este route). Nunca lança
+    // (try/catch interno) — não expõe os deltas na resposta (payload limpo).
+    await notifyRankingUps(db, summary.deltas, new Date());
+    const { deltas: _deltas, ...rest } = summary;
+    return NextResponse.json(rest, { status: 200 });
   } catch (err) {
     return copaDataErrorResponse(err);
   }

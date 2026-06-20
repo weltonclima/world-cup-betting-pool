@@ -62,14 +62,22 @@ export async function listNotifications(
         limit(MAX_NOTIFICATIONS),
       );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => notificationSchema.parse(d.data()));
+  // Descarta docs inválidos (ex.: legado `type: "pool"`, removido em PRD-15)
+  // em vez de quebrar a lista inteira.
+  return snapshot.docs.flatMap((d) => {
+    const parsed = notificationSchema.safeParse(d.data());
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 /** Busca uma notificação por id; `null` se não existir. */
 export async function getNotification(id: string): Promise<Notification | null> {
   const snap = await getDoc(doc(firestore, NOTIFICATIONS, id));
   if (!snap.exists()) return null;
-  return notificationSchema.parse(snap.data());
+  // Doc legado/órfão (ex.: `type: "pool"`) → trata como ausente em vez de
+  // quebrar a tela de detalhe (mesma tolerância de `listNotifications`).
+  const parsed = notificationSchema.safeParse(snap.data());
+  return parsed.success ? parsed.data : null;
 }
 
 /** Marca uma notificação como lida. */
@@ -120,7 +128,17 @@ export async function getPreferences(
 ): Promise<NotificationPreferences> {
   const snap = await getDoc(doc(firestore, PREFERENCES, uid));
   if (!snap.exists()) return defaultPreferences(uid);
-  return notificationPreferencesSchema.parse(snap.data());
+  // Doc legado pode trazer o campo `pool` (removido em PRD-15). Schema é
+  // `.strict()` → parse do doc cru falharia. Reprojeta só as chaves conhecidas
+  // para preservar os opt-outs reais do usuário (não resetar tudo p/ on).
+  const raw = snap.data() as Record<string, unknown>;
+  const parsed = notificationPreferencesSchema.safeParse({
+    userId: raw.userId,
+    system: raw.system,
+    games: raw.games,
+    ranking: raw.ranking,
+  });
+  return parsed.success ? parsed.data : defaultPreferences(uid);
 }
 
 /** Grava (merge) as preferências do usuário. */

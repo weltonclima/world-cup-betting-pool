@@ -10,7 +10,6 @@ export const notificationPreferencesSchema = z
     system: z.boolean(),
     games: z.boolean(),
     ranking: z.boolean(),
-    pool: z.boolean(),
   })
   .strict();
 
@@ -19,7 +18,6 @@ export const notificationPreferencesInputSchema = z.object({
   system: z.boolean(),
   games: z.boolean(),
   ranking: z.boolean(),
-  pool: z.boolean(),
 });
 
 export type NotificationPreferences = z.infer<
@@ -31,5 +29,5 @@ export type NotificationPreferencesInput = z.infer<
 
 /** Preferências padrão (todas as categorias habilitadas) quando o doc não existe. */
 export function defaultPreferences(userId: string): NotificationPreferences {
-  return { userId, system: true, games: true, ranking: true, pool: true };
+  return { userId, system: true, games: true, ranking: true };
 }
