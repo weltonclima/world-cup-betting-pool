@@ -2,13 +2,15 @@
 
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { getGroupRanking } from "@/services";
+import { getPoolGroupRanking } from "@/services";
 import type { GroupRanking } from "@/types";
 
 import { rankingKeys } from "./rankingKeys";
 
 /**
- * Ranking de um grupo individual (A–L) (TASK-05).
+ * Ranking de um grupo da Copa (A–L) recortado ao pool do usuário (PRD-09, Tela 03
+ * "Por Grupo"). O servidor resolve o pool pela sessão e re-rankeia só os membros do
+ * pool naquele grupo — antes lia o doc global e vazava participantes de outros bolões.
  * Desabilitado enquanto `groupId` ausente; `groupId!` no queryFn é seguro sob `enabled`.
  */
 export function useGroupRanking(
@@ -16,7 +18,7 @@ export function useGroupRanking(
 ): UseQueryResult<GroupRanking | null> {
   return useQuery({
     queryKey: rankingKeys.group(groupId ?? "__none__"),
-    queryFn: () => getGroupRanking(groupId!),
+    queryFn: () => getPoolGroupRanking(groupId!),
     enabled: Boolean(groupId),
   });
 }

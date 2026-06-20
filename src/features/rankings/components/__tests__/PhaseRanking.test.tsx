@@ -4,14 +4,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
-const { useRankingMock, useGroupRankingMock } = vi.hoisted(() => ({
-  useRankingMock: vi.fn(),
+const { usePoolRankingByScopeMock, useGroupRankingMock } = vi.hoisted(() => ({
+  usePoolRankingByScopeMock: vi.fn(),
   useGroupRankingMock: vi.fn(),
 }));
 
 // Mocka o barrel só para os hooks (o componente os importa dele).
+// StageRankingCard usa usePoolRankingByScope (fase recortada ao pool — PRD-09 Tela 03).
 vi.mock("@/features/rankings", () => ({
-  useRanking: useRankingMock,
+  usePoolRankingByScope: usePoolRankingByScopeMock,
   useGroupRanking: useGroupRankingMock,
 }));
 vi.mock("@/hooks/useAuth", () => ({
@@ -59,7 +60,7 @@ const okQuery = (data: unknown) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   // Por padrão, cada fase tem a entry do usuário logado.
-  useRankingMock.mockImplementation((scope: string) =>
+  usePoolRankingByScopeMock.mockImplementation((scope: string) =>
     okQuery({
       scope,
       updatedAt: "2026-06-05T02:00:00Z",
@@ -91,7 +92,7 @@ describe("PhaseRanking — StageRankingCard", () => {
   });
 
   it("mostra placeholder quando o usuário não tem entry na fase", () => {
-    useRankingMock.mockImplementation((scope: string) =>
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
       okQuery({
         scope,
         updatedAt: "2026-06-05T02:00:00Z",

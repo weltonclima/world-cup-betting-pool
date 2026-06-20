@@ -42,6 +42,25 @@ import type { MatchWithId } from "@/types/matches";
 const FRESHNESS_DOC_ID = "_freshness";
 
 /**
+ * Versão do FORMATO persistido pelo recalc (entries de `rankings/*`, `statistics/*`,
+ * `pool_stats`). Faz par com a assinatura no gate de frescor: a assinatura detecta
+ * mudança de DADOS (novo placar finalizado); a versão detecta mudança de SHAPE
+ * (campos novos) num deploy que NÃO mexe em partida finalizada.
+ *
+ * Sem isso, um deploy que adiciona campos não invalida a assinatura → `ensureRankingsFresh`
+ * vira no-op → docs stale (sem o campo novo) seguem servidos → a UI cai em 0 (ex.: A/V/E
+ * no ranking, totalPartial no hero da Home). Bumpe esta constante ao mudar o shape: o
+ * próximo read força UM recalc que regrava tudo no formato novo, depois estabiliza.
+ *
+ * Histórico:
+ *  1 (implícito, docs sem o campo `version`) — formato base {uid,nickname,position,points,...}.
+ *  2 — + correct/winner/draw na entry (Tela 01) e totalPartial em statistics (commit 89eeca3).
+ *  3 — + docs por pool nas fases e grupos da Copa (`pool-{poolId}-{scope}`,
+ *      `pool-{poolId}-grupo-{groupId}`): isolamento multi-tenant da Tela 03 (PRD-09).
+ */
+export const RECALC_VERSION = 3;
+
+/**
  * Assinatura determinística do conjunto de partidas FINALIZADAS, incluindo o
  * placar de cada uma. Muda quando um jogo novo finaliza (openfootball publica
  * `score.ft`) E também quando um placar já finalizado é corrigido (edição manual).
@@ -348,22 +367,39 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
 
   // Limpa docs de pool ÓRFÃOS (HG-02): pools que perderam todos os membros — ex.:
   // usuário movido p/ outro pool, último membro removido/bloqueado. Sem isso,
-  // GET /api/rankings/pool serviria entries stale de um pool já vazio.
+  // as rotas de pool serviriam entries stale de um pool já vazio. Cobre TODAS as
+  // variantes de doc por pool (geral, fases e grupos da Copa — PRD-09 Tela 03):
+  // um doc `pool-*` é órfão quando NENHUM pool vivo o reivindica. Testar por
+  // pertencimento (e não por regex que extrai o poolId) evita ambiguidade quando
+  // o próprio poolId contém hífens.
+  const livePoolIds = [...poolMembers.keys()];
+  const ownedByLivePool = (docId: string): boolean =>
+    livePoolIds.some(
+      (p) =>
+        docId === `pool-${p}-geral` ||
+        (RANKING_STAGE_SCOPES as readonly string[]).some(
+          (s) => docId === `pool-${p}-${s}`,
+        ) ||
+        docId.startsWith(`pool-${p}-grupo-`),
+    );
   const existingRankingDocs = await db.collection("rankings").get();
   for (const d of existingRankingDocs.docs) {
-    const m = /^pool-(.+)-geral$/.exec(d.id);
-    if (m && m[1] && !poolMembers.has(m[1])) {
+    if (d.id.startsWith("pool-") && !ownedByLivePool(d.id)) {
       writes.push(d.ref.delete());
     }
   }
 
   // ─── 6. Rankings por fase (5) ──────────────────────────────────────────────
+  // Global (`rankings/{scope}`) + por pool (`pool-{poolId}-{scope}`, PRD-09 Tela 03):
+  // mesma pontuação por fase, RE-RANKEADA só entre os membros do pool. Sem o doc por
+  // pool a Tela 03 cairia no global e vazaria participantes de outros bolões.
   let scopesWritten = 1;
   for (const scope of RANKING_STAGE_SCOPES) {
     const denom = finishedByStage.get(scope) ?? 0;
-    const participants: RankableParticipant[] = approved.map((u) => {
+    const partByUid = new Map<string, RankableParticipant>();
+    for (const u of approved) {
       const a = aggByUid.get(u.uid)!.byStageScope.get(scope) ?? emptyScopeCounts();
-      return {
+      partByUid.set(u.uid, {
         uid: u.uid,
         points: a.points, // ponderado
         accuracy: computeAccuracy(a.correct, denom), // exatos
@@ -372,24 +408,38 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
         winner: a.winner,
         draw: a.draw,
         firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
-      };
-    });
+      });
+    }
     writes.push(
       db.collection("rankings").doc(scope).set({
         scope,
         updatedAt: nowIso,
-        entries: toBudgetedEntries(rankParticipants(participants)),
+        entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
       }),
     );
     scopesWritten += 1;
+
+    for (const [poolId, members] of poolMembers) {
+      const poolPart = members.map((m) => partByUid.get(m.uid)!);
+      writes.push(
+        db.collection("rankings").doc(`pool-${poolId}-${scope}`).set({
+          scope,
+          updatedAt: nowIso,
+          entries: toBudgetedEntries(rankParticipants(poolPart)),
+        }),
+      );
+    }
   }
 
-  // ─── 7. Rankings por grupo ─────────────────────────────────────────────────
+  // ─── 7. Rankings por grupo da Copa (A–L) ───────────────────────────────────
+  // Global (`rankings/grupo-{groupId}`) + por pool (`pool-{poolId}-grupo-{groupId}`,
+  // PRD-09 Tela 03): mesma pontuação no grupo, RE-RANKEADA só entre os membros do pool.
   let groupsWritten = 0;
   for (const [groupId, denom] of finishedByGroup) {
-    const participants: RankableParticipant[] = approved.map((u) => {
+    const partByUid = new Map<string, RankableParticipant>();
+    for (const u of approved) {
       const a = aggByUid.get(u.uid)!.byGroup.get(groupId) ?? emptyScopeCounts();
-      return {
+      partByUid.set(u.uid, {
         uid: u.uid,
         points: a.points, // ponderado
         accuracy: computeAccuracy(a.correct, denom), // exatos
@@ -398,16 +448,27 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
         winner: a.winner,
         draw: a.draw,
         firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
-      };
-    });
+      });
+    }
     writes.push(
       db.collection("rankings").doc(`grupo-${groupId}`).set({
         groupId,
         updatedAt: nowIso,
-        entries: toBudgetedEntries(rankParticipants(participants)),
+        entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
       }),
     );
     groupsWritten += 1;
+
+    for (const [poolId, members] of poolMembers) {
+      const poolPart = members.map((m) => partByUid.get(m.uid)!);
+      writes.push(
+        db.collection("rankings").doc(`pool-${poolId}-grupo-${groupId}`).set({
+          groupId,
+          updatedAt: nowIso,
+          entries: toBudgetedEntries(rankParticipants(poolPart)),
+        }),
+      );
+    }
   }
 
   // ─── 8. Statistics por usuário (com positionHistory) ───────────────────────
@@ -489,6 +550,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   writes.push(
     db.collection("rankings").doc(FRESHNESS_DOC_ID).set({
       signature: finishedSignature,
+      version: RECALC_VERSION, // marca o formato regravado (gate de shape, ver constante)
       updatedAt: nowIso,
     }),
   );
@@ -657,10 +719,12 @@ export async function recalcRankingsBestEffort(db: Firestore): Promise<void> {
  * publica um placar (`score.ft`) SEM edição manual (era o bug: o cold-start puro
  * deixava o ranking congelado após a 1ª população).
  *
- * Compara a assinatura dos finalizados atuais (`computeFinishedSignature`) com a
- * gravada no doc `rankings/_freshness` pelo último recalc:
- *  - doc ausente (cold start) OU assinatura divergente → recomputa tudo;
- *  - assinatura igual → no-op (pula a agregação cara; só pagou 1 fetch + 1 read).
+ * Compara a assinatura dos finalizados atuais (`computeFinishedSignature`) E a versão
+ * de formato (`RECALC_VERSION`) com o que foi gravado no doc `rankings/_freshness`
+ * pelo último recalc:
+ *  - doc ausente (cold start) OU assinatura divergente (placar novo) OU versão
+ *    divergente (deploy mudou o shape) → recomputa tudo;
+ *  - assinatura E versão iguais → no-op (pula a agregação cara; só pagou 1 fetch + 1 read).
  *
  * Best-effort: nunca lança. Falha lendo a fonte/Firestore → serve o que já existe.
  */
@@ -683,12 +747,18 @@ export async function ensureRankingsFresh(db: Firestore): Promise<void> {
     return;
   }
 
-  // Fresco só quando o doc existe E a assinatura bate — nada mudou desde o recalc.
-  if (freshSnap.exists && freshSnap.data()?.["signature"] === currentSignature) {
+  // Fresco só quando o doc existe, a assinatura bate (dados) E a versão bate (shape):
+  // nada mudou desde o recalc — nem placar novo, nem formato de saída. Docs gravados
+  // antes do campo `version` (formato 1) divergem de RECALC_VERSION → forçam 1 recalc.
+  const freshData = freshSnap.exists ? freshSnap.data() : undefined;
+  if (
+    freshData?.["signature"] === currentSignature &&
+    freshData?.["version"] === RECALC_VERSION
+  ) {
     return;
   }
 
-  // Cold start OU novo placar finalizado (openfootball/edição) → recomputa.
+  // Cold start OU novo placar finalizado (openfootball/edição) OU shape novo → recomputa.
   try {
     await recalcRankings(db);
   } catch (err) {

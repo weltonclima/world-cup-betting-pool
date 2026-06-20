@@ -8,7 +8,8 @@ export const rankingKeys = {
   all: () => ["ranking"] as const,
   scope: (scope: RankingScope) => ["ranking", "scope", scope] as const,
   pool: (groupId: string) => ["ranking", "pool", groupId] as const, // ranking fechado do pool (PRD-09)
-  group: (groupId: string) => ["ranking", "group", groupId] as const,
+  poolScope: (scope: RankingScope) => ["ranking", "pool-scope", scope] as const, // fase recortada ao pool (PRD-09 Tela 03)
+  group: (groupId: string) => ["ranking", "group", groupId] as const, // grupo da Copa recortado ao pool (PRD-09 Tela 03)
   user: (uid: string) => ["ranking", "user", uid] as const, // linha do usuário no geral (UserRankingResult)
   profile: (uid: string) => ["ranking", "profile", uid] as const, // statistics/{uid} (Statistics)
   // PRD-14: palpites do perfil; context "self" (Client SDK, todos os jogos) vs
