@@ -20,6 +20,7 @@ import {
   verifyResetCode,
   type SignUpInput,
 } from "@/services/auth";
+import { unregisterPush } from "@/features/push/registration";
 
 // --- Mocks de Firebase (sem rede/emulador), espelhando AuthProvider.test.tsx ---
 vi.mock("firebase/auth", () => ({
@@ -35,6 +36,12 @@ vi.mock("firebase/auth", () => ({
 vi.mock("firebase/firestore", () => ({
   doc: vi.fn(() => ({})),
   setDoc: vi.fn(),
+}));
+
+// Cleanup de push no signOut (web-push-pwa TASK-02): colaborador best-effort,
+// stubbado para não puxar firebase/messaging (client real) no teste de auth.
+vi.mock("@/features/push/registration", () => ({
+  unregisterPush: vi.fn(() => Promise.resolve()),
 }));
 
 // currentUser.getIdToken usado por signIn para criar o session cookie (TASK-09).
@@ -71,6 +78,7 @@ const setDocMock = vi.mocked(setDoc);
 const sendResetMock = vi.mocked(sendPasswordResetEmail);
 const verifyCodeMock = vi.mocked(verifyPasswordResetCode);
 const confirmResetMock = vi.mocked(confirmPasswordReset);
+const unregisterPushMock = vi.mocked(unregisterPush);
 
 // Usuário fake do Firebase Auth.
 const fakeUser = { uid: "uid-123" } as FirebaseUser;
@@ -284,6 +292,14 @@ describe("signOut", () => {
     expect(signOutMock).toHaveBeenCalledWith(
       expect.objectContaining({ __tag: "auth" }),
     );
+  });
+
+  it("dispara a limpeza do token de push (web-push-pwa TASK-02)", async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    await signOut();
+
+    expect(unregisterPushMock).toHaveBeenCalled();
   });
 });
 

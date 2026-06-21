@@ -9,12 +9,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
+import { useForegroundPush } from "@/features/push/hooks/useForegroundPush";
 
 /** Barra de topo fixa com identidade da aplicação. */
 export function Header() {
   const { role } = useAuth();
   const pathname = usePathname();
   const isAdminRoute = pathname.startsWith("/admin");
+  // Dedup de push em foreground (TASK-05): app aberto não duplica o sino+toast.
+  useForegroundPush();
 
   return (
     <header

@@ -137,15 +137,20 @@ export async function getPreferences(
     system: raw.system,
     games: raw.games,
     ranking: raw.ranking,
+    // pushEnabled (TASK-05): ausente em docs legados → schema aplica default false.
+    pushEnabled: raw.pushEnabled,
   });
   return parsed.success ? parsed.data : defaultPreferences(uid);
 }
 
-/** Grava (merge) as preferências do usuário. */
+/** Grava as preferências do usuário. */
 export async function updatePreferences(
   uid: string,
   prefs: NotificationPreferencesInput,
 ): Promise<void> {
-  const payload: NotificationPreferences = { userId: uid, ...prefs };
+  // Valida antes de gravar (defesa, igual a `createNotification`): o doc gravado
+  // sempre conforma ao schema `.strict()`, evitando chave estranha que faria o
+  // safeParse do gate server-side (push.ts) cair no default e ignorar a escolha.
+  const payload = notificationPreferencesSchema.parse({ userId: uid, ...prefs });
   await setDoc(doc(firestore, PREFERENCES, uid), payload);
 }

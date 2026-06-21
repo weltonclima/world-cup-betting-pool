@@ -176,6 +176,17 @@ service cloud.firestore {
       allow delete:         if false;
     }
 
+    // ---- fcm_tokens (web-push-pwa TASK-03): tokens de Web Push por device ----
+    // Metadado de entrega server-side. O cliente nunca lê nem escreve direto:
+    // registro/remoção passam pelo Route Handler /api/push/tokens (Admin SDK,
+    // que bypassa as Rules por design), e o envio (TASK-04) lê via Admin SDK.
+    // Sem caminho de leitura client → read/write negados (espelha
+    // `webauthn_challenge_jti`). Reabrir como `isOwner` só se a UI precisar
+    // listar devices (TASK-05/06).
+    match /fcm_tokens/{token} {
+      allow read, write: if false;
+    }
+
     // ---- webauthn_credentials (login biométrico, TASK-03) ----
     // Credencial de passkey. Leitura só do dono approved (lista/gestão em
     // TASK-06) ou admin; ESCRITA negada a todo cliente (incl. admin). A prova

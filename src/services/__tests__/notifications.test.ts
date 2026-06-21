@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe("getPreferences (tolerância a doc legado)", () => {
-  it("doc ausente → default de 3 categorias", async () => {
+  it("doc ausente → default de 3 categorias (push off)", async () => {
     getDocMock.mockResolvedValueOnce(snapMissing());
 
     const result = await getPreferences("u1");
@@ -78,7 +78,34 @@ describe("getPreferences (tolerância a doc legado)", () => {
       system: true,
       games: true,
       ranking: true,
+      pushEnabled: false,
     });
+  });
+
+  it("doc legado SEM pushEnabled → migração tolerante (pushEnabled false)", async () => {
+    getDocMock.mockResolvedValueOnce(
+      snapExists({ userId: "u1", system: true, games: false, ranking: true }),
+    );
+
+    const result = await getPreferences("u1");
+
+    expect(result).toMatchObject({ games: false, ranking: true, pushEnabled: false });
+  });
+
+  it("doc com pushEnabled=true → preserva o opt-in", async () => {
+    getDocMock.mockResolvedValueOnce(
+      snapExists({
+        userId: "u1",
+        system: true,
+        games: true,
+        ranking: true,
+        pushEnabled: true,
+      }),
+    );
+
+    const result = await getPreferences("u1");
+
+    expect(result.pushEnabled).toBe(true);
   });
 
   it("doc válido → retorna preferências do usuário", async () => {
@@ -114,6 +141,7 @@ describe("getPreferences (tolerância a doc legado)", () => {
       system: true,
       games: true,
       ranking: true,
+      pushEnabled: false,
     });
     expect(result).not.toHaveProperty("pool");
   });
@@ -136,6 +164,7 @@ describe("getPreferences (tolerância a doc legado)", () => {
       system: false,
       games: false,
       ranking: true,
+      pushEnabled: false,
     });
   });
 });

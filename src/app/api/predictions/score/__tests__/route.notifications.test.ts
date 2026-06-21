@@ -34,6 +34,7 @@ const {
   scorePredictionMock,
   fetchPreferencesMapMock,
   writeNotificationsMock,
+  sendPushForNotificationsMock,
   resolveTeamByCodeMock,
 } = vi.hoisted(() => ({
   getFirestoreMock: vi.fn(),
@@ -41,6 +42,7 @@ const {
   scorePredictionMock: vi.fn(),
   fetchPreferencesMapMock: vi.fn(),
   writeNotificationsMock: vi.fn(),
+  sendPushForNotificationsMock: vi.fn(),
   resolveTeamByCodeMock: vi.fn(),
 }));
 
@@ -87,6 +89,7 @@ vi.mock("@/server/notifications", async () => {
     ...actual,
     fetchPreferencesMap: fetchPreferencesMapMock,
     writeNotifications: writeNotificationsMock,
+    sendPushForNotifications: sendPushForNotificationsMock,
   };
 });
 
@@ -128,7 +131,14 @@ function prediction(over: Record<string, unknown> = {}) {
 }
 
 function prefs(over: Partial<NotificationPreferences> = {}): NotificationPreferences {
-  return { userId: "user-123", system: true, games: true, ranking: true, ...over };
+  return {
+    userId: "user-123",
+    system: true,
+    games: true,
+    ranking: true,
+    pushEnabled: false,
+    ...over,
+  };
 }
 
 /** Firestore mock: só a query predictions.where(matchId).get(). */
@@ -174,6 +184,12 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
     fetchAllMatchesMock.mockResolvedValue([MATCH]);
     fetchPreferencesMapMock.mockResolvedValue(new Map([["user-123", prefs()]]));
     writeNotificationsMock.mockResolvedValue(undefined);
+    sendPushForNotificationsMock.mockResolvedValue({
+      attempted: 0,
+      success: 0,
+      failure: 0,
+      pruned: 0,
+    });
     resolveTeamByCodeMock.mockImplementation((code: string) => {
       const names: Record<string, { name: string }> = {
         BRA: { name: "Brasil" },
@@ -270,6 +286,31 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
     await POST(postWithSecret());
     const items = writtenItems();
     expect(items[0]!.message).toContain("1A x Argentina");
+  });
+
+  it("TASK-07: push recebe os recém-criados retornados por writeNotifications (não os items crus)", async () => {
+    scorePredictionMock.mockReturnValue({ status: "correct", points: 10 });
+    setupFirestore([prediction()]);
+    // write devolve um subconjunto (idempotência sob cron resolvida no write).
+    const created = [
+      { id: "games-user-123-5001", userId: "user-123", type: "games", title: "t", message: "m" },
+    ] as NotificationCreate[];
+    writeNotificationsMock.mockResolvedValue(created);
+
+    await POST(postWithSecret());
+    expect(sendPushForNotificationsMock).toHaveBeenCalledTimes(1);
+    // push é alimentado pelo RETORNO do write, não pelo array original de items.
+    expect(sendPushForNotificationsMock.mock.calls[0]![0]).toBe(created);
+  });
+
+  it("TASK-07 re-run: writeNotifications retorna [] → push enviado com [] (sem repush)", async () => {
+    scorePredictionMock.mockReturnValue({ status: "correct", points: 10 });
+    setupFirestore([prediction()]);
+    writeNotificationsMock.mockResolvedValue([]); // re-run: doc já existia
+
+    await POST(postWithSecret());
+    expect(sendPushForNotificationsMock).toHaveBeenCalledTimes(1);
+    expect(sendPushForNotificationsMock.mock.calls[0]![0]).toEqual([]);
   });
 
   it("owner-targeting: palpite com editedBy ainda notifica prediction.uid", async () => {

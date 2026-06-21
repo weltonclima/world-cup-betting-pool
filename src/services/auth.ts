@@ -286,6 +286,16 @@ export async function signUp({
  * best-effort (não bloqueia o logout local).
  */
 export async function signOut(): Promise<void> {
+  // Limpeza do token de push (web-push-pwa TASK-02): remove no backend + revoga
+  // local, evitando push cruzada em device compartilhado. Best-effort (nunca
+  // lança) — não pode bloquear o logout.
+  //
+  // Import dinâmico DE PROPÓSITO: `registration` puxa `firebase/messaging` →
+  // `firebase/client` (código só-browser). Importá-lo no topo faria essa cadeia
+  // carregar sempre que `services/auth` fosse importado, quebrando o isolamento
+  // de testes que mockam apenas `@/firebase`. Carregamos só no logout real.
+  const { unregisterPush } = await import("@/features/push/registration");
+  await unregisterPush();
   await clearSessionCookie();
   // Limpa o throttle de renovação (TASK-02): nova sessão recomeça a janela.
   clearLastMintAt();

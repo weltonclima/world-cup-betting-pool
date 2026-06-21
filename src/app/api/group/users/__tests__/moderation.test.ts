@@ -15,13 +15,19 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeMock, getFirestoreMock, recalcBestEffortMock, writeNotificationsMock } =
-  vi.hoisted(() => ({
-    authorizeMock: vi.fn(),
-    getFirestoreMock: vi.fn(),
-    recalcBestEffortMock: vi.fn(),
-    writeNotificationsMock: vi.fn(),
-  }));
+const {
+  authorizeMock,
+  getFirestoreMock,
+  recalcBestEffortMock,
+  writeNotificationsMock,
+  sendPushForNotificationsMock,
+} = vi.hoisted(() => ({
+  authorizeMock: vi.fn(),
+  getFirestoreMock: vi.fn(),
+  recalcBestEffortMock: vi.fn(),
+  writeNotificationsMock: vi.fn(),
+  sendPushForNotificationsMock: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/app/api/group/_authorize", () => ({
@@ -35,7 +41,11 @@ vi.mock("@/server/rankings/recalc", () => ({
 // `writeNotifications` é espiada (TASK-03: notificação `system` server-side).
 vi.mock("@/server/notifications", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/notifications")>();
-  return { ...actual, writeNotifications: writeNotificationsMock };
+  return {
+    ...actual,
+    writeNotifications: writeNotificationsMock,
+    sendPushForNotifications: sendPushForNotificationsMock,
+  };
 });
 vi.mock("firebase-admin/firestore", () => ({
   FieldValue: { delete: () => "__delete__" },
@@ -91,6 +101,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   authorizeMock.mockResolvedValue({
     auth: { uid: "admin-1", groupId: "pool-1", role: "group_admin" },
+  });
+  sendPushForNotificationsMock.mockResolvedValue({
+    attempted: 0,
+    success: 0,
+    failure: 0,
+    pruned: 0,
   });
 });
 
@@ -207,6 +223,20 @@ describe("handleStatusModeration — notificação `system` (TASK-03)", () => {
       expect(notif["id"]).toBeUndefined(); // auto-id (sem ID determinístico)
     },
   );
+
+  it("TASK-07: auto-id sempre pusha — push recebe os recém-criados do write", async () => {
+    mockDb({ user: userDoc({ status: "pending" }) });
+    const created = [
+      { userId: "u2", type: "system", title: "Cadastro aprovado", message: "m" },
+    ] as Record<string, unknown>[];
+    writeNotificationsMock.mockResolvedValue(created);
+
+    const res = await handleStatusModeration(makeReq({ body: okBody }), "approve");
+    expect(res.status).toBe(200);
+    expect(sendPushForNotificationsMock).toHaveBeenCalledTimes(1);
+    // auto-id (sem ID determinístico) → write sempre o devolve → push sempre dispara.
+    expect(sendPushForNotificationsMock.mock.calls[0]![0]).toBe(created);
+  });
 
   it("best-effort: falha de writeNotifications NÃO derruba a moderação (200)", async () => {
     mockDb({ user: userDoc({ status: "pending" }) });

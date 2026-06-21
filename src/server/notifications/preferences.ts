@@ -50,13 +50,33 @@ export async function fetchPreferencesMap(
 }
 
 /**
- * Gate de preferência por tipo. `system` (moderação) sempre entrega — ignora o
- * toggle; `games`/`ranking` respeitam a escolha do usuário.
+ * Gate de preferência por tipo (in-app). `system` (moderação) sempre entrega —
+ * ignora o toggle; `games`/`ranking` respeitam a escolha do usuário.
  */
 export function shouldDeliver(
   type: NotificationType,
   prefs: NotificationPreferences,
 ): boolean {
+  if (type === "system") {
+    return true;
+  }
+  return prefs[type];
+}
+
+/**
+ * Gate de preferência por tipo para **push** (web-push-pwa TASK-05). Difere do
+ * in-app: o master switch `pushEnabled` governa TUDO — sem opt-in, nada de push.
+ * Com push ligado, `system` entrega sempre (gated só pelo master, espelhando que
+ * é crítico mas agora respeita o opt-out de push); `games`/`ranking` ainda
+ * respeitam o toggle por-tipo.
+ */
+export function shouldDeliverPush(
+  type: NotificationType,
+  prefs: NotificationPreferences,
+): boolean {
+  if (!prefs.pushEnabled) {
+    return false;
+  }
   if (type === "system") {
     return true;
   }

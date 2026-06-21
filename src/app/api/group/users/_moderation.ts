@@ -5,7 +5,11 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
-import { notifyModeration, writeNotifications } from "@/server/notifications";
+import {
+  notifyModeration,
+  sendPushForNotifications,
+  writeNotifications,
+} from "@/server/notifications";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
   canTransition,
@@ -84,7 +88,10 @@ async function notifyModerationBestEffort(
       );
       return;
     }
-    await writeNotifications(db, [notification], now);
+    // TASK-07: auto-id (sem ID determinístico) → sempre recém-criado → sempre
+    // pusha (block→unblock→block é repeat legítimo, não spam de cron).
+    const created = await writeNotifications(db, [notification], now);
+    await sendPushForNotifications(created, now);
   } catch (error) {
     console.error("[group/users] falha ao notificar moderação:", error);
   }

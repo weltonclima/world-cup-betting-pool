@@ -15,6 +15,7 @@ import {
   shouldDeliver,
   notifyScoreHit,
   writeNotifications,
+  sendPushForNotifications,
   type NotificationCreate,
 } from "@/server/notifications";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
@@ -67,7 +68,10 @@ async function notifyScoreHitsBestEffort(
       );
     }
 
-    await writeNotifications(db, items, now);
+    // TASK-07: writeNotifications retorna só os docs recém-criados; push apenas
+    // neles → re-run do cron não repusha (in-app já é idempotente por ID).
+    const created = await writeNotifications(db, items, now);
+    await sendPushForNotifications(created, now);
   } catch (err) {
     console.warn("[score] fan-out de notificações games falhou:", err);
   }

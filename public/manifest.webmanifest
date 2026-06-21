@@ -1,0 +1,17 @@
+{
+  "name": "Bolão dos Parças",
+  "short_name": "Bolão",
+  "description": "Prognósticos da Copa do Mundo 2026",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "theme_color": "#1f1f1f",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

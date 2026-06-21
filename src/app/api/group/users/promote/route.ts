@@ -5,7 +5,11 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
-import { notifyPromotion, writeNotifications } from "@/server/notifications";
+import {
+  notifyPromotion,
+  sendPushForNotifications,
+  writeNotifications,
+} from "@/server/notifications";
 import {
   isGroupAdminRole,
   isParticipantRole,
@@ -132,11 +136,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // S5 (PRD §6.2): notifica o promovido `system`, server-side, FORA da
     // transação. Best-effort — falha loga e não derruba a promoção já efetivada.
     try {
-      await writeNotifications(
-        db,
-        [notifyPromotion({ uid: newAdminId, poolName: updatedPool.name })],
-        new Date(updatedAt),
-      );
+      const now = new Date(updatedAt);
+      const notification = notifyPromotion({
+        uid: newAdminId,
+        poolName: updatedPool.name,
+      });
+      // TASK-07: auto-id (sem ID determinístico) → sempre recém-criado → sempre
+      // pusha (promote→demote→promote é repeat legítimo).
+      const created = await writeNotifications(db, [notification], now);
+      await sendPushForNotifications(created, now);
     } catch (error) {
       console.error("[group/users/promote] falha ao notificar promoção:", error);
     }

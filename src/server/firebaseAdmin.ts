@@ -11,6 +11,7 @@ import {
 } from "firebase-admin/app";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import { z } from "zod";
 
 /**
@@ -100,4 +101,9 @@ export function getAdminAuth(): Auth {
 /** `Firestore` do Admin SDK (acesso server-side ao banco). */
 export function getAdminFirestore(): Firestore {
   return getFirestore(getAdminApp());
+}
+
+/** `Messaging` do Admin SDK (Web Push via FCM — web-push-pwa TASK-04). */
+export function getAdminMessaging(): Messaging {
+  return getMessaging(getAdminApp());
 }

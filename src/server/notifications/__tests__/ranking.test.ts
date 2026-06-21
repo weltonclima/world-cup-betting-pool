@@ -92,8 +92,8 @@ describe("notifyRankingUps — filtro só-subida + baseline", () => {
   });
 });
 
-describe("notifyRankingUps — pódio vs subida comum", () => {
-  it("newPosition <= 3 usa copy de pódio", async () => {
+describe("notifyRankingUps — só top 3 (pódio)", () => {
+  it("subida PARA o top 3 (newPosition <= 3) → notifica com copy de pódio", async () => {
     fetchPreferencesMapMock.mockResolvedValue(
       prefsMap([["u1", defaultPreferences("u1")]]),
     );
@@ -106,7 +106,7 @@ describe("notifyRankingUps — pódio vs subida comum", () => {
     expect(items[0]!["title"]).toBe("Pódio!");
   });
 
-  it("newPosition > 3 usa copy de subida comum", async () => {
+  it("subida FORA do top 3 (newPosition > 3) → NÃO notifica", async () => {
     fetchPreferencesMapMock.mockResolvedValue(
       prefsMap([["u1", defaultPreferences("u1")]]),
     );
@@ -115,15 +115,32 @@ describe("notifyRankingUps — pódio vs subida comum", () => {
       [{ uid: "u1", previousPosition: 9, newPosition: 5 }],
       NOW,
     );
+    if (writeNotificationsMock.mock.calls.length > 0) {
+      expect(writtenItems()).toHaveLength(0);
+    }
+  });
+
+  it("subida DENTRO do top 3 (3º → 1º) → notifica (pódio)", async () => {
+    fetchPreferencesMapMock.mockResolvedValue(
+      prefsMap([["u1", defaultPreferences("u1")]]),
+    );
+    await notifyRankingUps(
+      db,
+      [{ uid: "u1", previousPosition: 3, newPosition: 1 }],
+      NOW,
+    );
     const items = writtenItems();
-    expect(items[0]!["title"]).toBe("Você subiu no ranking!");
+    expect(items).toHaveLength(1);
+    expect(items[0]!["title"]).toBe("Pódio!");
   });
 });
 
 describe("notifyRankingUps — preferência ranking", () => {
   it("ranking:false → não entrega", async () => {
     fetchPreferencesMapMock.mockResolvedValue(
-      prefsMap([["u1", { userId: "u1", system: true, games: true, ranking: false }]]),
+      prefsMap([
+        ["u1", { userId: "u1", system: true, games: true, ranking: false, pushEnabled: false }],
+      ]),
     );
     await notifyRankingUps(
       db,

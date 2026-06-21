@@ -56,12 +56,14 @@ describe("notificationInputSchema", () => {
 });
 
 describe("notificationPreferences", () => {
-  it("defaultPreferences liga todas as categorias", () => {
+  it("defaultPreferences liga todas as categorias e deixa push desligado", () => {
     expect(defaultPreferences("u1")).toEqual({
       userId: "u1",
       system: true,
       games: true,
       ranking: true,
+      // web-push-pwa TASK-05: push é opt-in explícito → default false.
+      pushEnabled: false,
     });
   });
 
