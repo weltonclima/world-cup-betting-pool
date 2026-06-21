@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
+import {
+  notifyModeration,
+  sendPushForNotifications,
+  writeNotifications,
+} from "@/server/notifications";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
   canTransition,
@@ -59,6 +64,37 @@ interface TargetUser {
   status: UserStatus;
   groupId: string | undefined;
   isSuperAdmin: boolean;
+}
+
+/**
+ * Cria a notificação `system` de moderação server-side (Admin SDK, bypassa Rules
+ * — corrige o bug do group_admin negado client-side). Best-effort: qualquer falha
+ * é logada e NÃO propaga — a moderação já efetivou. `system` sempre entrega
+ * (ignora preferência). Sem ID determinístico (eventos repetem legitimamente).
+ */
+async function notifyModerationBestEffort(
+  db: ReturnType<typeof getAdminFirestore>,
+  ctx: { uid: string; from: UserStatus; to: UserStatus },
+  now: Date,
+): Promise<void> {
+  try {
+    const notification = notifyModeration(ctx);
+    if (!notification) {
+      // Transição persistida sem notificação mapeada: o usuário foi moderado mas
+      // não seria avisado. Não deve acontecer com o mapa TRANSITIONS atual — loga
+      // para flagrar drift futuro em vez de silenciar.
+      console.warn(
+        `[group/users] transição ${ctx.from}→${ctx.to} sem notificação mapeada`,
+      );
+      return;
+    }
+    // TASK-07: auto-id (sem ID determinístico) → sempre recém-criado → sempre
+    // pusha (block→unblock→block é repeat legítimo, não spam de cron).
+    const created = await writeNotifications(db, [notification], now);
+    await sendPushForNotifications(created, now);
+  } catch (error) {
+    console.error("[group/users] falha ao notificar moderação:", error);
+  }
 }
 
 /** Lê e valida o alvo: existe, é do pool, e não é super_admin. */
@@ -147,12 +183,19 @@ export async function handleStatusModeration(
 
     await db.collection("users").doc(uid).update(patch);
 
+    // Re-lê o estado autoritativo logo após o update (antes dos side-effects),
+    // minimizando a janela para uma escrita concorrente misreportar o retorno.
+    const updatedSnap = await db.collection("users").doc(uid).get();
+    const updated = userSchema.parse(updatedSnap.data());
+
     // Entra/sai do conjunto approved-com-pool → recalcula o ranking do pool
     // (HG-02, best-effort: approve/unblock incluem, block exclui).
     await recalcRankingsBestEffort(db);
 
-    const updatedSnap = await db.collection("users").doc(uid).get();
-    const updated = userSchema.parse(updatedSnap.data());
+    // Notificação `system` ao usuário-alvo (PRD §2.4) — server-side, best-effort.
+    // `createdAt` alinhado ao `updatedAt` da ação (timestamp injetado).
+    await notifyModerationBestEffort(db, { uid, from, to }, new Date(updatedAt));
+
     return NextResponse.json({ user: updated }, { status: 200 });
   } catch (err) {
     if (err instanceof ModerationError) {

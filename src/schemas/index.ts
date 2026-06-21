@@ -15,6 +15,7 @@ export * from "./bonusPredictions";
 export * from "./systemSettings";
 export * from "./notifications";
 export * from "./notificationPreferences";
+export * from "./fcmToken";
 export * from "./systemLogs";
 export * from "./syncLogs";
 export * from "./webauthnCredentials";

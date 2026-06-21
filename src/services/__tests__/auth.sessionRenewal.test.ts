@@ -41,6 +41,12 @@ vi.mock("firebase/firestore", () => ({
   setDoc: vi.fn(),
 }));
 
+// Cleanup de push no signOut (web-push-pwa TASK-02): colaborador best-effort,
+// stubbado para não puxar firebase/messaging (client real) no teste de auth.
+vi.mock("@/features/push/registration", () => ({
+  unregisterPush: vi.fn(() => Promise.resolve()),
+}));
+
 const { getIdTokenMock, currentUserRef } = vi.hoisted(() => ({
   getIdTokenMock: vi.fn<(forceRefresh?: boolean) => Promise<string>>(),
   currentUserRef: { value: null } as {

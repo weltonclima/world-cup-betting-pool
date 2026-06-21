@@ -9,12 +9,10 @@ import {
 import { toast } from "sonner";
 
 import { moderateGroupUser, type GroupModerationAction } from "@/services/group";
-import { createNotification } from "@/services/notifications";
 import { createLog } from "@/services/systemLogs";
 import { firebaseAuth } from "@/firebase";
 import {
   moderationLog,
-  moderationNotification,
   type ModerationContext,
 } from "@/features/admin/lib/notificationFactory";
 import type { User, UserStatus } from "@/types";
@@ -32,23 +30,16 @@ export interface ModerateGroupUserVars {
 }
 
 /**
- * Efeitos colaterais de moderação (best-effort) — REUSA o motor da PRD-07/08
- * (`notificationFactory`). Cada escrita isolada: falha de rede/permissão não
- * derruba a outra nem propaga para a mutação (a moderação já efetivou no servidor).
+ * Efeito colateral de moderação (best-effort): grava o log de auditoria. A
+ * notificação `system` migrou para o Route Handler server-side (TASK-03) —
+ * criá-la aqui no client era negado pelas Firestore Rules para group_admin
+ * (bug silencioso). Falha do log é isolada e não propaga para a mutação.
  */
 async function recordModerationSideEffects(ctx: ModerationContext): Promise<void> {
   try {
     await createLog(moderationLog(ctx));
   } catch (error) {
     console.error("Falha ao registrar log de moderação:", error);
-  }
-  const notification = moderationNotification(ctx);
-  if (notification) {
-    try {
-      await createNotification(notification);
-    } catch (error) {
-      console.error("Falha ao criar notificação de moderação:", error);
-    }
   }
 }
 

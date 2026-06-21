@@ -51,6 +51,7 @@ export {
   getPreferences,
   updatePreferences,
 } from "./notifications";
+export { registerPushToken, deletePushToken } from "./pushTokens";
 export { createLog, listLogs } from "./systemLogs";
 export { getGroups, getBracket } from "./worldcup";
 export {

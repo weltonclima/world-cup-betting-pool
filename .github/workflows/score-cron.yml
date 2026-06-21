@@ -1,0 +1,54 @@
+# Cron de pontuação (PRD-15 / TASK-06)
+#
+# Dispara periodicamente POST /api/predictions/score na produção. Esse único
+# request encadeia, in-process, o recálculo de rankings (chainRecalc →
+# /api/rankings/recalc) e os fan-outs de notificações `games` e `ranking`.
+# Resultado: o pipeline scoring → recalc → notificações roda sem ação manual.
+#
+# Configuração necessária (Settings do repositório):
+#   - secrets.SCORE_SECRET  → deve bater com process.env.SCORE_SECRET do deploy.
+#   - vars.APP_BASE_URL      → (opcional) URL base de produção; usa o fallback se ausente.
+# RANKINGS_SECRET é configurado no DEPLOY (não aqui) para o chainRecalc disparar.
+# NUNCA logar/commitar valores de secret.
+
+name: score-cron
+
+on:
+  schedule:
+    # A cada 30 minutos (UTC — padrão do GitHub Actions).
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/predictions/score
+        env:
+          SCORE_SECRET: ${{ secrets.SCORE_SECRET }}
+          # Fallback para a URL de produção atual quando vars.APP_BASE_URL não está definida.
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://bolaodosparcas.vercel.app' }}
+        run: |
+          if [ -z "${SCORE_SECRET}" ]; then
+            echo "::error::SCORE_SECRET não configurado nos secrets do repositório."
+            exit 1
+          fi
+
+          # --fail-with-body: status não-2xx vira erro de curl, mas ainda imprime o corpo.
+          # -sS: silencioso, mas mostra erros. Secret vai só no header (nunca ecoado).
+          # `|| status=$?` evita que o errexit (-e) do shell aborte antes de logarmos.
+          status=0
+          http_body=$(curl -sS --fail-with-body \
+            -X POST "${APP_BASE_URL}/api/predictions/score" \
+            -H "x-cron-secret: ${SCORE_SECRET}") || status=$?
+
+          # Corpo é { scoredMatches, updatedPredictions } — não sensível, pode logar.
+          echo "Resposta: ${http_body}"
+
+          if [ "${status}" -ne 0 ]; then
+            echo "::error::Falha ao chamar /api/predictions/score (curl exit ${status})."
+            exit "${status}"
+          fi

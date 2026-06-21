@@ -21,7 +21,7 @@ import { notificationKeys } from "./notificationKeys";
 
 /**
  * Lista as notificações do usuário logado, opcionalmente filtradas por tipo
- * (tabs Todas/Sistema/Jogos/Ranking/Bolão — PRD08-01). Desabilitada sem uid.
+ * (tabs Todas/Sistema/Jogos/Ranking — PRD08-01). Desabilitada sem uid.
  */
 export function useNotifications(
   type?: NotificationType,

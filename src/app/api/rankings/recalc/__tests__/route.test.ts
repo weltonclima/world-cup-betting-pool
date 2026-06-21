@@ -17,11 +17,13 @@ const {
   getFirestoreMock,
   fetchAllMatchesMock,
   cookiesMock,
+  notifyRankingUpsMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
   fetchAllMatchesMock: vi.fn(),
   cookiesMock: vi.fn(),
+  notifyRankingUpsMock: vi.fn(),
 }));
 
 vi.mock("@/server/firebaseAdmin", () => ({
@@ -45,6 +47,12 @@ vi.mock("@/server/copaData", async () => {
 });
 
 vi.mock("server-only", () => ({}));
+
+// TASK-05: o disparo `ranking` é mockado p/ isolar o wiring do route da escrita real
+// de notificações (testada à parte). `notifyRankingUps` é best-effort (nunca lança).
+vi.mock("@/server/notifications", () => ({
+  notifyRankingUps: notifyRankingUpsMock,
+}));
 
 import { POST } from "@/app/api/rankings/recalc/route";
 import { CopaDataFetchError } from "@/server/copaData/client";
@@ -211,6 +219,7 @@ describe("POST /api/rankings/recalc", () => {
     vi.unstubAllEnvs();
     vi.stubEnv("RANKINGS_SECRET", SECRET);
     fetchAllMatchesMock.mockResolvedValue([M_GRUPOS, M_OITAVAS, M_SCHEDULED]);
+    notifyRankingUpsMock.mockResolvedValue(undefined);
   });
   afterEach(() => {
     vi.clearAllMocks();
@@ -442,6 +451,64 @@ describe("POST /api/rankings/recalc", () => {
       expect(JSON.stringify(find(w1, "rankings/geral")!.data.entries)).toBe(
         JSON.stringify(find(w2, "rankings/geral")!.data.entries),
       );
+    });
+  });
+
+  describe("disparo de notificações ranking (TASK-05)", () => {
+    it("dispara notifyRankingUps com os deltas do recalc e um Date", async () => {
+      makeDb();
+      await POST(withSecret(SECRET));
+      expect(notifyRankingUpsMock).toHaveBeenCalledTimes(1);
+      const [dbArg, deltasArg, nowArg] = notifyRankingUpsMock.mock.calls[0]!;
+      expect(dbArg).toBeDefined();
+      expect(Array.isArray(deltasArg)).toBe(true);
+      // deltas cobrem TODOS os aprovados (recalc expõe; o helper é quem filtra subida).
+      const uids = (deltasArg as Array<{ uid: string }>).map((d) => d.uid).sort();
+      expect(uids).toEqual(["u1", "u2"]);
+      expect(nowArg).toBeInstanceOf(Date);
+    });
+
+    it("delta de quem subiu carrega previousPosition do histórico", async () => {
+      makeDb({
+        existingStats: {
+          u1: {
+            uid: "u1",
+            totalCorrect: 0,
+            accuracy: 0,
+            longestStreak: 0,
+            correctByStage: {},
+            positionHistory: [
+              { at: iso(-1000 * 3_600_000), scope: "geral", position: 9, round: 1 },
+            ],
+          },
+        },
+      });
+      await POST(withSecret(SECRET));
+      const deltas = notifyRankingUpsMock.mock.calls[0]![1] as Array<{
+        uid: string;
+        previousPosition: number | undefined;
+        newPosition: number;
+      }>;
+      const u1 = deltas.find((d) => d.uid === "u1")!;
+      expect(u1.previousPosition).toBe(9); // veio do positionHistory
+      expect(u1.newPosition).toBe(1); // lidera agora → subiu
+    });
+
+    it("resposta NÃO expõe deltas (payload limpo) mas mantém o resumo", async () => {
+      makeDb();
+      const res = await POST(withSecret(SECRET));
+      const body = (await res.json()) as Record<string, unknown>;
+      expect("deltas" in body).toBe(false);
+      expect(body.participants).toBe(2);
+      expect(typeof body.finishedMatches).toBe("number");
+    });
+
+    it("notificação best-effort: recalc grava e responde 200 independentemente", async () => {
+      // Contrato: notifyRankingUps nunca lança; aqui é no-op. O recalc segue íntegro.
+      const { writes } = makeDb();
+      const res = await POST(withSecret(SECRET));
+      expect(res.status).toBe(200);
+      expect(find(writes, "rankings/geral")).toBeDefined();
     });
   });
 

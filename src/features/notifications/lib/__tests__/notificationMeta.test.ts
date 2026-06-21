@@ -7,10 +7,9 @@ import {
 } from "@/features/notifications/lib/notificationMeta";
 
 describe("NOTIFICATION_META", () => {
-  it("cobre as 4 categorias", () => {
+  it("cobre as 3 categorias", () => {
     expect(Object.keys(NOTIFICATION_META).sort()).toEqual([
       "games",
-      "pool",
       "ranking",
       "system",
     ]);
@@ -27,9 +26,8 @@ describe("actionFor", () => {
   it("games → Ver Jogo", () => {
     expect(actionFor("games")?.href).toBe("/matches");
   });
-  it("system/pool → sem ação", () => {
+  it("system → sem ação", () => {
     expect(actionFor("system")).toBeNull();
-    expect(actionFor("pool")).toBeNull();
   });
 });
 

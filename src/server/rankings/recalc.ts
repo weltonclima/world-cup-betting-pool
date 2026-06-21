@@ -155,6 +155,17 @@ function longestStreak(preds: Array<{ kickoffAt: string; correct: boolean }>): n
   return max;
 }
 
+/**
+ * Delta de posição por usuário (TASK-05) — entrada do disparo `ranking`.
+ * `previousPosition: undefined` = sem baseline (1º recalc / sem histórico ou doc
+ * de pool prévio) → o helper NÃO notifica (não inventa "subiu" no marco zero).
+ */
+export interface RankingPositionDelta {
+  uid: string;
+  previousPosition: number | undefined;
+  newPosition: number;
+}
+
 export interface RecalcSummary {
   scopes: number;
   groups: number;
@@ -162,6 +173,12 @@ export interface RecalcSummary {
   participants: number;
   finishedMatches: number;
   statisticsUpdated: number;
+  /**
+   * Delta geral (global) por usuário — `previousPosition` = última posição `geral`
+   * do `positionHistory`; `newPosition` = posição recém-rankeada. Aditivo: derivado
+   * do que o loop de statistics já computa, sem novo fetch/write.
+   */
+  deltas: RankingPositionDelta[];
 }
 
 /**
@@ -472,6 +489,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   }
 
   // ─── 8. Statistics por usuário (com positionHistory) ───────────────────────
+  // TASK-05: deltas de posição geral derivados AQUI (aditivo) — `previousPosition`
+  // vem do último ponto `geral` do histórico, `newPosition` da nova rankeação.
+  const deltas: RankingPositionDelta[] = [];
   const statsWrites = approved.map(async (u) => {
     const a = aggByUid.get(u.uid)!;
     const existingSnap = await db.collection("statistics").doc(u.uid).get();
@@ -488,6 +508,12 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     // snapshot (TASK-14, WR-02 da TASK-03): evita poluir a Tela 04 e o crescimento
     // ilimitado do histórico quando o recalc roda sem mudança de estado.
     const last = prevHistory[prevHistory.length - 1];
+    // Baseline = última posição `geral` numérica do histórico; senão sem baseline.
+    const previousPosition =
+      last !== undefined && last["scope"] === "geral" && typeof last["position"] === "number"
+        ? (last["position"] as number)
+        : undefined;
+    deltas.push({ uid: u.uid, previousPosition, newPosition });
     const positionUnchanged =
       last !== undefined &&
       last["scope"] === "geral" &&
@@ -564,6 +590,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     participants: approved.length,
     finishedMatches: finished.length,
     statisticsUpdated: approved.length,
+    deltas,
   };
 }
 
@@ -571,6 +598,12 @@ export interface RecalcPoolSummary {
   poolId: string;
   participants: number;
   finishedMatches: number;
+  /**
+   * Delta de posição DENTRO do pool (TASK-05) — `previousPosition` lido do doc
+   * `rankings/pool-{poolId}-geral` existente ANTES do overwrite; `newPosition` da
+   * rankeação nova. `undefined` quando o uid não estava no doc (ou doc inexistente).
+   */
+  deltas: RankingPositionDelta[];
 }
 
 /**
@@ -668,6 +701,29 @@ export async function recalcPoolRanking(
 
   const userByUid = new Map(members.map((u) => [u.uid, u]));
   const ranked = rankParticipants(participants);
+
+  // TASK-05 (aditivo): lê o doc de pool EXISTENTE antes do overwrite p/ derivar o
+  // `previousPosition` por uid (diff de posição dentro do pool). 1 read marginal;
+  // nenhuma nova persistência. Doc/uid ausente → sem baseline (`undefined`).
+  const poolDocRef = db.collection("rankings").doc(`pool-${poolId}-geral`);
+  const prevSnap = await poolDocRef.get();
+  const prevPositionByUid = new Map<string, number>();
+  if (prevSnap.exists) {
+    const prevEntries = prevSnap.data()?.["entries"];
+    if (Array.isArray(prevEntries)) {
+      for (const e of prevEntries as Array<Record<string, unknown>>) {
+        if (typeof e["uid"] === "string" && typeof e["position"] === "number") {
+          prevPositionByUid.set(e["uid"] as string, e["position"] as number);
+        }
+      }
+    }
+  }
+  const deltas: RankingPositionDelta[] = ranked.map((r) => ({
+    uid: r.uid,
+    previousPosition: prevPositionByUid.get(r.uid),
+    newPosition: r.position,
+  }));
+
   const entries: RankingEntry[] = applyAvatarBudget(
     ranked.map((r) => {
       const u = userByUid.get(r.uid)!;
@@ -697,6 +753,7 @@ export async function recalcPoolRanking(
     poolId,
     participants: members.length,
     finishedMatches: finished.length,
+    deltas,
   };
 }
 

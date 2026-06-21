@@ -5,9 +5,8 @@ import { isoDateTime, nonEmptyString } from "@/schemas/shared";
 // Categoria da notificação (PRD-08). Slug inglês estável; rótulos pt-BR na UI.
 export const notificationTypeSchema = z.enum([
   "system", // cadastro aprovado/rejeitado, conta bloqueada/reativada
-  "games", // novos jogos, prazo encerrando, fase liberada
-  "ranking", // ranking atualizado, mudança de posição, top 10
-  "pool", // início da Copa, encerramento de fase/bolão
+  "games", // acerto de palpite (placar/vencedor/empate)
+  "ranking", // mudança de posição (subida/pódio)
 ]);
 
 // Coleção `notifications` (`notifications/{id}`).

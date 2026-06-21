@@ -13,7 +13,6 @@ const FILTERS: { value: NotificationFilter; label: string }[] = [
   { value: "system", label: "Sistema" },
   { value: "games", label: "Jogos" },
   { value: "ranking", label: "Ranking" },
-  { value: "pool", label: "Bolão" },
 ];
 
 /** Filtros por categoria (PRD08-01) — pílulas roláveis horizontalmente. */

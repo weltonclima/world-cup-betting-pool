@@ -15,10 +15,18 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeMock, getFirestoreMock, recalcBestEffortMock } = vi.hoisted(() => ({
+const {
+  authorizeMock,
+  getFirestoreMock,
+  recalcBestEffortMock,
+  writeNotificationsMock,
+  sendPushForNotificationsMock,
+} = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   getFirestoreMock: vi.fn(),
   recalcBestEffortMock: vi.fn(),
+  writeNotificationsMock: vi.fn(),
+  sendPushForNotificationsMock: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -29,6 +37,16 @@ vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }
 vi.mock("@/server/rankings/recalc", () => ({
   recalcRankingsBestEffort: recalcBestEffortMock,
 }));
+// `notifyModeration` REAL (valida a copy de moderação end-to-end);
+// `writeNotifications` é espiada (TASK-03: notificação `system` server-side).
+vi.mock("@/server/notifications", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/notifications")>();
+  return {
+    ...actual,
+    writeNotifications: writeNotificationsMock,
+    sendPushForNotifications: sendPushForNotificationsMock,
+  };
+});
 vi.mock("firebase-admin/firestore", () => ({
   FieldValue: { delete: () => "__delete__" },
 }));
@@ -83,6 +101,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   authorizeMock.mockResolvedValue({
     auth: { uid: "admin-1", groupId: "pool-1", role: "group_admin" },
+  });
+  sendPushForNotificationsMock.mockResolvedValue({
+    attempted: 0,
+    success: 0,
+    failure: 0,
+    pruned: 0,
   });
 });
 
@@ -170,6 +194,63 @@ describe("handleStatusModeration", () => {
     const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(patch["status"]).toBe("approved");
     expect(patch["blockReason"]).toBe("");
+  });
+});
+
+describe("handleStatusModeration — notificação `system` (TASK-03)", () => {
+  /** Lê o único item gravado na chamada de writeNotifications. */
+  function writtenNotification(): Record<string, unknown> {
+    const items = writeNotificationsMock.mock.calls[0]![1] as Record<string, unknown>[];
+    return items[0]!;
+  }
+
+  it.each([
+    ["approve", "pending", "Cadastro aprovado"],
+    ["reject", "pending", "Cadastro não aprovado"],
+    ["block", "approved", "Conta bloqueada"],
+    ["unblock", "blocked", "Conta reativada"],
+  ] as const)(
+    "%s grava 1 notificação `system` server-side com a copy correta",
+    async (kind, fromStatus, expectedTitle) => {
+      mockDb({ user: userDoc({ status: fromStatus }) });
+      const res = await handleStatusModeration(makeReq({ body: okBody }), kind);
+      expect(res.status).toBe(200);
+      expect(writeNotificationsMock).toHaveBeenCalledTimes(1);
+      const notif = writtenNotification();
+      expect(notif["type"]).toBe("system");
+      expect(notif["userId"]).toBe("u2");
+      expect(notif["title"]).toBe(expectedTitle);
+      expect(notif["id"]).toBeUndefined(); // auto-id (sem ID determinístico)
+    },
+  );
+
+  it("TASK-07: auto-id sempre pusha — push recebe os recém-criados do write", async () => {
+    mockDb({ user: userDoc({ status: "pending" }) });
+    const created = [
+      { userId: "u2", type: "system", title: "Cadastro aprovado", message: "m" },
+    ] as Record<string, unknown>[];
+    writeNotificationsMock.mockResolvedValue(created);
+
+    const res = await handleStatusModeration(makeReq({ body: okBody }), "approve");
+    expect(res.status).toBe(200);
+    expect(sendPushForNotificationsMock).toHaveBeenCalledTimes(1);
+    // auto-id (sem ID determinístico) → write sempre o devolve → push sempre dispara.
+    expect(sendPushForNotificationsMock.mock.calls[0]![0]).toBe(created);
+  });
+
+  it("best-effort: falha de writeNotifications NÃO derruba a moderação (200)", async () => {
+    mockDb({ user: userDoc({ status: "pending" }) });
+    writeNotificationsMock.mockRejectedValueOnce(new Error("admin sdk down"));
+    const res = await handleStatusModeration(makeReq({ body: okBody }), "approve");
+    expect(res.status).toBe(200); // status já persistido; notificação é efeito best-effort
+    expect(updateMock).toHaveBeenCalled();
+  });
+
+  it("não notifica quando a ação falha antes do write (409)", async () => {
+    mockDb({ user: userDoc({ status: "approved" }) });
+    const res = await handleStatusModeration(makeReq({ body: okBody }), "approve");
+    expect(res.status).toBe(409);
+    expect(writeNotificationsMock).not.toHaveBeenCalled();
   });
 });
 

@@ -12,6 +12,10 @@ const clientEnvSchema = z.object({
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1),
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1),
   NEXT_PUBLIC_FIREBASE_APP_ID: z.string().min(1),
+  // VAPID public key (Web Push certificate). OPCIONAL: ausente → push opt-in
+  // fica oculto/desabilitado (degrada gracioso). Gerada em Firebase Console →
+  // Project settings → Cloud Messaging → Web Push certificates → Generate key pair.
+  NEXT_PUBLIC_FIREBASE_VAPID_KEY: z.string().min(1).optional(),
   // Flag opcional: liga conexão aos emuladores locais.
   NEXT_PUBLIC_FIREBASE_USE_EMULATORS: z
     .enum(["true", "false"])
@@ -37,11 +41,33 @@ function readClientEnv(): FirebaseClientEnv {
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:
       process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    NEXT_PUBLIC_FIREBASE_VAPID_KEY:
+      process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
     NEXT_PUBLIC_FIREBASE_USE_EMULATORS:
       process.env.NEXT_PUBLIC_FIREBASE_USE_EMULATORS,
   });
 
   if (!parsed.success) {
+    // Sob testes (Vitest), o feature web-push-pwa fez `firebase/messaging` →
+    // `firebase/client` → este módulo serem alcançados transitivamente por
+    // muitos pontos (Header → useForegroundPush, services/auth → registration).
+    // Lançar no load quebraria qualquer teste que não mocke a cadeia. Aqui
+    // devolvemos config placeholder (sem rede no load; `initializeApp` só guarda
+    // a config) e NÃO tocamos em `process.env` — `firebaseAdmin` lê
+    // `NEXT_PUBLIC_FIREBASE_PROJECT_ID` direto de `process.env` e deve continuar
+    // vendo-o ausente. Em prod/dev o fail-fast original é preservado.
+    if (process.env.VITEST || process.env.NODE_ENV === "test") {
+      return {
+        NEXT_PUBLIC_FIREBASE_API_KEY: "test-api-key",
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "test.firebaseapp.com",
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: "test-project",
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "test.appspot.com",
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "1234567890",
+        NEXT_PUBLIC_FIREBASE_APP_ID: "1:1234567890:web:test",
+        NEXT_PUBLIC_FIREBASE_VAPID_KEY: undefined,
+        NEXT_PUBLIC_FIREBASE_USE_EMULATORS: "false",
+      };
+    }
     const missing = parsed.error.issues
       .map((issue) => issue.path.join("."))
       .join(", ");

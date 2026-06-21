@@ -22,8 +22,11 @@ vi.mock("server-only", () => ({}));
 import {
   computeFinishedSignature,
   ensureRankingsFresh,
+  recalcRankings,
+  recalcPoolRanking,
   recalcRankingsBestEffort,
   RECALC_VERSION as CURRENT_VERSION,
+  type RankingPositionDelta,
 } from "@/server/rankings/recalc";
 
 /**
@@ -412,6 +415,258 @@ describe("recalc — isolamento por pool (Tela 03)", () => {
       entries: Array<{ uid: string; position: number }>;
     };
     expect(poolP2.entries.find((e) => e.uid === "u2")?.position).toBe(1);
+  });
+});
+
+// ── TASK-05: delta de posição exposto pelo recalc ──────────────────────────
+/**
+ * Mock que serve usuários aprovados, predictions cruas e o doc de `statistics`
+ * EXISTENTE por uid (com `positionHistory`) — fonte do `previousPosition`. Captura
+ * os payloads gravados. `recalcRankings` é chamado DIRETO (não best-effort) para
+ * ler `summary.deltas` do retorno.
+ */
+function makeDeltaDb(
+  users: Array<Record<string, unknown>>,
+  preds: Array<Record<string, unknown>>,
+  statsByUid: Record<string, Record<string, unknown> | undefined> = {},
+) {
+  const setPayloads = new Map<string, unknown>();
+  const collection = vi.fn((name: string) => {
+    if (name === "users") {
+      return {
+        where: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            docs: users.map((u) => ({ id: u["uid"], data: () => u })),
+          }),
+        }),
+        get: vi.fn().mockResolvedValue({ docs: [] }),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "predictions") {
+      return {
+        get: vi.fn().mockResolvedValue({
+          docs: preds.map((p, i) => ({ id: `p${i}`, data: () => p })),
+        }),
+        where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+        doc: vi.fn(),
+      };
+    }
+    return {
+      get: vi.fn().mockResolvedValue({ docs: [] }),
+      where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+      doc: vi.fn((id: string) => ({
+        get: vi.fn().mockResolvedValue(
+          name === "statistics" && statsByUid[id] !== undefined
+            ? { exists: true, data: () => statsByUid[id] }
+            : { exists: false, data: () => undefined },
+        ),
+        set: vi.fn(async (payload: unknown) => {
+          setPayloads.set(`${name}/${id}`, payload);
+        }),
+        ref: { delete: vi.fn() },
+      })),
+    };
+  });
+  return { db: { collection } as never, setPayloads };
+}
+
+/** Histórico de posição terminando em `position` no escopo geral. */
+const geralHistory = (position: number) => ({
+  positionHistory: [{ at: "2026-06-19T00:00:00.000Z", scope: "geral", position, round: 1 }],
+});
+
+const deltaOf = (summary: { deltas: RankingPositionDelta[] }, uid: string) =>
+  summary.deltas.find((d) => d.uid === uid);
+
+describe("recalcRankings — delta de posição (TASK-05)", () => {
+  it("usuário que subiu → previousPosition > newPosition", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    const { db } = makeDeltaDb([baseUser({ uid: "u1" })], [], {
+      u1: geralHistory(5), // estava em 5º; sozinho agora → 1º
+    });
+    const summary = await recalcRankings(db);
+    expect(deltaOf(summary, "u1")).toEqual({
+      uid: "u1",
+      previousPosition: 5,
+      newPosition: 1,
+    });
+  });
+
+  it("posição igual → delta com previous === new (helper filtra, não o recalc)", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    const { db } = makeDeltaDb([baseUser({ uid: "u1" })], [], {
+      u1: geralHistory(1), // já era 1º e segue 1º
+    });
+    const summary = await recalcRankings(db);
+    expect(deltaOf(summary, "u1")).toEqual({
+      uid: "u1",
+      previousPosition: 1,
+      newPosition: 1,
+    });
+  });
+
+  it("posição caiu → newPosition > previousPosition", async () => {
+    // u2 pontua (10) e fica 1º; u1 (0 pts) cai p/ 2º vindo de 1º.
+    getEffectiveMatchesMock.mockResolvedValue([
+      {
+        id: "m1",
+        status: "finished",
+        homeScore: 2,
+        awayScore: 0,
+        stage: "grupos",
+        groupId: "A",
+        kickoffAt: "2026-06-11T13:00:00-06:00",
+      },
+    ] as never);
+    const { db } = makeDeltaDb(
+      [baseUser({ uid: "u1" }), baseUser({ uid: "u2" })],
+      [{ uid: "u2", matchId: "m1", homeScore: 2, awayScore: 0 }], // u2 exato
+      { u1: geralHistory(1) },
+    );
+    const summary = await recalcRankings(db);
+    expect(deltaOf(summary, "u1")).toEqual({
+      uid: "u1",
+      previousPosition: 1,
+      newPosition: 2,
+    });
+  });
+
+  it("sem positionHistory prévio → previousPosition undefined", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    const { db } = makeDeltaDb([baseUser({ uid: "u1" })], [], {}); // sem stats
+    const summary = await recalcRankings(db);
+    expect(deltaOf(summary, "u1")).toEqual({
+      uid: "u1",
+      previousPosition: undefined,
+      newPosition: 1,
+    });
+  });
+
+  it("último ponto do histórico NÃO é escopo geral → previousPosition undefined", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    const { db } = makeDeltaDb([baseUser({ uid: "u1" })], [], {
+      u1: {
+        positionHistory: [
+          { at: "2026-06-19T00:00:00.000Z", scope: "grupos", position: 3, round: 1 },
+        ],
+      },
+    });
+    const summary = await recalcRankings(db);
+    expect(deltaOf(summary, "u1")?.previousPosition).toBeUndefined();
+  });
+
+  it("aditivo: ainda grava rankings/geral e o positionHistory (não regrediu)", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    const { db, setPayloads } = makeDeltaDb([baseUser({ uid: "u1" })], [], {
+      u1: geralHistory(5),
+    });
+    await recalcRankings(db);
+    expect(setPayloads.has("rankings/geral")).toBe(true);
+    const stats = setPayloads.get("statistics/u1") as { positionHistory: unknown[] };
+    expect(Array.isArray(stats.positionHistory)).toBe(true);
+  });
+});
+
+// ── recalcPoolRanking — delta por diff do doc de pool existente ──────────────
+/**
+ * Mock para `recalcPoolRanking`: membros aprovados, predictions por `in` chunk e o
+ * doc `rankings/pool-{poolId}-geral` EXISTENTE (lido ANTES do overwrite p/ derivar
+ * `previousPosition`). `existingPoolEntries` ausente → doc inexistente.
+ */
+function makePoolDeltaDb(
+  poolId: string,
+  members: Array<Record<string, unknown>>,
+  preds: Array<Record<string, unknown>>,
+  existingPoolEntries?: Array<{ uid: string; position: number }>,
+) {
+  const setPayloads = new Map<string, unknown>();
+  const collection = vi.fn((name: string) => {
+    if (name === "users") {
+      return {
+        where: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            docs: members.map((u) => ({ id: u["uid"], data: () => u })),
+          }),
+        }),
+        get: vi.fn().mockResolvedValue({ docs: [] }),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "predictions") {
+      return {
+        where: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            docs: preds.map((p, i) => ({ id: `p${i}`, data: () => p })),
+          }),
+        }),
+        get: vi.fn().mockResolvedValue({ docs: [] }),
+        doc: vi.fn(),
+      };
+    }
+    return {
+      get: vi.fn().mockResolvedValue({ docs: [] }),
+      where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+      doc: vi.fn((id: string) => ({
+        get: vi.fn().mockResolvedValue(
+          name === "rankings" &&
+            id === `pool-${poolId}-geral` &&
+            existingPoolEntries !== undefined
+            ? { exists: true, data: () => ({ entries: existingPoolEntries }) }
+            : { exists: false, data: () => undefined },
+        ),
+        set: vi.fn(async (payload: unknown) => {
+          setPayloads.set(`${name}/${id}`, payload);
+        }),
+        ref: { delete: vi.fn() },
+      })),
+    };
+  });
+  return { db: { collection } as never, setPayloads };
+}
+
+describe("recalcPoolRanking — delta por diff do doc de pool (TASK-05)", () => {
+  it("doc de pool prévio com posições → deltas por diff", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([
+      {
+        id: "m1",
+        status: "finished",
+        homeScore: 2,
+        awayScore: 0,
+        stage: "grupos",
+        groupId: "A",
+        kickoffAt: "2026-06-11T13:00:00-06:00",
+      },
+    ] as never);
+    // u1 acerta (1º novo), estava em 2º no doc prévio → subiu.
+    const { db } = makePoolDeltaDb(
+      "p1",
+      [baseUser({ uid: "u1", groupId: "p1" })],
+      [{ uid: "u1", matchId: "m1", homeScore: 2, awayScore: 0 }],
+      [{ uid: "u1", position: 2 }],
+    );
+    const summary = await recalcPoolRanking(db, "p1");
+    expect(deltaOf(summary, "u1")).toEqual({
+      uid: "u1",
+      previousPosition: 2,
+      newPosition: 1,
+    });
+  });
+
+  it("doc de pool ausente → previousPosition undefined", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    const { db } = makePoolDeltaDb(
+      "p1",
+      [baseUser({ uid: "u1", groupId: "p1" })],
+      [],
+      undefined, // sem doc prévio
+    );
+    const summary = await recalcPoolRanking(db, "p1");
+    expect(deltaOf(summary, "u1")).toEqual({
+      uid: "u1",
+      previousPosition: undefined,
+      newPosition: 1,
+    });
   });
 });
 

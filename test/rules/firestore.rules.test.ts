@@ -803,6 +803,60 @@ describe("Firestore Security Rules — webauthn_challenge_jti (TASK-07)", () => 
 });
 
 // ---------------------------------------------------------------------------
+// Web Push (web-push-pwa TASK-03): fcm_tokens — tokens de push por device.
+// Metadado de entrega server-side: read e write client negados a todos
+// (registro/remoção via Route Handler com Admin SDK). Espelha challenge_jti.
+// ---------------------------------------------------------------------------
+
+describe("Firestore Security Rules — fcm_tokens (web-push-pwa TASK-03)", () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("fcm_tokens/tok-1").set({
+        token: "tok-1",
+        userId: "approvedUser",
+        userAgent: "ua",
+        createdAt: "2026-06-09T12:00:00.000Z",
+        lastSeenAt: "2026-06-09T12:00:00.000Z",
+      });
+    });
+  });
+
+  it("CP01: read client é negado mesmo do dono approved", async () => {
+    await assertFails(approvedDb().doc("fcm_tokens/tok-1").get());
+  });
+
+  it("CP02: read client é negado (admin)", async () => {
+    await assertFails(adminDb().doc("fcm_tokens/tok-1").get());
+  });
+
+  it("CP03: read não autenticado é negado", async () => {
+    await assertFails(unauthDb().doc("fcm_tokens/tok-1").get());
+  });
+
+  it("CP04: create client é negado (só Admin SDK)", async () => {
+    await assertFails(
+      approvedDb().doc("fcm_tokens/tok-novo").set({
+        token: "tok-novo",
+        userId: "approvedUser",
+        userAgent: "ua",
+        createdAt: "2026-06-09T12:00:00.000Z",
+        lastSeenAt: "2026-06-09T12:00:00.000Z",
+      }),
+    );
+  });
+
+  it("CP05: delete client é negado", async () => {
+    await assertFails(approvedDb().doc("fcm_tokens/tok-1").delete());
+  });
+
+  it("CP06: query da coleção é negada (rules não são filtro)", async () => {
+    await assertFails(
+      approvedDb().collection("fcm_tokens").where("userId", "==", "approvedUser").get(),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PRD-09 (TASK-03): pools — leitura só de ativos por approved; escrita exclusiva
 // do Admin SDK (write client negado, como predictions). + auto-cadastro com role
 // canônico "participant" e dupla-compat de role nos helpers.
