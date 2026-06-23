@@ -37,8 +37,12 @@ const DEAD_TOKEN_CODES = new Set([
 
 /** Payload FCM — alinhado ao consumer `firebase-messaging-sw.js` (TASK-02). */
 export interface PushPayload {
-  notification: { title: string; body: string; icon?: string };
+  notification: { title: string; body: string };
   data: { url: string; type: NotificationType };
+  // `icon` é campo Web Push e NÃO existe em `notification` do FCM Admin SDK (que
+  // só aceita title/body/imageUrl) — colocá-lo lá faz o FCM rejeitar com
+  // `messaging/invalid-argument`. Vai em `webpush.notification`, lido pelo SW.
+  webpush: { notification: { title: string; body: string; icon: string } };
 }
 
 export interface PushSendStats {
@@ -61,9 +65,12 @@ function urlForType(type: NotificationType): string {
 
 /** Monta o payload FCM a partir da notificação in-app. */
 function toPushPayload(item: NotificationCreate): PushPayload {
+  const notification = { title: item.title, body: item.message };
   return {
-    notification: { title: item.title, body: item.message, icon: PUSH_ICON },
+    notification,
     data: { url: urlForType(item.type), type: item.type },
+    // Web Push: title/body/icon do notification exibido em background pelo SW.
+    webpush: { notification: { ...notification, icon: PUSH_ICON } },
   };
 }
 
@@ -128,7 +135,7 @@ export async function sendPushForNotifications(
         const dead = new Set<string>();
 
         for (const item of group) {
-          const { notification, data } = toPushPayload(item);
+          const { notification, data, webpush } = toPushPayload(item);
 
           for (let i = 0; i < tokens.length; i += MAX_MULTICAST) {
             const chunk = tokens.slice(i, i + MAX_MULTICAST);
@@ -138,6 +145,7 @@ export async function sendPushForNotifications(
               tokens: chunk,
               notification,
               data,
+              webpush,
             });
             stats.success += res.successCount;
             stats.failure += res.failureCount;
