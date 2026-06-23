@@ -230,6 +230,14 @@ service cloud.firestore {
       allow read, write: if false; // cache server-side (Admin SDK); cliente nunca acessa
     }
 
+    // ---- score_state (scoring-write-cost TASK-02): controle do cron de pontuação ----
+    // Doc único `score_state/cron` (mapa { matchId: resultHash }) lido/gravado
+    // EXCLUSIVAMENTE pelo Admin SDK no Route Handler de pontuação (/api/predictions/score).
+    // O cliente nunca acessa — metadado de custo server-side. Espelha worldcup_cache.
+    match /score_state/{id} {
+      allow read, write: if false; // controle server-side (Admin SDK); cliente nunca acessa
+    }
+
     // ---- Deny-by-default: qualquer outro path ----
     // Redundante (não casar já nega), mantido como afirmação explícita.
     match /{document=**} {

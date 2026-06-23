@@ -180,6 +180,20 @@ function makeQuerySnapshot(docs: ReturnType<typeof makeDocSnapshot>[]) {
 }
 
 /**
+ * Stub do doc de controle `score_state/cron` (scoring-write-cost TASK-03).
+ * Default: doc ausente (`exists: false`) → readScoreState degrada p/ Map vazio,
+ * então toda partida finished é processada (comportamento equivalente ao legado).
+ */
+function stubScoreState() {
+  return {
+    doc: vi.fn().mockReturnValue({
+      get: vi.fn().mockResolvedValue({ exists: false }),
+      set: vi.fn().mockResolvedValue(undefined),
+    }),
+  };
+}
+
+/**
  * Monta o mock do Firestore para o loop de pontuação.
  * `matchPredictionsMap`: matchId → array de dados de palpite
  * `userDocData`: dados do doc users/{uid} para auth de admin
@@ -225,6 +239,7 @@ function makeFirestoreMock({
     collection: vi.fn().mockImplementation((name: string) => {
       if (name === "users") return { doc: userDocMock };
       if (name === "predictions") return { where: whereMock };
+      if (name === "score_state") return stubScoreState();
       return {};
     }),
   });
@@ -436,6 +451,7 @@ describe("POST /api/predictions/score", () => {
               }),
             };
           }
+          if (name === "score_state") return stubScoreState();
           return {};
         }),
       });
@@ -468,6 +484,7 @@ describe("POST /api/predictions/score", () => {
               }),
             };
           }
+          if (name === "score_state") return stubScoreState();
           return {};
         }),
       });
@@ -500,6 +517,7 @@ describe("POST /api/predictions/score", () => {
               }),
             };
           }
+          if (name === "score_state") return stubScoreState();
           return {};
         }),
       });
@@ -576,6 +594,7 @@ describe("POST /api/predictions/score", () => {
               }),
             };
           }
+          if (name === "score_state") return stubScoreState();
           return {};
         }),
       });
@@ -610,6 +629,7 @@ describe("POST /api/predictions/score", () => {
               }),
             };
           }
+          if (name === "score_state") return stubScoreState();
           return {};
         }),
       });
@@ -662,6 +682,7 @@ describe("POST /api/predictions/score", () => {
               }),
             };
           }
+          if (name === "score_state") return stubScoreState();
           return {};
         }),
       });
@@ -690,7 +711,7 @@ describe("POST /api/predictions/score", () => {
         scoredMatches: number;
         updatedPredictions: number;
       };
-      expect(body).toEqual({ scoredMatches: 0, updatedPredictions: 0 });
+      expect(body).toEqual({ scoredMatches: 0, updatedPredictions: 0, skippedMatches: 0 });
     });
   });
 
