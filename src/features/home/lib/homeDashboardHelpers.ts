@@ -11,6 +11,7 @@ import type {
   PoolStats,
   Prediction,
   Ranking,
+  Stage,
   Statistics,
   SystemSettings,
   TeamWithId,
@@ -31,8 +32,8 @@ export type HomePredictionStatus = "enviado" | "pendente" | "bloqueado";
 
 /** Próximo jogo com dados resolvidos. */
 export interface NextMatchSummary {
-  matchId: string;             // doc id do Firestore (id da API-Football)
-  kickoffAt: string;           // ISO 8601
+  matchId: string; // doc id do Firestore (id da API-Football)
+  kickoffAt: string; // ISO 8601
   homeTeam: ResolvedTeam;
   awayTeam: ResolvedTeam;
   predictionStatus: HomePredictionStatus;
@@ -48,7 +49,7 @@ export interface RecentResult {
   kickoffAt: string;
   homeTeam: ResolvedTeam;
   awayTeam: ResolvedTeam;
-  matchHomeScore: number;      // placar real — não null (jogo finished, validado pelo schema)
+  matchHomeScore: number; // placar real — não null (jogo finished, validado pelo schema)
   matchAwayScore: number;
   userPrediction: { homeScore: number; awayScore: number } | null;
   // Pontos ponderados do palpite neste jogo (scorePrediction): 10 = placar
@@ -59,36 +60,36 @@ export interface RecentResult {
 
 /** Raio-X dos palpites do usuário em jogos finalizados (TASK-03 home-revamp). */
 export interface PredictionBreakdown {
-  correct: number;   // placar exato (10 pts)
-  partial: number;   // só vencedor (5 pts)
-  wrong: number;     // errou (0 pts)
-  total: number;     // correct + partial + wrong (palpites em jogos finished)
-  isEmpty: boolean;  // true quando total === 0
+  correct: number; // placar exato (10 pts)
+  partial: number; // só vencedor (5 pts)
+  wrong: number; // errou (0 pts)
+  total: number; // correct + partial + wrong (palpites em jogos finished)
+  isEmpty: boolean; // true quando total === 0
 }
 
 /** Aviso do sistema para exibição no card Avisos. */
 export interface SystemNotice {
-  id: string;        // chave estável para React key
-  message: string;   // texto pt-BR derivado das flags
+  id: string; // chave estável para React key
+  message: string; // texto pt-BR derivado das flags
   severity: "info" | "warning";
 }
 
 /** Jogo aberto para palpitar (TASK-02 home-revamp). */
 export interface OpenMatchSummary {
   matchId: string;
-  kickoffAt: string;           // ISO 8601
-  homeTeam: ResolvedTeam;      // já resolvido via MatchListItem
+  kickoffAt: string; // ISO 8601
+  homeTeam: ResolvedTeam; // já resolvido via MatchListItem
   awayTeam: ResolvedTeam;
-  deadlineLabel: string;       // ex.: "Fecha em 1h 30m" | "Fecha em 45m"
+  deadlineLabel: string; // ex.: "Fecha em 1h 30m" | "Fecha em 45m"
   /** true quando faltam < 60min para o kickoff (urgência na UI; não re-parsear label). */
   isUrgent: boolean;
-  predictHref: string;         // "/matches/{matchId}/predict"
+  predictHref: string; // "/matches/{matchId}/predict"
 }
 
 /** Resultado de deriveOpenMatches. */
 export interface OpenMatchesResult {
-  items: OpenMatchSummary[];   // ≤ limit
-  totalOpen: number;           // total antes do corte (para "+ N outros")
+  items: OpenMatchSummary[]; // ≤ limit
+  totalOpen: number; // total antes do corte (para "+ N outros")
 }
 
 /** Direção da tendência de posição no ranking. */
@@ -104,14 +105,14 @@ export interface HeroSummary {
   /** Tendência de posição; null quando há <2 snapshots em positionHistory. */
   trend: {
     direction: HeroTrendDirection;
-    delta: number;            // variação absoluta de posição (>=0)
+    delta: number; // variação absoluta de posição (>=0)
     roundLabel: string | null; // "R{round}" da última entrada, se houver
   } | null;
-  accuracy: number;           // 0–100 (0 sem statistics)
-  totalCorrect: number;       // 0 sem statistics
+  accuracy: number; // 0–100 (0 sem statistics)
+  totalCorrect: number; // 0 sem statistics
   /** Jogos jogados = exatos + parciais + erros; null quando totalWrong ausente. */
   denominator: number | null;
-  longestStreak: number;      // 0 sem statistics
+  longestStreak: number; // 0 sem statistics
   /** Posições por `at` (asc); null com <2 pontos. */
   sparkline: number[] | null;
   /** Régua de percentil (bullet); null sem poolStats ou sem pontos do usuário. */
@@ -120,8 +121,8 @@ export interface HeroSummary {
     average: number;
     highest: number;
     userPoints: number;
-    fraction: number;         // 0–1 na escala [lowest, highest] (posição do usuário)
-    averageFraction: number;  // 0–1 na escala [lowest, highest] (posição da média)
+    fraction: number; // 0–1 na escala [lowest, highest] (posição do usuário)
+    averageFraction: number; // 0–1 na escala [lowest, highest] (posição da média)
     label: "acima da média" | "na média" | "abaixo da média";
   } | null;
   /** true quando não há nada relevante a exibir (conta nova / pré-torneio). */
@@ -135,9 +136,11 @@ export interface HomeDashboardData {
   /** Raio-X dos palpites (TASK-03 home-revamp). */
   predictionBreakdown: PredictionBreakdown;
   nextMatch: NextMatchSummary | null;
-  recentResults: RecentResult[];        // até 5
+  recentResults: RecentResult[]; // até 5
   /** Jogos ainda abertos para palpitar (TASK-02 home-revamp). */
   openMatches: OpenMatchesResult;
+  /** Fase ativa da Copa para o banner (PRD-16 / TASK-04); null sem jogos. */
+  currentStage: Stage | null;
   notices: SystemNotice[];
   /** true se qualquer query obrigatória ainda estiver carregando. */
   isLoading: boolean;
@@ -198,10 +201,7 @@ export function computeIsCorrect(
   // Guarda de segurança: placar nulo não deveria ocorrer em jogos finished
   // (o refinement do schema garante non-null), mas protege contra dados inconsistentes.
   if (match.homeScore === null || match.awayScore === null) return false;
-  return (
-    prediction.homeScore === match.homeScore &&
-    prediction.awayScore === match.awayScore
-  );
+  return prediction.homeScore === match.homeScore && prediction.awayScore === match.awayScore;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,13 +235,8 @@ export function derivePredictionStatus(
  * `matchId` é o id estável do jogo (slug para grupos), casando com o parâmetro
  * de `/matches/[id]`.
  */
-export function buildPredictionsHref(
-  matchId: string,
-  status: HomePredictionStatus,
-): string {
-  return status === "bloqueado"
-    ? `/matches/${matchId}`
-    : `/matches/${matchId}/predict`;
+export function buildPredictionsHref(matchId: string, status: HomePredictionStatus): string {
+  return status === "bloqueado" ? `/matches/${matchId}` : `/matches/${matchId}/predict`;
 }
 
 // ---------------------------------------------------------------------------
@@ -375,9 +370,7 @@ export function deriveHeroSummary(
   // Tendência: comparar os 2 últimos snapshots por `at` (>=2 obrigatório).
   // Filtra escopo "geral" (§6.2) — alinhado a geralHistory() em myRankingDerivations;
   // hoje recalc só grava geral, mas blinda contra positionHistory multi-escopo.
-  const history = (statistics?.positionHistory ?? []).filter(
-    (h) => h.scope === "geral",
-  );
+  const history = (statistics?.positionHistory ?? []).filter((h) => h.scope === "geral");
   const sorted = [...history].sort((a, b) => a.at.localeCompare(b.at));
   let trend: HeroSummary["trend"] = null;
   let sparkline: number[] | null = null;
@@ -385,8 +378,7 @@ export function deriveHeroSummary(
   const prev = sorted.at(-2);
   if (last && prev) {
     const diff = prev.position - last.position; // >0 = subiu (posição menor é melhor)
-    const direction: HeroTrendDirection =
-      diff > 0 ? "up" : diff < 0 ? "down" : "stable";
+    const direction: HeroTrendDirection = diff > 0 ? "up" : diff < 0 ? "down" : "stable";
     trend = {
       direction,
       delta: Math.abs(diff),
@@ -486,10 +478,7 @@ export function deriveOpenMatches(
 ): OpenMatchesResult {
   const open = matches
     .filter((m) => m.predictionStatus === "pendente")
-    .sort(
-      (a, b) =>
-        new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime(),
-    );
+    .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
 
   const items: OpenMatchSummary[] = open.slice(0, limit).map((m) => {
     const msUntilKickoff = new Date(m.kickoffAt).getTime() - now.getTime();
@@ -505,4 +494,41 @@ export function deriveOpenMatches(
   });
 
   return { items, totalOpen: open.length };
+}
+
+// ---------------------------------------------------------------------------
+// 9. deriveCurrentStage (TASK-04 / PRD-16)
+// ---------------------------------------------------------------------------
+
+/** Status que representam um jogo que ainda VAI acontecer (define a fase ativa). */
+const ACTIVE_MATCH_STATUSES: ReadonlyArray<MatchListItem["status"]> = ["scheduled", "live"];
+
+/**
+ * Deriva a fase ATIVA da Copa para o banner da Home.
+ *
+ * Regra: fase do próximo jogo a acontecer = menor `kickoffAt` entre os jogos
+ * ATIVOS (`scheduled`/`live`). `postponed`/`canceled` NÃO definem a fase — o jogo
+ * não vai acontecer e advertiria uma fase errada. Sem nenhum ativo → torneio
+ * encerrado: fase do jogo FINALIZADO mais recente. Sem jogos elegíveis → null.
+ *
+ * Função PURA: sem `new Date()` interno — decide por `status`/`kickoffAt`.
+ * `kickoffAt` inválido → tratado como +Infinity (vai p/ o fim, nunca sequestra
+ * a seleção do próximo jogo).
+ */
+export function deriveCurrentStage(matches: MatchListItem[]): Stage | null {
+  if (matches.length === 0) return null;
+
+  const ms = (m: MatchListItem) => {
+    const t = new Date(m.kickoffAt).getTime();
+    return Number.isNaN(t) ? Infinity : t;
+  };
+
+  const upcoming = matches
+    .filter((m) => ACTIVE_MATCH_STATUSES.includes(m.status))
+    .sort((a, b) => ms(a) - ms(b));
+  if (upcoming.length > 0) return upcoming[0]!.stage;
+
+  // Sem ativos → torneio encerrado: fase do jogo FINALIZADO mais recente.
+  const finished = matches.filter((m) => m.status === "finished").sort((a, b) => ms(b) - ms(a));
+  return finished.length > 0 ? finished[0]!.stage : null;
 }

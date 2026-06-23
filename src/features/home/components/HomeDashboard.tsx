@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 import { useHomeDashboard } from "@/features/home/hooks/useHomeDashboard";
 
+import { CurrentStageBanner } from "./CurrentStageBanner";
 import { HeroCard, HeroCardSkeleton } from "./HeroCard";
 import { HomeHeader } from "./HomeHeader";
 import { LastResultsCard, LastResultsCardSkeleton } from "./LastResultsCard";
@@ -44,28 +45,15 @@ interface ErrorStateProps {
  */
 function ErrorState({ onRetry }: ErrorStateProps) {
   return (
-    <div
-      role="alert"
-      aria-live="polite"
-      className="flex flex-col items-center gap-4 py-12 px-4"
-    >
-      <AlertCircle
-        size={40}
-        className="text-destructive"
-        aria-hidden="true"
-      />
+    <div role="alert" aria-live="polite" className="flex flex-col items-center gap-4 py-12 px-4">
+      <AlertCircle size={40} className="text-destructive" aria-hidden="true" />
       <p className="text-base font-semibold text-foreground text-center">
         Erro ao carregar dashboard
       </p>
       <p className="text-sm text-muted-foreground text-center">
         Não foi possível carregar os dados. Tente novamente.
       </p>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onRetry}
-        className="min-h-[44px]"
-      >
+      <Button variant="outline" size="sm" onClick={onRetry} className="min-h-[44px]">
         Tentar Novamente
       </Button>
     </div>
@@ -117,6 +105,7 @@ export function HomeDashboard() {
     nextMatch,
     recentResults,
     openMatches,
+    currentStage,
     notices,
     isLoading,
     isError,
@@ -133,7 +122,6 @@ export function HomeDashboard() {
   // ── Grade de conteúdo (loading com skeletons OU dados reais) ─────────────
   return (
     <div className="flex flex-col gap-4">
-
       {/* Bloco de boas-vindas — skeleton durante loading */}
       {isLoading ? (
         <HomeHeaderSkeleton />
@@ -145,21 +133,17 @@ export function HomeDashboard() {
         />
       )}
 
+      {/* Banner discreto da fase ativa da Copa (TASK-04 / PRD-16) — oculto se null */}
+      {!isLoading && <CurrentStageBanner stage={currentStage} />}
+
       {/* Hero — posição + tendência + aproveitamento + sparkline + régua (TASK-01 home-revamp) */}
-      {isLoading ? (
-        <HeroCardSkeleton />
-      ) : (
-        <HeroCard summary={heroSummary} />
-      )}
+      {isLoading ? <HeroCardSkeleton /> : <HeroCard summary={heroSummary} />}
 
       {/* Próximo Jogo — card full-width */}
       {isLoading ? (
         <NextMatchCardSkeleton />
       ) : (
-        <NextMatchCard
-          nextMatch={nextMatch}
-          ctaHref={nextMatch?.predictionsHref}
-        />
+        <NextMatchCard nextMatch={nextMatch} ctaHref={nextMatch?.predictionsHref} />
       )}
 
       {/* Jogos abertos pra palpitar — card full-width (lista + faixa de avisos) */}
@@ -170,19 +154,10 @@ export function HomeDashboard() {
       )}
 
       {/* Últimos Resultados — card full-width (lista até 5 itens) */}
-      {isLoading ? (
-        <LastResultsCardSkeleton />
-      ) : (
-        <LastResultsCard results={recentResults} />
-      )}
+      {isLoading ? <LastResultsCardSkeleton /> : <LastResultsCard results={recentResults} />}
 
       {/* Raio-X dos Palpites — card full-width (donut exato/vencedor/erro) */}
-      {isLoading ? (
-        <RaioXCardSkeleton />
-      ) : (
-        <RaioXCard breakdown={predictionBreakdown} />
-      )}
-
+      {isLoading ? <RaioXCardSkeleton /> : <RaioXCard breakdown={predictionBreakdown} />}
     </div>
   );
 }

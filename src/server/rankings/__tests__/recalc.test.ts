@@ -36,11 +36,13 @@ import {
 function makeDb(opts: { fresh?: { exists: boolean; data?: () => unknown } } = {}) {
   const writes: string[] = [];
   const docRef = (coll: string, id: string) => ({
-    get: vi.fn().mockResolvedValue(
-      coll === "rankings" && id === "_freshness"
-        ? (opts.fresh ?? { exists: false, data: () => undefined })
-        : { exists: false, data: () => undefined },
-    ),
+    get: vi
+      .fn()
+      .mockResolvedValue(
+        coll === "rankings" && id === "_freshness"
+          ? (opts.fresh ?? { exists: false, data: () => undefined })
+          : { exists: false, data: () => undefined },
+      ),
     set: vi.fn(async () => {
       writes.push(`${coll}/${id}`);
     }),
@@ -82,7 +84,10 @@ describe("ensureRankingsFresh (dirty-by-finish)", () => {
 
   it("assinatura diverge (placar novo) → recalc", async () => {
     const { db, writes } = makeDb({
-      fresh: { exists: true, data: () => ({ signature: "stale-signature", version: CURRENT_VERSION }) },
+      fresh: {
+        exists: true,
+        data: () => ({ signature: "stale-signature", version: CURRENT_VERSION }),
+      },
     });
     await ensureRankingsFresh(db);
     expect(recalcRan(writes)).toBe(true);
@@ -106,7 +111,9 @@ describe("ensureRankingsFresh (dirty-by-finish)", () => {
 
   it("falha lendo partidas efetivas não lança nem recalcula", async () => {
     getEffectiveMatchesMock.mockRejectedValueOnce(new Error("fonte fora"));
-    const { db, writes } = makeDb({ fresh: { exists: true, data: () => ({ signature: EMPTY_SIG }) } });
+    const { db, writes } = makeDb({
+      fresh: { exists: true, data: () => ({ signature: EMPTY_SIG }) },
+    });
     await expect(ensureRankingsFresh(db)).resolves.toBeUndefined();
     expect(recalcRan(writes)).toBe(false);
   });
@@ -121,13 +128,14 @@ describe("ensureRankingsFresh (dirty-by-finish)", () => {
 });
 
 describe("computeFinishedSignature", () => {
-  const m = (over: Record<string, unknown>) => ({
-    id: "m1",
-    status: "finished",
-    homeScore: 1,
-    awayScore: 0,
-    ...over,
-  }) as never;
+  const m = (over: Record<string, unknown>) =>
+    ({
+      id: "m1",
+      status: "finished",
+      homeScore: 1,
+      awayScore: 0,
+      ...over,
+    }) as never;
 
   it("ignora não-finalizados", () => {
     expect(computeFinishedSignature([m({ id: "x", status: "scheduled" })])).toBe(EMPTY_SIG);
@@ -180,7 +188,9 @@ function makeUsersDb(users: Array<Record<string, unknown>>) {
     if (name === "users") {
       return {
         where: vi.fn().mockReturnValue({
-          get: vi.fn().mockResolvedValue({ docs: users.map((u) => ({ id: u["uid"], data: () => u })) }),
+          get: vi
+            .fn()
+            .mockResolvedValue({ docs: users.map((u) => ({ id: u["uid"], data: () => u })) }),
         }),
         get: vi.fn().mockResolvedValue({ docs: [] }),
         doc: vi.fn(),
@@ -303,12 +313,7 @@ describe("recalc — decomposição A/V/E (correct/winner/draw)", () => {
     ] as never);
     const { db, setPayloads } = makeScoringDb(
       [baseUser({ uid: "u1" })],
-      [
-        pred("m1", 2, 0),
-        pred("m2", 1, 0),
-        pred("m3", 2, 2),
-        pred("m4", 0, 1),
-      ],
+      [pred("m1", 2, 0), pred("m2", 1, 0), pred("m3", 2, 2), pred("m4", 0, 1)],
     );
 
     await recalcRankingsBestEffort(db);
@@ -456,11 +461,13 @@ function makeDeltaDb(
       get: vi.fn().mockResolvedValue({ docs: [] }),
       where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
       doc: vi.fn((id: string) => ({
-        get: vi.fn().mockResolvedValue(
-          name === "statistics" && statsByUid[id] !== undefined
-            ? { exists: true, data: () => statsByUid[id] }
-            : { exists: false, data: () => undefined },
-        ),
+        get: vi
+          .fn()
+          .mockResolvedValue(
+            name === "statistics" && statsByUid[id] !== undefined
+              ? { exists: true, data: () => statsByUid[id] }
+              : { exists: false, data: () => undefined },
+          ),
         set: vi.fn(async (payload: unknown) => {
           setPayloads.set(`${name}/${id}`, payload);
         }),
@@ -608,13 +615,15 @@ function makePoolDeltaDb(
       get: vi.fn().mockResolvedValue({ docs: [] }),
       where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
       doc: vi.fn((id: string) => ({
-        get: vi.fn().mockResolvedValue(
-          name === "rankings" &&
-            id === `pool-${poolId}-geral` &&
-            existingPoolEntries !== undefined
-            ? { exists: true, data: () => ({ entries: existingPoolEntries }) }
-            : { exists: false, data: () => undefined },
-        ),
+        get: vi
+          .fn()
+          .mockResolvedValue(
+            name === "rankings" &&
+              id === `pool-${poolId}-geral` &&
+              existingPoolEntries !== undefined
+              ? { exists: true, data: () => ({ entries: existingPoolEntries }) }
+              : { exists: false, data: () => undefined },
+          ),
         set: vi.fn(async (payload: unknown) => {
           setPayloads.set(`${name}/${id}`, payload);
         }),
@@ -667,6 +676,261 @@ describe("recalcPoolRanking — delta por diff do doc de pool (TASK-05)", () => 
       previousPosition: undefined,
       newPosition: 1,
     });
+  });
+});
+
+// ── TASK-02: agregado `eliminatorias` (soma das 5 fases mata-mata) ──────────
+/**
+ * D2 (load-bearing): o agregado `eliminatorias` soma TODAS as 5 stages
+ * mata-mata — dezesseis-avos + oitavas + quartas + semifinal + final —
+ * INCLUINDO dezesseis-avos, que NÃO tem scope de fase próprio
+ * (`RANKING_STAGE_SCOPES` o exclui). Path de agregação dedicado, NÃO derivado
+ * de `byStageScope`.
+ */
+describe("recalc — agregado eliminatorias (TASK-02)", () => {
+  const elimMatch = (id: string, stage: string, homeScore: number, awayScore: number) => ({
+    id,
+    status: "finished" as const,
+    homeScore,
+    awayScore,
+    stage,
+    kickoffAt: "2026-07-01T13:00:00-06:00",
+  });
+  const pred = (uid: string, matchId: string, homeScore: number, awayScore: number) => ({
+    uid,
+    matchId,
+    homeScore,
+    awayScore,
+  });
+  const entriesOf = (payload: unknown) =>
+    (payload as { entries: Array<Record<string, unknown>> } | undefined)?.entries;
+
+  it("RECALC_VERSION bumpado para 4 (shape mudou)", () => {
+    expect(CURRENT_VERSION).toBe(4);
+  });
+
+  it("pontos de dezesseis-avos APARECEM no agregado eliminatorias (D2)", async () => {
+    // Único acerto é em dezesseis-avos (fora de RANKING_STAGE_SCOPES). Se o
+    // agregado derivasse de byStageScope, dropparia este ponto → 0. Deve ser 10.
+    getEffectiveMatchesMock.mockResolvedValue([elimMatch("d16", "dezesseis-avos", 2, 0)] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1" })],
+      [pred("u1", "d16", 2, 0)], // exato → 10
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const e = entriesOf(setPayloads.get("rankings/eliminatorias"))?.find((x) => x["uid"] === "u1");
+    expect(e).toBeDefined();
+    expect(e!["points"]).toBe(10);
+    expect(e!["correct"]).toBe(1);
+  });
+
+  it("agregado = soma ponderada das 5 stages eliminatórias", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([
+      elimMatch("d16", "dezesseis-avos", 2, 0), // exato → 10
+      elimMatch("oit", "oitavas", 2, 0), // vencedor parcial → 5
+      elimMatch("qua", "quartas", 1, 1), // empate parcial → 5
+      elimMatch("sem", "semifinal", 2, 0), // exato → 10
+      elimMatch("fin", "final", 1, 0), // errado → 0
+    ] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1" })],
+      [
+        pred("u1", "d16", 2, 0), // exato
+        pred("u1", "oit", 1, 0), // mesmo vencedor, placar errado → parcial
+        pred("u1", "qua", 3, 3), // empate previsto, placar errado → parcial
+        pred("u1", "sem", 2, 0), // exato
+        pred("u1", "fin", 0, 1), // vencedor errado → wrong
+      ],
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const e = entriesOf(setPayloads.get("rankings/eliminatorias"))?.find((x) => x["uid"] === "u1");
+    expect(e?.["points"]).toBe(30); // 10+5+5+10+0
+    expect(e?.["correct"]).toBe(2); // d16 + semi
+    expect(e?.["winner"]).toBe(1); // oitavas
+    expect(e?.["draw"]).toBe(1); // quartas
+    expect(e?.["wrong"]).toBe(1); // final
+  });
+
+  it("accuracy usa denominador das 5 stages elim (inclui dezesseis-avos)", async () => {
+    // 2 finalizadas elim (d16 + final). 1 exato (d16). Denominador correto = 2 →
+    // accuracy 50. Se excluísse dezesseis-avos do denom (bug), seria 1/1 = 100.
+    getEffectiveMatchesMock.mockResolvedValue([
+      elimMatch("d16", "dezesseis-avos", 2, 0),
+      elimMatch("fin", "final", 1, 0),
+    ] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1" })],
+      [
+        pred("u1", "d16", 2, 0), // exato
+        pred("u1", "fin", 0, 1), // errado
+      ],
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const e = entriesOf(setPayloads.get("rankings/eliminatorias"))?.find((x) => x["uid"] === "u1");
+    expect(e?.["accuracy"]).toBe(50);
+  });
+
+  it("usuário sem palpite eliminatório → entry zerada no agregado", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([elimMatch("d16", "dezesseis-avos", 2, 0)] as never);
+    const { db, setPayloads } = makeScoringDb([baseUser({ uid: "semElim" })], []);
+
+    await recalcRankingsBestEffort(db);
+
+    const e = entriesOf(setPayloads.get("rankings/eliminatorias"))?.find(
+      (x) => x["uid"] === "semElim",
+    );
+    expect(e).toBeDefined();
+    expect(e!["points"]).toBe(0);
+    expect(e!["correct"]).toBe(0);
+  });
+
+  it("doc por pool eliminatorias re-rankeado só entre membros do pool", async () => {
+    // u1 ∈ p1 (exato, 10), u2 ∈ p2 (parcial, 5). Cada doc de pool só com seu membro.
+    getEffectiveMatchesMock.mockResolvedValue([elimMatch("oit", "oitavas", 2, 0)] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1", groupId: "p1" }), baseUser({ uid: "u2", groupId: "p2" })],
+      [pred("u1", "oit", 2, 0), pred("u2", "oit", 1, 0)],
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const p1 = entriesOf(setPayloads.get("rankings/pool-p1-eliminatorias"));
+    const p2 = entriesOf(setPayloads.get("rankings/pool-p2-eliminatorias"));
+    expect(p1?.map((e) => e["uid"])).toEqual(["u1"]);
+    expect(p2?.map((e) => e["uid"])).toEqual(["u2"]);
+    // Cada membro é #1 isolado no próprio pool.
+    expect(p1?.[0]?.["position"]).toBe(1);
+    expect(p2?.[0]?.["position"]).toBe(1);
+  });
+
+  it("doc global eliminatorias rankeia TODOS os aprovados por pontos do agregado", async () => {
+    // u2 (exato, 10) > u1 (parcial, 5) no agregado global, independente de pool.
+    getEffectiveMatchesMock.mockResolvedValue([elimMatch("oit", "oitavas", 2, 0)] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1" }), baseUser({ uid: "u2" })],
+      [pred("u1", "oit", 1, 0), pred("u2", "oit", 2, 0)],
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const g = entriesOf(setPayloads.get("rankings/eliminatorias"))!;
+    expect(g.find((e) => e["uid"] === "u2")?.["position"]).toBe(1);
+    expect(g.find((e) => e["uid"] === "u1")?.["position"]).toBe(2);
+  });
+
+  it("stages NÃO-eliminatórias (grupos, terceiro) ficam fora do agregado", async () => {
+    // Acertos em grupos e terceiro NÃO podem inflar o agregado eliminatorias.
+    getEffectiveMatchesMock.mockResolvedValue([
+      elimMatch("grp", "grupos", 2, 0),
+      elimMatch("ter", "terceiro", 2, 0),
+    ] as never);
+    const { db, setPayloads } = makeScoringDb(
+      [baseUser({ uid: "u1" })],
+      [pred("u1", "grp", 2, 0), pred("u1", "ter", 2, 0)], // ambos exatos
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    const e = entriesOf(setPayloads.get("rankings/eliminatorias"))?.find((x) => x["uid"] === "u1");
+    expect(e?.["points"]).toBe(0); // nenhuma das duas stages conta
+    expect(e?.["correct"]).toBe(0);
+  });
+});
+
+// ── TASK-02: cleanup de órfão NÃO apaga pool-*-eliminatorias vivo ───────────
+/**
+ * DB que serve users/preds E devolve docs de ranking EXISTENTES na coleção
+ * `rankings` (`.get()`), capturando deletes. Exercita o cleanup de órfãos:
+ * `pool-{id}-eliminatorias` de pool vivo deve sobreviver; órfão é apagado.
+ */
+function makeCleanupDb(
+  users: Array<Record<string, unknown>>,
+  preds: Array<Record<string, unknown>>,
+  existingRankingDocIds: string[],
+) {
+  const deletes: string[] = [];
+  const collection = vi.fn((name: string) => {
+    if (name === "users") {
+      return {
+        where: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            docs: users.map((u) => ({ id: u["uid"], data: () => u })),
+          }),
+        }),
+        get: vi.fn().mockResolvedValue({ docs: [] }),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "predictions") {
+      return {
+        get: vi.fn().mockResolvedValue({
+          docs: preds.map((p, i) => ({ id: `p${i}`, data: () => p })),
+        }),
+        where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "rankings") {
+      return {
+        get: vi.fn().mockResolvedValue({
+          docs: existingRankingDocIds.map((id) => ({
+            id,
+            ref: {
+              delete: vi.fn(async () => {
+                deletes.push(id);
+              }),
+            },
+          })),
+        }),
+        where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+        doc: vi.fn(() => ({
+          get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
+          set: vi.fn(async () => {}),
+          ref: { delete: vi.fn() },
+        })),
+      };
+    }
+    return {
+      get: vi.fn().mockResolvedValue({ docs: [] }),
+      where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+      doc: vi.fn(() => ({
+        get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
+        set: vi.fn(async () => {}),
+        ref: { delete: vi.fn() },
+      })),
+    };
+  });
+  return { db: { collection } as never, deletes };
+}
+
+describe("recalc — cleanup de órfão preserva pool-*-eliminatorias vivo (TASK-02)", () => {
+  it("apaga pool órfão eliminatorias mas preserva o de pool vivo", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([
+      {
+        id: "oit",
+        status: "finished",
+        homeScore: 2,
+        awayScore: 0,
+        stage: "oitavas",
+        kickoffAt: "2026-07-01T13:00:00-06:00",
+      },
+    ] as never);
+    const { db, deletes } = makeCleanupDb(
+      [baseUser({ uid: "u1", groupId: "p1" })], // pool p1 vivo
+      [{ uid: "u1", matchId: "oit", homeScore: 2, awayScore: 0 }],
+      ["pool-p1-eliminatorias", "pool-dead-eliminatorias"],
+    );
+
+    await recalcRankingsBestEffort(db);
+
+    expect(deletes).toContain("pool-dead-eliminatorias"); // órfão removido
+    expect(deletes).not.toContain("pool-p1-eliminatorias"); // pool vivo preservado
   });
 });
 

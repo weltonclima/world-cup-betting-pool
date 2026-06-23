@@ -60,7 +60,7 @@ describe("shared › enums", () => {
     expect(stageSchema.safeParse("round-of-32").success).toBe(false); // slug inválido
   });
 
-  it("rankingScopeSchema aceita geral + 5 fases", () => {
+  it("rankingScopeSchema aceita geral + 5 fases + agregado eliminatorias", () => {
     for (const s of [
       "geral",
       "grupos",
@@ -68,13 +68,14 @@ describe("shared › enums", () => {
       "quartas",
       "semifinal",
       "final",
+      "eliminatorias",
     ]) {
       expect(rankingScopeSchema.safeParse(s).success).toBe(true);
     }
     expect(rankingScopeSchema.safeParse("repescagem").success).toBe(false);
   });
 
-  it("rankingScopeSchema não inclui dezesseis-avos (sem ranking de 16 avos)", () => {
+  it("rankingScopeSchema não inclui dezesseis-avos como scope de fase (entra só no agregado eliminatorias)", () => {
     expect(rankingScopeSchema.safeParse("dezesseis-avos").success).toBe(false);
   });
 
@@ -180,7 +181,13 @@ describe("shared › inferência de tipos", () => {
       | "final"
     >();
     expectTypeOf<RankingScope>().toEqualTypeOf<
-      "geral" | "grupos" | "oitavas" | "quartas" | "semifinal" | "final"
+      | "geral"
+      | "grupos"
+      | "oitavas"
+      | "quartas"
+      | "semifinal"
+      | "final"
+      | "eliminatorias"
     >();
     expectTypeOf<MatchStatus>().toEqualTypeOf<
       "scheduled" | "live" | "finished" | "postponed" | "canceled"

@@ -50,9 +50,12 @@ export const stageSchema = z.enum([
   "final",
 ]);
 
-// Escopo de ranking: "geral" + as 5 fases de ranking.
+// Escopo de ranking: "geral" + as 5 fases de ranking + o agregado "eliminatorias".
 // Exclui "terceiro" (disputa do 3º lugar, jogo único sem ranking próprio)
-// e "dezesseis-avos" (Copa 2026 — sem ranking de fase previsto no PRD).
+// e "dezesseis-avos" como scope de FASE individual (Copa 2026 — sem card de 16-avos).
+// "eliminatorias" é AGREGADO (não 1 stage → 1 scope): soma TODAS as fases mata-mata
+// — dezesseis-avos + oitavas + quartas + semifinal + final — incluindo os pontos de
+// dezesseis-avos, que não têm scope de fase próprio.
 export const rankingScopeSchema = z.enum([
   "geral",
   "grupos",
@@ -60,6 +63,7 @@ export const rankingScopeSchema = z.enum([
   "quartas",
   "semifinal",
   "final",
+  "eliminatorias",
 ]);
 
 export const matchStatusSchema = z.enum([
