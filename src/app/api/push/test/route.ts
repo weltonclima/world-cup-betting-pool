@@ -55,18 +55,18 @@ export async function GET(): Promise<NextResponse> {
 
   try {
     const messaging = getAdminMessaging();
-    // Tipado fora do literal: o `icon` extra só é aceito por uma variável (o
-    // excess-property check do TS só dispara em literal inline) — mesmo padrão
-    // de `sendPushForNotifications`.
-    const notification: { title: string; body: string; icon?: string } = {
+    // `icon` é campo Web Push — NÃO existe em `notification` do FCM Admin SDK
+    // (que só aceita title/body/imageUrl); colocá-lo lá faz o FCM rejeitar com
+    // `messaging/invalid-argument`. Vai em `webpush.notification`, lido pelo SW.
+    const notification = {
       title: "Teste de push ✅",
       body: "Se você está vendo isto, a entrega de push está funcionando.",
-      icon: PUSH_ICON,
     };
     const res = await messaging.sendEachForMulticast({
       tokens,
       notification,
       data: { url: "/notifications", type: "system" },
+      webpush: { notification: { ...notification, icon: PUSH_ICON } },
     });
 
     // Diagnóstico por token: índice ↔ token (mascarado), messageId ou código de erro.

@@ -245,6 +245,14 @@ describe("sendPushForNotifications — agrupamento e payload", () => {
     const msg = sendMock.mock.calls[0]![0];
     expect(msg.notification).toMatchObject({ title: "Pódio!", body: "1º lugar" });
     expect(msg.data).toMatchObject({ url: "/rankings", type: "ranking" });
+    // `icon` é campo Web Push: vai em webpush.notification, NUNCA no notification
+    // top-level (o FCM Admin SDK rejeita com messaging/invalid-argument).
+    expect(msg.notification).not.toHaveProperty("icon");
+    expect(msg.webpush.notification).toMatchObject({
+      title: "Pódio!",
+      body: "1º lugar",
+      icon: expect.stringContaining("/icons/"),
+    });
   });
 
   it("mapa type→url: games/system→/notifications, ranking→/rankings", async () => {
