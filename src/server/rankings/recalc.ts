@@ -57,8 +57,11 @@ const FRESHNESS_DOC_ID = "_freshness";
  *  2 — + correct/winner/draw na entry (Tela 01) e totalPartial em statistics (commit 89eeca3).
  *  3 — + docs por pool nas fases e grupos da Copa (`pool-{poolId}-{scope}`,
  *      `pool-{poolId}-grupo-{groupId}`): isolamento multi-tenant da Tela 03 (PRD-09).
+ *  4 — + ranking agregado das eliminatórias (`rankings/eliminatorias` e
+ *      `pool-{poolId}-eliminatorias`): soma das 5 fases mata-mata incl. dezesseis-avos
+ *      (PRD-16 / TASK-02).
  */
-export const RECALC_VERSION = 3;
+export const RECALC_VERSION = 4;
 
 /**
  * Assinatura determinística do conjunto de partidas FINALIZADAS, incluindo o
@@ -81,14 +84,17 @@ export function computeFinishedSignature(matches: MatchWithId[]): string {
 }
 
 /** Fases que possuem ranking próprio (PRD-05). Exclui dezesseis-avos e terceiro. */
-const RANKING_STAGE_SCOPES = [
-  "grupos",
-  "oitavas",
-  "quartas",
-  "semifinal",
-  "final",
-] as const;
+const RANKING_STAGE_SCOPES = ["grupos", "oitavas", "quartas", "semifinal", "final"] as const;
 type RankingStageScope = (typeof RANKING_STAGE_SCOPES)[number];
+
+/**
+ * Fases mata-mata que compõem o AGREGADO `eliminatorias` (PRD-16 / TASK-02).
+ * Inclui `dezesseis-avos`, que NÃO está em `RANKING_STAGE_SCOPES` (sem card de
+ * fase próprio na Copa 2026) — por isso o agregado precisa de path próprio e
+ * NÃO pode ser derivado de `byStageScope` (que dropparia dezesseis-avos, D2).
+ */
+const ELIMINATION_STAGES = ["dezesseis-avos", "oitavas", "quartas", "semifinal", "final"] as const;
+const ELIMINATION_SCOPE = "eliminatorias" as const;
 
 type Stage = Match["stage"];
 
@@ -115,6 +121,7 @@ interface UserAgg {
   wrongGeral: number;
   correctByStage: Partial<Record<Stage, number>>; // contagem de EXATOS por fase
   byStageScope: Map<RankingStageScope, ScopeCounts>;
+  byElimination: ScopeCounts; // AGREGADO das 5 fases mata-mata (incl. dezesseis-avos)
   byGroup: Map<string, ScopeCounts>;
   firstPredictionAt: string | undefined;
   finishedPreds: Array<{ kickoffAt: string; correct: boolean }>;
@@ -133,6 +140,7 @@ function emptyAgg(): UserAgg {
     wrongGeral: 0,
     correctByStage: {},
     byStageScope: new Map(),
+    byElimination: emptyScopeCounts(),
     byGroup: new Map(),
     firstPredictionAt: undefined,
     finishedPreds: [],
@@ -200,10 +208,16 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   const finishedGeral = finished.length;
   const finishedByStage = new Map<RankingStageScope, number>();
   const finishedByGroup = new Map<string, number>();
+  // Denominador do agregado: finalizadas em TODAS as 5 stages mata-mata (incl.
+  // dezesseis-avos) — casa com o numerador de exatos do `byElimination` (D2).
+  let finishedElimination = 0;
   for (const m of finished) {
     if ((RANKING_STAGE_SCOPES as readonly string[]).includes(m.stage)) {
       const s = m.stage as RankingStageScope;
       finishedByStage.set(s, (finishedByStage.get(s) ?? 0) + 1);
+    }
+    if ((ELIMINATION_STAGES as readonly string[]).includes(m.stage)) {
+      finishedElimination += 1;
     }
     if (m.stage === "grupos" && m.groupId) {
       finishedByGroup.set(m.groupId, (finishedByGroup.get(m.groupId) ?? 0) + 1);
@@ -211,10 +225,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   }
 
   // ─── 2. Usuários aprovados ─────────────────────────────────────────────────
-  const usersSnap = await db
-    .collection("users")
-    .where("status", "==", "approved")
-    .get();
+  const usersSnap = await db.collection("users").where("status", "==", "approved").get();
   const approved = usersSnap.docs
     .map((d) => {
       const parsed = userSchema.safeParse(d.data());
@@ -286,6 +297,17 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
         agg.byStageScope.set(s, cur);
       }
 
+      // AGREGADO eliminatórias: path próprio (inclui dezesseis-avos, fora de
+      // RANKING_STAGE_SCOPES). NÃO derivar de byStageScope (dropparia 16-avos, D2).
+      if ((ELIMINATION_STAGES as readonly string[]).includes(match.stage)) {
+        const el = agg.byElimination;
+        el.points += points;
+        if (correct) el.correct += 1;
+        if (isWinner) el.winner += 1;
+        if (isDraw) el.draw += 1;
+        if (status === "wrong") el.wrong += 1;
+      }
+
       if (match.stage === "grupos" && match.groupId) {
         const cur = agg.byGroup.get(match.groupId) ?? emptyScopeCounts();
         cur.points += points;
@@ -349,11 +371,14 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   const geralRanked = rankParticipants(geralParticipants);
   const geralPositionByUid = new Map(geralRanked.map((r) => [r.uid, r.position]));
   writes.push(
-    db.collection("rankings").doc("geral").set({
-      scope: "geral",
-      updatedAt: nowIso,
-      entries: toBudgetedEntries(geralRanked),
-    }),
+    db
+      .collection("rankings")
+      .doc("geral")
+      .set({
+        scope: "geral",
+        updatedAt: nowIso,
+        entries: toBudgetedEntries(geralRanked),
+      }),
   );
 
   // ─── 5.1 Rankings por pool (multi-tenant, PRD-09 TASK-10) ──────────────────
@@ -373,11 +398,14 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   let poolsWritten = 0;
   for (const [poolId, participants] of poolMembers) {
     writes.push(
-      db.collection("rankings").doc(`pool-${poolId}-geral`).set({
-        scope: "geral",
-        updatedAt: nowIso,
-        entries: toBudgetedEntries(rankParticipants(participants)),
-      }),
+      db
+        .collection("rankings")
+        .doc(`pool-${poolId}-geral`)
+        .set({
+          scope: "geral",
+          updatedAt: nowIso,
+          entries: toBudgetedEntries(rankParticipants(participants)),
+        }),
     );
     poolsWritten += 1;
   }
@@ -394,9 +422,8 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     livePoolIds.some(
       (p) =>
         docId === `pool-${p}-geral` ||
-        (RANKING_STAGE_SCOPES as readonly string[]).some(
-          (s) => docId === `pool-${p}-${s}`,
-        ) ||
+        docId === `pool-${p}-${ELIMINATION_SCOPE}` ||
+        (RANKING_STAGE_SCOPES as readonly string[]).some((s) => docId === `pool-${p}-${s}`) ||
         docId.startsWith(`pool-${p}-grupo-`),
     );
   const existingRankingDocs = await db.collection("rankings").get();
@@ -428,24 +455,73 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       });
     }
     writes.push(
-      db.collection("rankings").doc(scope).set({
-        scope,
-        updatedAt: nowIso,
-        entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
-      }),
+      db
+        .collection("rankings")
+        .doc(scope)
+        .set({
+          scope,
+          updatedAt: nowIso,
+          entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
+        }),
     );
     scopesWritten += 1;
 
     for (const [poolId, members] of poolMembers) {
       const poolPart = members.map((m) => partByUid.get(m.uid)!);
       writes.push(
-        db.collection("rankings").doc(`pool-${poolId}-${scope}`).set({
-          scope,
+        db
+          .collection("rankings")
+          .doc(`pool-${poolId}-${scope}`)
+          .set({
+            scope,
+            updatedAt: nowIso,
+            entries: toBudgetedEntries(rankParticipants(poolPart)),
+          }),
+      );
+    }
+  }
+
+  // ─── 6.1 Ranking AGREGADO eliminatórias (PRD-16 / TASK-02) ─────────────────
+  // Soma das 5 fases mata-mata (incl. dezesseis-avos) — `rankings/eliminatorias`
+  // (global) + `pool-{poolId}-eliminatorias` (re-rankeado só entre membros do pool,
+  // pelos pontos do agregado, NÃO por pointsGeral). Espelha o loop das fases.
+  const elimPartByUid = new Map<string, RankableParticipant>();
+  for (const u of approved) {
+    const el = aggByUid.get(u.uid)!.byElimination;
+    elimPartByUid.set(u.uid, {
+      uid: u.uid,
+      points: el.points, // ponderado (ordena o agregado)
+      accuracy: computeAccuracy(el.correct, finishedElimination), // exatos / finalizadas elim
+      wrong: el.wrong,
+      correct: el.correct,
+      winner: el.winner,
+      draw: el.draw,
+      firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
+    });
+  }
+  writes.push(
+    db
+      .collection("rankings")
+      .doc(ELIMINATION_SCOPE)
+      .set({
+        scope: ELIMINATION_SCOPE,
+        updatedAt: nowIso,
+        entries: toBudgetedEntries(rankParticipants([...elimPartByUid.values()])),
+      }),
+  );
+  scopesWritten += 1;
+  for (const [poolId, members] of poolMembers) {
+    const poolPart = members.map((m) => elimPartByUid.get(m.uid)!);
+    writes.push(
+      db
+        .collection("rankings")
+        .doc(`pool-${poolId}-${ELIMINATION_SCOPE}`)
+        .set({
+          scope: ELIMINATION_SCOPE,
           updatedAt: nowIso,
           entries: toBudgetedEntries(rankParticipants(poolPart)),
         }),
-      );
-    }
+    );
   }
 
   // ─── 7. Rankings por grupo da Copa (A–L) ───────────────────────────────────
@@ -468,22 +544,28 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       });
     }
     writes.push(
-      db.collection("rankings").doc(`grupo-${groupId}`).set({
-        groupId,
-        updatedAt: nowIso,
-        entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
-      }),
+      db
+        .collection("rankings")
+        .doc(`grupo-${groupId}`)
+        .set({
+          groupId,
+          updatedAt: nowIso,
+          entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
+        }),
     );
     groupsWritten += 1;
 
     for (const [poolId, members] of poolMembers) {
       const poolPart = members.map((m) => partByUid.get(m.uid)!);
       writes.push(
-        db.collection("rankings").doc(`pool-${poolId}-grupo-${groupId}`).set({
-          groupId,
-          updatedAt: nowIso,
-          entries: toBudgetedEntries(rankParticipants(poolPart)),
-        }),
+        db
+          .collection("rankings")
+          .doc(`pool-${poolId}-grupo-${groupId}`)
+          .set({
+            groupId,
+            updatedAt: nowIso,
+            entries: toBudgetedEntries(rankParticipants(poolPart)),
+          }),
       );
     }
   }
@@ -500,7 +582,8 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       ? (existing!["positionHistory"] as Array<Record<string, unknown>>)
       : [];
     const prevMaxRound = prevHistory.reduce(
-      (max, h) => (typeof h["round"] === "number" && h["round"] > max ? (h["round"] as number) : max),
+      (max, h) =>
+        typeof h["round"] === "number" && h["round"] > max ? (h["round"] as number) : max,
       0,
     );
     const newPosition = geralPositionByUid.get(u.uid) ?? 1;
@@ -531,19 +614,22 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
           },
         ];
 
-    await db.collection("statistics").doc(u.uid).set(
-      {
-        uid: u.uid,
-        totalCorrect: a.correctGeral, // EXATOS (não pontos ponderados)
-        totalPartial: a.winnerGeral + a.drawGeral, // parciais (vencedor + empate)
-        totalWrong: a.wrongGeral,
-        accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
-        longestStreak: longestStreak(a.finishedPreds),
-        correctByStage: a.correctByStage,
-        positionHistory,
-      },
-      { merge: true },
-    );
+    await db
+      .collection("statistics")
+      .doc(u.uid)
+      .set(
+        {
+          uid: u.uid,
+          totalCorrect: a.correctGeral, // EXATOS (não pontos ponderados)
+          totalPartial: a.winnerGeral + a.drawGeral, // parciais (vencedor + empate)
+          totalWrong: a.wrongGeral,
+          accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
+          longestStreak: longestStreak(a.finishedPreds),
+          correctByStage: a.correctByStage,
+          positionHistory,
+        },
+        { merge: true },
+      );
   });
   writes.push(...statsWrites);
 
@@ -562,7 +648,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     updatedAt: nowIso,
     totalParticipants: approved.length,
     highestPoints, // ponderado
-    ...(leader && approved.length > 0 ? { highestPointsName: userByUid.get(leader.uid)!.name } : {}),
+    ...(leader && approved.length > 0
+      ? { highestPointsName: userByUid.get(leader.uid)!.name }
+      : {}),
     lowestPoints, // ponderado
     averagePoints, // ponderado
     totalCorrect, // EXATOS
@@ -620,10 +708,7 @@ export interface RecalcPoolSummary {
  * igual ao `geralParticipants` do recalc completo. Idempotente. Lança em falha de
  * fonte de dados (`getEffectiveMatches`) — o chamador trata.
  */
-export async function recalcPoolRanking(
-  db: Firestore,
-  poolId: string,
-): Promise<RecalcPoolSummary> {
+export async function recalcPoolRanking(db: Firestore, poolId: string): Promise<RecalcPoolSummary> {
   const matches = await getEffectiveMatches();
   const finished = matches.filter((m) => m.status === "finished");
   const matchById = new Map(finished.map((m) => [m.id, m]));
@@ -631,10 +716,7 @@ export async function recalcPoolRanking(
 
   // Membros aprovados do pool. Filtra `groupId` em memória (evita índice composto
   // status+groupId); só este pool é tocado — isolamento multi-tenant (D2).
-  const usersSnap = await db
-    .collection("users")
-    .where("status", "==", "approved")
-    .get();
+  const usersSnap = await db.collection("users").where("status", "==", "approved").get();
   const members = usersSnap.docs
     .map((d) => {
       const parsed = userSchema.safeParse(d.data());
@@ -681,7 +763,8 @@ export async function recalcPoolRanking(
       if (!match) continue; // partida não finalizada / inexistente
       const scored = scorePrediction(pred, match);
       points += scored.points; // ponderado (5/10)
-      if (scored.status === "correct") correct += 1; // EXATO
+      if (scored.status === "correct")
+        correct += 1; // EXATO
       else if (scored.status === "partial") {
         if (pred.homeScore === pred.awayScore) draw += 1;
         else winner += 1;
@@ -808,10 +891,7 @@ export async function ensureRankingsFresh(db: Firestore): Promise<void> {
   // nada mudou desde o recalc — nem placar novo, nem formato de saída. Docs gravados
   // antes do campo `version` (formato 1) divergem de RECALC_VERSION → forçam 1 recalc.
   const freshData = freshSnap.exists ? freshSnap.data() : undefined;
-  if (
-    freshData?.["signature"] === currentSignature &&
-    freshData?.["version"] === RECALC_VERSION
-  ) {
+  if (freshData?.["signature"] === currentSignature && freshData?.["version"] === RECALC_VERSION) {
     return;
   }
 

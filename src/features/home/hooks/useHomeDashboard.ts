@@ -9,6 +9,7 @@ import { scorePrediction } from "@/features/predictions/lib";
 import {
   buildPredictionsHref,
   buildTeamMap,
+  deriveCurrentStage,
   deriveHeroSummary,
   deriveNotices,
   deriveOpenMatches,
@@ -65,17 +66,17 @@ export function useHomeDashboard(): HomeDashboardData {
   // 2. Queries por recurso (sem cache override — herdam global 30min/24h)
   // Ranking FECHADO por pool (PRD-09): o card da Home mostra só o pool do usuário,
   // nunca o ranking global. Sem pool → query desabilitada (Hero sem posição).
-  const rankingQuery     = usePoolRanking(profile?.groupId);
-  const statisticsQuery  = useStatistics(uid);
-  const poolStatsQuery   = usePoolStats();
-  const nextMatchQuery   = useNextMatch();
-  const recentQuery      = useRecentResults();
-  const teamsQuery       = useTeams();
+  const rankingQuery = usePoolRanking(profile?.groupId);
+  const statisticsQuery = useStatistics(uid);
+  const poolStatsQuery = usePoolStats();
+  const nextMatchQuery = useNextMatch();
+  const recentQuery = useRecentResults();
+  const teamsQuery = useTeams();
   const predictionsQuery = usePredictions(uid);
-  const settingsQuery    = useSystemSettings();
+  const settingsQuery = useSystemSettings();
   // Lista de jogos enriquecida (TASK-02 home-revamp). Reusa useMatches/useTeams/
   // usePredictions internamente — React Query deduplica com os hooks acima.
-  const matchesListData  = useMatchesList();
+  const matchesListData = useMatchesList();
 
   // 3. Estado agregado — todas as queries participam de isLoading e isError.
   // Queries desabilitadas (uid=null) reportam isLoading: false no TanStack Query v5,
@@ -92,7 +93,7 @@ export function useHomeDashboard(): HomeDashboardData {
     matchesListData,
   ];
   const isLoading = queries.some((q) => q.isLoading);
-  const isError   = queries.some((q) => q.isError);
+  const isError = queries.some((q) => q.isError);
 
   // B-02: refetch estável — lista explícita de .refetch individuais no dep array.
   // TanStack Query v5 garante estabilidade de identidade de .refetch entre renders.
@@ -126,6 +127,7 @@ export function useHomeDashboard(): HomeDashboardData {
       nextMatch: null,
       recentResults: [],
       openMatches: { items: [], totalOpen: 0 },
+      currentStage: null,
       notices: [],
       isLoading,
       isError,
@@ -134,14 +136,14 @@ export function useHomeDashboard(): HomeDashboardData {
   }
 
   // 5. Dados brutos (podem ser undefined enquanto carregam)
-  const ranking     = rankingQuery.data;
-  const statistics  = statisticsQuery.data;
-  const poolStats   = poolStatsQuery.data ?? null;
-  const nextMatch   = nextMatchQuery.data ?? null;
-  const recent      = recentQuery.data ?? [];
-  const teams       = teamsQuery.data ?? [];
+  const ranking = rankingQuery.data;
+  const statistics = statisticsQuery.data;
+  const poolStats = poolStatsQuery.data ?? null;
+  const nextMatch = nextMatchQuery.data ?? null;
+  const recent = recentQuery.data ?? [];
+  const teams = teamsQuery.data ?? [];
   const predictions = predictionsQuery.data ?? [];
-  const settings    = settingsQuery.data ?? null;
+  const settings = settingsQuery.data ?? null;
 
   // 6. Cache de teams (Map para O(1) lookup — sem N+1)
   const teamMap = buildTeamMap(teams);
@@ -151,10 +153,7 @@ export function useHomeDashboard(): HomeDashboardData {
 
   // 8. Raio-X dos palpites (TASK-03 home-revamp): scoring client-side sobre
   // a lista de partidas já carregada (finished × predictions).
-  const predictionBreakdown = derivePredictionBreakdown(
-    matchesListData.flatList,
-    predictions,
-  );
+  const predictionBreakdown = derivePredictionBreakdown(matchesListData.flatList, predictions);
 
   // 9. Próximo jogo com join de teams + status do palpite
   let nextMatchSummary: NextMatchSummary | null = null;
@@ -186,16 +185,18 @@ export function useHomeDashboard(): HomeDashboardData {
     // Omite jogo sem placar (não deveria ocorrer para finished, mas protege o tipo)
     if (match.homeScore === null || match.awayScore === null) return [];
     const pred = predictions.find((p) => p.matchId === match.id) ?? null;
-    return [{
-      matchId: match.id,
-      kickoffAt: match.kickoffAt,
-      homeTeam: resolveTeam(match.homeTeamId, teamMap),
-      awayTeam: resolveTeam(match.awayTeamId, teamMap),
-      matchHomeScore: match.homeScore,
-      matchAwayScore: match.awayScore,
-      userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
-      points: pred ? scorePrediction(pred, match).points : 0,
-    }];
+    return [
+      {
+        matchId: match.id,
+        kickoffAt: match.kickoffAt,
+        homeTeam: resolveTeam(match.homeTeamId, teamMap),
+        awayTeam: resolveTeam(match.awayTeamId, teamMap),
+        matchHomeScore: match.homeScore,
+        matchAwayScore: match.awayScore,
+        userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
+        points: pred ? scorePrediction(pred, match).points : 0,
+      },
+    ];
   });
 
   // 11. `now` único para derivações temporais (avisos + jogos abertos).
@@ -207,12 +208,16 @@ export function useHomeDashboard(): HomeDashboardData {
   // 13. Jogos abertos para palpitar (TASK-02 home-revamp).
   const openMatches = deriveOpenMatches(matchesListData.flatList, now, 3);
 
+  // 14. Fase ativa da Copa para o banner (TASK-04 / PRD-16).
+  const currentStage = deriveCurrentStage(matchesListData.flatList);
+
   return {
     heroSummary,
     predictionBreakdown,
     nextMatch: nextMatchSummary,
     recentResults,
     openMatches,
+    currentStage,
     notices,
     isLoading,
     isError,

@@ -101,6 +101,7 @@ const baseDashboardSuccess: HomeDashboardData = {
   nextMatch: null,
   recentResults: [],
   openMatches: { items: [], totalOpen: 0 },
+  currentStage: null,
   notices: [],
   isLoading: false,
   isError: false,
@@ -266,9 +267,7 @@ describe("HomeDashboard — estado de sucesso", () => {
 
   it("T20: exibe card Jogos abertos (empty state quando não há jogos abertos)", () => {
     render(<HomeDashboard />);
-    expect(
-      screen.getByRole("article", { name: "Jogos abertos para palpitar" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("article", { name: "Jogos abertos para palpitar" })).toBeTruthy();
     expect(screen.getByText("Você está em dia!")).toBeTruthy();
   });
 });
@@ -284,9 +283,7 @@ describe("HomeDashboard — estado sucesso sem dados (tudo null/vazio)", () => {
 
   it("T21: HeroCard exibe empty-state quando não há dados", () => {
     render(<HomeDashboard />);
-    expect(
-      screen.getByText("Seu desempenho aparece aqui após o primeiro jogo."),
-    ).toBeTruthy();
+    expect(screen.getByText("Seu desempenho aparece aqui após o primeiro jogo.")).toBeTruthy();
   });
 
   it("T22: HomeHeader exibe fallback quando profile.name não é fornecido pelo auth", () => {

@@ -7,7 +7,12 @@ import type { Firestore } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 import { predictionSchema } from "@/schemas";
-import { scorePrediction } from "@/features/predictions/lib";
+import {
+  scorePrediction,
+  matchResultFingerprint,
+  predictionScoreChanged,
+} from "@/features/predictions/lib";
+import { readScoreState, writeScoreState } from "@/server/scoring/scoreState";
 import { fetchAllMatches } from "@/server/copaData";
 import { resolveTeamByCode } from "@/server/copaData/teamRegistry";
 import {
@@ -170,7 +175,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (finishedMatches.length === 0) {
     return NextResponse.json(
-      { scoredMatches: 0, updatedPredictions: 0 },
+      { scoredMatches: 0, updatedPredictions: 0, skippedMatches: 0 },
       { status: 200 },
     );
   }
@@ -178,16 +183,57 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // ─── 4. Pontuação paralela ────────────────────────────────────────────────
   const db = getAdminFirestore(); // singleton — retorna mesma instância
 
+  // scoring-write-cost (TASK-03): 1 read do doc de controle. Mapa { matchId: hash }
+  // do que já foi pontuado — sustenta o filtro grosso (B). Degrada seguro p/ vazio.
+  const scoreState = await readScoreState(db);
+
+  /**
+   * Resultado do processamento de UMA partida finished.
+   * - `processed: false` → partida pulada pelo filtro grosso (hash inalterado):
+   *   nenhuma query de palpites, nenhum write, `hash` = o valor já registrado.
+   * - `processed: true` → partida nova/corrigida: `hash` = fingerprint atual,
+   *   `count` = palpites efetivamente regravados (filtro fino), `hits` p/ fan-out.
+   */
+  type MatchResult = {
+    matchId: string;
+    hash: string;
+    processed: boolean;
+    /**
+     * `true` só quando TODOS os palpites da partida foram parseados com sucesso.
+     * Um doc malformado torna a pontuação da partida incompleta: o hash NÃO pode
+     * avançar (senão a partida é pulada para sempre pelo filtro grosso e o palpite
+     * some do ranking se voltar a ser válido — viola CA3). `false` força re-processo
+     * no próximo run (degrada para o comportamento legado só nessa partida).
+     */
+    complete: boolean;
+    count: number;
+    hits: ScoreHit[];
+  };
+
   /**
    * Processa uma única partida finished:
-   * - Busca todos os palpites (matchId ==)
-   * - Parseia, pontua e grava em paralelo
-   * - Coleta candidatos a notificação `games` (só `correct`/`partial`)
-   * - Retorna o número de palpites escritos e os hits para o fan-out
+   * - Filtro grosso (B): se o fingerprint do resultado bate o estado registrado,
+   *   pula tudo (0 reads de palpites, 0 writes).
+   * - Caso contrário: busca palpites, pontua e grava via filtro fino (A) — só o
+   *   palpite cujo `{ status, points }` mudou. Coleta candidatos a notificação.
    */
   async function processMatch(
     match: (typeof finishedMatches)[number],
-  ): Promise<{ count: number; hits: ScoreHit[] }> {
+  ): Promise<MatchResult> {
+    const fingerprint = matchResultFingerprint(match);
+
+    // Filtro grosso (B): resultado inalterado → pula a partida inteira.
+    if (scoreState.get(match.id) === fingerprint) {
+      return {
+        matchId: match.id,
+        hash: fingerprint,
+        processed: false,
+        complete: true,
+        count: 0,
+        hits: [],
+      };
+    }
+
     const snapshot = await db
       .collection("predictions")
       .where("matchId", "==", match.id)
@@ -199,29 +245,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const awayTeam = resolveTeamByCode(match.awayTeamId)?.name ?? match.awayTeamId;
 
     const writes = snapshot.docs.map(
-      async (docSnap): Promise<{ count: number; hit: ScoreHit | null }> => {
+      async (docSnap): Promise<{ count: number; hit: ScoreHit | null; ok: boolean }> => {
         const parsed = predictionSchema.safeParse(docSnap.data());
         if (!parsed.success) {
-          // #1 Observabilidade: doc malformado rastreável em produção
+          // #1 Observabilidade: doc malformado rastreável em produção. `ok: false`
+          // impede o hash de avançar (C1): a partida re-processa no próximo run.
           console.warn(
             "[score] doc malformado ignorado:",
             docSnap.ref.path,
             parsed.error.issues,
           );
-          return { count: 0, hit: null };
+          return { count: 0, hit: null, ok: false };
         }
 
         const prediction = parsed.data;
-        const { status, points } = scorePrediction(prediction, match);
+        const computed = scorePrediction(prediction, match);
+        const { status, points } = computed;
 
-        // Idempotente: set merge sempre grava os mesmos valores derivados de função pura
-        await docSnap.ref.set({ status, points }, { merge: true });
+        // Filtro fino (A): só grava quando o `{ status, points }` recalculado
+        // difere do persistido. Palpite nunca pontuado conta como divergência.
+        const changed = predictionScoreChanged(
+          { status: prediction.status, points: prediction.points },
+          computed,
+        );
+        if (changed) {
+          await docSnap.ref.set({ status, points }, { merge: true });
+        }
 
-        // Só acerto vira candidato a notificação. Owner-targeting: notifica
-        // sempre `prediction.uid` (dono ganhou os pontos), mesmo se lançado por admin.
-        // Invariante: `scorePrediction` só retorna `partial` com palpite empate
-        // (homeScore === awayScore) quando a partida também terminou empatada — por
-        // isso `predictionIsDraw` distingue corretamente "acertou empate" de "vencedor".
+        // Só acerto vira candidato a notificação — derivado do `status` recalculado,
+        // independente de ter havido write (RF5; `writeNotifications` dedup por id).
+        // Owner-targeting: notifica sempre `prediction.uid` (dono ganhou os pontos),
+        // mesmo se lançado por admin. Invariante: `scorePrediction` só retorna
+        // `partial` com palpite empate (homeScore === awayScore) quando a partida
+        // também terminou empatada — `predictionIsDraw` distingue "acertou empate".
         const hit: ScoreHit | null =
           status === "correct" || status === "partial"
             ? {
@@ -234,31 +290,55 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               }
             : null;
 
-        return { count: 1, hit };
+        return { count: changed ? 1 : 0, hit, ok: true };
       },
     );
 
     // Paraleliza todos os set() da partida
     const results = await Promise.all(writes);
     const count = results.reduce((sum, r) => sum + r.count, 0);
+    const complete = results.every((r) => r.ok);
     const hits = results
       .map((r) => r.hit)
       .filter((h): h is ScoreHit => h !== null);
-    return { count, hits };
+    return { matchId: match.id, hash: fingerprint, processed: true, complete, count, hits };
   }
 
   // Paraleliza o processamento de todas as partidas finished (#2 timeout risk)
   const perMatch = await Promise.all(finishedMatches.map(processMatch));
 
+  const now = new Date();
+
   const scoredMatches = finishedMatches.length;
   const updatedPredictions = perMatch.reduce((sum, r) => sum + r.count, 0);
+  const skippedMatches = perMatch.filter((r) => !r.processed).length;
+
+  // Atualiza o estado de controle só onde o hash mudou; grava 1× se o mapa mudou
+  // (BR6: run estável sem mudança ⇒ 0 writes em predictions E em score_state).
+  const newState = new Map(scoreState);
+  let stateChanged = false;
+  for (const r of perMatch) {
+    // C1: só avança o hash de partida totalmente parseada. Partida com doc
+    // malformado fica de fora → re-processa no próximo run (nunca é congelada).
+    if (!r.complete) continue;
+    if (newState.get(r.matchId) !== r.hash) {
+      newState.set(r.matchId, r.hash);
+      stateChanged = true;
+    }
+  }
+  if (stateChanged) {
+    await writeScoreState(db, newState, now);
+  }
 
   // Notificações `games` (best-effort, após a pontuação gravada). `now` injetado.
   const allHits = perMatch.flatMap((r) => r.hits);
-  await notifyScoreHitsBestEffort(db, allHits, new Date());
+  await notifyScoreHitsBestEffort(db, allHits, now);
 
   // Encadeia o recálculo de rankings/estatísticas (best-effort).
   await chainRecalc(request);
 
-  return NextResponse.json({ scoredMatches, updatedPredictions }, { status: 200 });
+  return NextResponse.json(
+    { scoredMatches, updatedPredictions, skippedMatches },
+    { status: 200 },
+  );
 }

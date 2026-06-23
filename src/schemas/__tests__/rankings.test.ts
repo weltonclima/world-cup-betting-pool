@@ -222,7 +222,13 @@ describe("rankings", () => {
 
   it("inferência de tipo", () => {
     expectTypeOf<Ranking["scope"]>().toEqualTypeOf<
-      "geral" | "grupos" | "oitavas" | "quartas" | "semifinal" | "final"
+      | "geral"
+      | "grupos"
+      | "oitavas"
+      | "quartas"
+      | "semifinal"
+      | "final"
+      | "eliminatorias"
     >();
     expectTypeOf<RankingEntry["position"]>().toEqualTypeOf<number>();
     expectTypeOf<Ranking["entries"]>().toEqualTypeOf<RankingEntry[]>();

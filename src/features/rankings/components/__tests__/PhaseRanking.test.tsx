@@ -45,9 +45,7 @@ function renderWithClient(ui: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
-  );
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
 const okQuery = (data: unknown) => ({
@@ -64,20 +62,14 @@ beforeEach(() => {
     okQuery({
       scope,
       updatedAt: "2026-06-05T02:00:00Z",
-      entries: [
-        entry("u1", 1, 10, "Joao Silva"),
-        entry("u-me", 2, 6, "Voce Mesmo", 75),
-      ],
+      entries: [entry("u1", 1, 10, "Joao Silva"), entry("u-me", 2, 6, "Voce Mesmo", 75)],
     }),
   );
   useGroupRankingMock.mockReturnValue(
     okQuery({
       groupId: "A",
       updatedAt: "2026-06-05T02:00:00Z",
-      entries: [
-        entry("u1", 1, 8, "Joao Silva"),
-        entry("u-me", 2, 5, "Voce Mesmo", 60),
-      ],
+      entries: [entry("u1", 1, 8, "Joao Silva"), entry("u-me", 2, 5, "Voce Mesmo", 60)],
     }),
   );
 });
@@ -86,7 +78,7 @@ afterEach(() => vi.clearAllMocks());
 describe("PhaseRanking — StageRankingCard", () => {
   it("mostra #posição e acertos quando a entry do usuário existe", () => {
     renderWithClient(<PhaseRanking />);
-    // 5 cards, todos com a mesma entry mockada → #2 e 6 acertos.
+    // 6 cards (grupos + agregado + 4 fases), todos com a mesma entry → #2 e 6 acertos.
     expect(screen.getAllByText("#2").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("6").length).toBeGreaterThanOrEqual(1);
   });
@@ -102,6 +94,32 @@ describe("PhaseRanking — StageRankingCard", () => {
     renderWithClient(<PhaseRanking />);
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("#2")).toBeNull();
+  });
+});
+
+describe("PhaseRanking — split Grupos/Eliminatórias (TASK-03)", () => {
+  it("renderiza os headings de bloco (h2) Fase de Grupos e Eliminatórias", () => {
+    renderWithClient(<PhaseRanking />);
+    expect(screen.getByRole("heading", { level: 2, name: "Fase de Grupos" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Eliminatórias" })).toBeTruthy();
+  });
+
+  it("bloco Eliminatórias tem agregado + 4 fases e NENHUM card de dezesseis-avos (D2)", () => {
+    renderWithClient(<PhaseRanking />);
+    // Card de cada fase mata-mata presente (título h3).
+    expect(screen.getByText("Oitavas de Final")).toBeTruthy();
+    expect(screen.getByText("Quartas de Final")).toBeTruthy();
+    expect(screen.getByText("Semifinal")).toBeTruthy();
+    expect(screen.getByText("Final")).toBeTruthy();
+    // dezesseis-avos NÃO tem card próprio (só conta no agregado).
+    expect(screen.queryByText(/dezesseis/i)).toBeNull();
+    expect(screen.queryByText(/16.?avos/i)).toBeNull();
+  });
+
+  it("card agregado consome usePoolRankingByScope('eliminatorias') e exibe a legenda", () => {
+    renderWithClient(<PhaseRanking />);
+    expect(usePoolRankingByScopeMock).toHaveBeenCalledWith("eliminatorias");
+    expect(screen.getByText("Soma de todas as fases mata-mata")).toBeTruthy();
   });
 });
 

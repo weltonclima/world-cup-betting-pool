@@ -237,7 +237,13 @@ describe("statistics", () => {
   it("inferência de tipo", () => {
     expectTypeOf<Statistics["accuracy"]>().toEqualTypeOf<number>();
     expectTypeOf<PositionHistoryEntry["scope"]>().toEqualTypeOf<
-      "geral" | "grupos" | "oitavas" | "quartas" | "semifinal" | "final"
+      | "geral"
+      | "grupos"
+      | "oitavas"
+      | "quartas"
+      | "semifinal"
+      | "final"
+      | "eliminatorias"
     >();
     expectTypeOf<PoolStats["totalParticipants"]>().toEqualTypeOf<number>();
     expectTypeOf<PoolStats["distribution"]>().toEqualTypeOf<

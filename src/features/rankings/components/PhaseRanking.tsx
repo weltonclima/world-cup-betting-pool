@@ -2,13 +2,7 @@
 
 import { useState, type JSX } from "react";
 import Link from "next/link";
-import {
-  Medal,
-  Network,
-  Trophy,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { Crown, Medal, Network, Trophy, Users, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,13 +19,26 @@ import { RankingErrorState } from "./RankingErrorState";
 
 const PLACEHOLDER = "—";
 
-/** Fases de ranking exibidas na aba "Por Fase" (exclui "geral") — constante dedicada. */
-const STAGE_CARDS: ReadonlyArray<{
+/** Card de fase/agregado da aba "Por Fase". `featured` = card agregado em destaque. */
+interface StageCardConfig {
   scope: Exclude<RankingScope, "geral">;
   label: string;
   Icon: LucideIcon;
-}> = [
+  featured?: boolean;
+}
+
+/** Bloco "Fase de Grupos": apenas o card de grupos (seletor A–L vive na aba "Por Grupo"). */
+const GROUP_STAGE_CARDS: ReadonlyArray<StageCardConfig> = [
   { scope: "grupos", label: "Fase de Grupos", Icon: Users },
+];
+
+/**
+ * Bloco "Eliminatórias": card AGREGADO em destaque (soma todas as fases mata-mata,
+ * incl. dezesseis-avos — D2) + cards de fase. SEM card de dezesseis-avos (não tem
+ * scope de fase próprio; seus pontos entram só no agregado).
+ */
+const ELIMINATION_STAGE_CARDS: ReadonlyArray<StageCardConfig> = [
+  { scope: "eliminatorias", label: "Eliminatórias", Icon: Crown, featured: true },
   { scope: "oitavas", label: "Oitavas de Final", Icon: Network },
   { scope: "quartas", label: "Quartas de Final", Icon: Trophy },
   { scope: "semifinal", label: "Semifinal", Icon: Medal },
@@ -39,20 +46,7 @@ const STAGE_CARDS: ReadonlyArray<{
 ];
 
 /** Grupos da Copa 2026 (12 grupos, A–L) — constante dedicada (sem hardcode espalhado). */
-const GROUP_IDS: readonly string[] = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H",
-  "I",
-  "J",
-  "K",
-  "L",
-];
+const GROUP_IDS: readonly string[] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 
 /** Iniciais p/ fallback de avatar (sem foto no schema). */
 function initials(entry: RankingEntry): string {
@@ -94,29 +88,46 @@ export function PhaseRanking(): JSX.Element {
 
 // ───────────────────────── Por Fase ─────────────────────────
 
-function StageRankingCards(): JSX.Element {
+/** Heading discreto de bloco (separador semântico entre Grupos e Eliminatórias). */
+function BlockHeading({ id, children }: { id: string; children: string }): JSX.Element {
+  return (
+    <h2 id={id} className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h2>
+  );
+}
+
+function StageCardList({ cards }: { cards: ReadonlyArray<StageCardConfig> }): JSX.Element {
   return (
     <ul className="flex flex-col gap-3">
-      {STAGE_CARDS.map(({ scope, label, Icon }) => (
-        <StageRankingCard key={scope} scope={scope} label={label} Icon={Icon} />
+      {cards.map(({ scope, label, Icon, featured }) => (
+        <StageRankingCard key={scope} scope={scope} label={label} Icon={Icon} featured={featured} />
       ))}
     </ul>
   );
 }
 
-function MetricColumn({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}): JSX.Element {
+function StageRankingCards(): JSX.Element {
+  return (
+    <div className="flex flex-col gap-6">
+      <section aria-labelledby="block-grupos" className="flex flex-col gap-3">
+        <BlockHeading id="block-grupos">Fase de Grupos</BlockHeading>
+        <StageCardList cards={GROUP_STAGE_CARDS} />
+      </section>
+
+      <section aria-labelledby="block-eliminatorias" className="flex flex-col gap-3">
+        <BlockHeading id="block-eliminatorias">Eliminatórias</BlockHeading>
+        <StageCardList cards={ELIMINATION_STAGE_CARDS} />
+      </section>
+    </div>
+  );
+}
+
+function MetricColumn({ label, value }: { label: string; value: string }): JSX.Element {
   return (
     <div className="flex flex-col">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-2xl font-bold tabular-nums text-foreground">
-        {value}
-      </span>
+      <span className="text-2xl font-bold tabular-nums text-foreground">{value}</span>
     </div>
   );
 }
@@ -125,10 +136,12 @@ function StageRankingCard({
   scope,
   label,
   Icon,
+  featured = false,
 }: {
   scope: Exclude<RankingScope, "geral">;
   label: string;
   Icon: LucideIcon;
+  featured?: boolean;
 }): JSX.Element {
   const { data, isLoading, isError, refetch } = usePoolRankingByScope(scope);
   const currentUid = useAuth().firebaseUser?.uid;
@@ -136,13 +149,29 @@ function StageRankingCard({
   const entry = data?.entries.find((e) => e.uid === currentUid);
 
   return (
-    <li className="rounded-lg border border-border bg-card p-4 shadow-sm">
+    <li
+      className={cn(
+        "rounded-lg border p-4 shadow-sm",
+        featured
+          ? "border-primary/40 bg-primary/5 ring-1 ring-primary/15"
+          : "border-border bg-card",
+      )}
+    >
       <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <span
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary",
+            featured ? "bg-primary/15" : "bg-primary/10",
+          )}
+        >
           <Icon size={24} aria-hidden="true" />
         </span>
         <h3 className="text-base font-medium text-foreground">{label}</h3>
       </div>
+
+      {featured && (
+        <p className="mt-1 text-xs text-muted-foreground">Soma de todas as fases mata-mata</p>
+      )}
 
       <div className="mt-4">
         {isLoading ? (
@@ -156,27 +185,15 @@ function StageRankingCard({
           </div>
         ) : isError ? (
           <div className="flex flex-col items-start gap-2">
-            <p className="text-sm text-destructive">
-              Erro ao carregar esta fase
-            </p>
-            <Button
-              variant="outline"
-              className="min-h-11"
-              onClick={() => void refetch()}
-            >
+            <p className="text-sm text-destructive">Erro ao carregar esta fase</p>
+            <Button variant="outline" className="min-h-11" onClick={() => void refetch()}>
               Tentar Novamente
             </Button>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-6">
-            <MetricColumn
-              label="Posição"
-              value={entry ? `#${entry.position}` : PLACEHOLDER}
-            />
-            <MetricColumn
-              label="Acertos"
-              value={entry ? String(entry.points) : PLACEHOLDER}
-            />
+            <MetricColumn label="Posição" value={entry ? `#${entry.position}` : PLACEHOLDER} />
+            <MetricColumn label="Acertos" value={entry ? String(entry.points) : PLACEHOLDER} />
             <MetricColumn
               label="Aproveitamento"
               value={entry ? accuracyLabel(entry) : PLACEHOLDER}
@@ -200,11 +217,7 @@ function GroupSelector({
   onChange: (groupId: string) => void;
 }): JSX.Element {
   return (
-    <div
-      role="group"
-      aria-label="Selecionar grupo"
-      className="flex gap-2 overflow-x-auto pb-1"
-    >
+    <div role="group" aria-label="Selecionar grupo" className="flex gap-2 overflow-x-auto pb-1">
       {groups.map((groupId) => {
         const selected = groupId === value;
         return (
@@ -247,11 +260,7 @@ function GroupRankingView(): JSX.Element {
       ) : (
         <ol className="flex flex-col gap-2">
           {data.entries.map((entry) => (
-            <RankingRow
-              key={entry.uid}
-              entry={entry}
-              isCurrentUser={entry.uid === currentUid}
-            />
+            <RankingRow key={entry.uid} entry={entry} isCurrentUser={entry.uid === currentUid} />
           ))}
         </ol>
       )}
@@ -288,19 +297,13 @@ function RankingRow({
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-2 truncate font-medium text-foreground">
             {entry.name ?? entry.nickname}
-            {isCurrentUser && (
-              <Badge className="bg-primary text-primary-foreground">Você</Badge>
-            )}
+            {isCurrentUser && <Badge className="bg-primary text-primary-foreground">Você</Badge>}
           </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {entry.nickname}
-          </span>
+          <span className="truncate text-xs text-muted-foreground">{entry.nickname}</span>
         </span>
         <span className="shrink-0 text-right font-bold tabular-nums">
           {entry.points}
-          <span className="ml-1 text-xs font-normal text-muted-foreground">
-            pts
-          </span>
+          <span className="ml-1 text-xs font-normal text-muted-foreground">pts</span>
         </span>
         <span className="w-12 shrink-0 text-right text-sm text-muted-foreground tabular-nums">
           {accuracyLabel(entry)}

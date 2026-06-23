@@ -22,6 +22,7 @@
 import { type NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { matchResultFingerprint } from "@/features/predictions/lib";
 import type { NotificationPreferences } from "@/schemas/notificationPreferences";
 
 // ---------------------------------------------------------------------------
@@ -115,7 +116,7 @@ const MATCH = {
   groupId: "A",
   stage: "grupos" as const,
   venue: null,
-  round: "Group Stage - 1",
+  round: 1,
 };
 
 function prediction(over: Record<string, unknown> = {}) {
@@ -141,24 +142,49 @@ function prefs(over: Partial<NotificationPreferences> = {}): NotificationPrefere
   };
 }
 
-/** Firestore mock: só a query predictions.where(matchId).get(). */
-function setupFirestore(predictions: Record<string, unknown>[]) {
-  const docs = predictions.map((data) => ({
-    data: () => data,
-    ref: { set: vi.fn().mockResolvedValue(undefined), path: `predictions/x` },
-  }));
+/**
+ * Firestore mock: a query predictions.where(matchId).get() + o doc de controle
+ * `score_state/cron` (scoring-write-cost TASK-03). `scoreStateMatches` default
+ * `null` = doc ausente → toda partida finished é processada. Passe um mapa
+ * { matchId: hash } para simular partida já pontuada (filtro grosso).
+ */
+function setupFirestore(
+  predictions: Record<string, unknown>[],
+  scoreStateMatches: Record<string, string> | null = null,
+) {
+  const whereMock = vi.fn().mockImplementation(() => {
+    const docs = predictions.map((data) => ({
+      data: () => data,
+      ref: { set: vi.fn().mockResolvedValue(undefined), path: `predictions/x` },
+    }));
+    return { get: vi.fn().mockResolvedValue({ empty: docs.length === 0, docs }) };
+  });
+  const scoreStateSetMock = vi.fn().mockResolvedValue(undefined);
   getFirestoreMock.mockReturnValue({
     collection: vi.fn().mockImplementation((name: string) => {
-      if (name === "predictions") {
+      if (name === "predictions") return { where: whereMock };
+      if (name === "score_state") {
         return {
-          where: vi.fn().mockReturnValue({
-            get: vi.fn().mockResolvedValue({ empty: docs.length === 0, docs }),
+          doc: vi.fn().mockReturnValue({
+            get: vi.fn().mockResolvedValue(
+              scoreStateMatches === null
+                ? { exists: false }
+                : {
+                    exists: true,
+                    data: () => ({
+                      matches: scoreStateMatches,
+                      updatedAt: new Date(Date.now() - 3600_000).toISOString(),
+                    }),
+                  },
+            ),
+            set: scoreStateSetMock,
           }),
         };
       }
       return {};
     }),
   });
+  return { whereMock, scoreStateSetMock };
 }
 
 function postWithSecret(): NextRequest {
@@ -272,8 +298,9 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
     const body = (await res.json()) as {
       scoredMatches: number;
       updatedPredictions: number;
+      skippedMatches: number;
     };
-    expect(body).toEqual({ scoredMatches: 1, updatedPredictions: 1 });
+    expect(body).toEqual({ scoredMatches: 1, updatedPredictions: 1, skippedMatches: 0 });
   });
 
   it("nome de time resolvido (BRA→Brasil) e fallback ao código quando não resolve", async () => {
@@ -311,6 +338,25 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
     await POST(postWithSecret());
     expect(sendPushForNotificationsMock).toHaveBeenCalledTimes(1);
     expect(sendPushForNotificationsMock.mock.calls[0]![0]).toEqual([]);
+  });
+
+  it("Q2: partida pulada pelo filtro grosso NÃO re-notifica (sem hits)", async () => {
+    scorePredictionMock.mockReturnValue({ status: "correct", points: 10 });
+    // Hash registrado == fingerprint atual → partida pulada inteira.
+    const { whereMock } = setupFirestore([prediction()], {
+      [MATCH.id]: matchResultFingerprint(MATCH),
+    });
+
+    const res = await POST(postWithSecret());
+    expect(res.status).toBe(200);
+
+    // Nenhuma query de palpites e nenhuma notificação (acerto já notificado antes).
+    expect(whereMock).not.toHaveBeenCalled();
+    expect(writeNotificationsMock).not.toHaveBeenCalled();
+
+    const body = (await res.json()) as { skippedMatches: number; updatedPredictions: number };
+    expect(body.skippedMatches).toBe(1);
+    expect(body.updatedPredictions).toBe(0);
   });
 
   it("owner-targeting: palpite com editedBy ainda notifica prediction.uid", async () => {
