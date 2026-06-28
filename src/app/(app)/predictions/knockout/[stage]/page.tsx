@@ -15,7 +15,7 @@
  * Container com tema `.palpites-theme` (shell verde — MASTER §2.4-palpites).
  */
 
-import { use, useCallback, useMemo } from "react";
+import { use, useCallback, useMemo, useState } from "react";
 import { notFound } from "next/navigation";
 import { toast } from "sonner";
 
@@ -148,6 +148,14 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
   const draft = usePredictionDraft(uid ?? "");
   const batch = useUpsertPredictionsBatch(uid ?? "");
 
+  // Buffer de edição ao vivo (matchId → placar parcial). Fonte que controla o
+  // input: precisa guardar um lado só (o outro `null`) enquanto o usuário digita.
+  // Sem ele, um confronto vazio nunca aceita o primeiro dígito (par incompleto
+  // não persiste no draft → input reverte). Mesmo padrão de useGroupPredictions.
+  const [edits, setEdits] = useState<
+    Record<string, { homeScore: number | null; awayScore: number | null }>
+  >({});
+
   const isLoading =
     uid === null ||
     matchesQuery.isLoading ||
@@ -191,13 +199,18 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
       .filter((section) => section.matchups.length > 0);
   }, [bracket, config.stages, config.sectionTitle]);
 
-  // Placar atual por matchId: draft tem prioridade sobre salvo.
+  // Placar atual por matchId. Prioridade: edição ao vivo (parcial) > draft > salvo.
   const scores = useMemo<BracketScores>(() => {
     const savedByMatchId = new Map(
       (predictionsQuery.data ?? []).map((p) => [p.matchId, p]),
     );
     const result: BracketScores = {};
     for (const match of phaseMatches) {
+      const editVal = edits[match.id];
+      if (editVal) {
+        result[match.id] = { home: editVal.homeScore, away: editVal.awayScore };
+        continue;
+      }
       const draftVal = draft.allDrafts[match.id];
       const saved = savedByMatchId.get(match.id);
       const current = draftVal ?? saved;
@@ -209,7 +222,7 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
       }
     }
     return result;
-  }, [phaseMatches, predictionsQuery.data, draft.allDrafts]);
+  }, [phaseMatches, predictionsQuery.data, draft.allDrafts, edits]);
 
   // matchIds bloqueados por kickoff.
   const lockedMatchIds = useMemo<ReadonlySet<string>>(() => {
@@ -239,9 +252,13 @@ function KnockoutPhase({ slug }: { slug: KnockoutSlug }) {
     [phaseMatches, lockedMatchIds, scores],
   );
 
-  // Auto-save local: grava só quando o par está completo.
+  // Edição ao vivo guarda parcial (um lado só); par completo também vai p/ draft.
   const handleScoreChange = useCallback(
     (matchId: string, home: number | null, away: number | null) => {
+      setEdits((prev) => ({
+        ...prev,
+        [matchId]: { homeScore: home, awayScore: away },
+      }));
       if (home !== null && away !== null) {
         draft.setDraft(matchId, { homeScore: home, awayScore: away });
       }
