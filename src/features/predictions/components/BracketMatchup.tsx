@@ -75,11 +75,11 @@ function SlotFlag({ flagUrl }: { flagUrl: string | undefined }) {
       src={flagUrl}
       alt=""
       aria-hidden="true"
-      width={24}
-      height={16}
+      width={48}
+      height={32}
       loading="lazy"
       decoding="async"
-      className="h-4 w-6 shrink-0 rounded-sm object-cover border border-border"
+      className="h-8 w-12 shrink-0 rounded-sm object-cover border border-border"
     />
   );
 }
@@ -107,7 +107,7 @@ export function BracketMatchup({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-xl border border-border bg-card p-3 shadow-sm",
+        "flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-sm",
         className,
       )}
     >
@@ -118,51 +118,64 @@ export function BracketMatchup({
         </span>
       ) : null}
 
-      {/* Mandante */}
-      <div className="flex min-h-[44px] items-center gap-2">
-        <SlotFlag flagUrl={home.flagUrl} />
+      {/* Seleções (em cima) — bandeira maior acima, nome abaixo; lado a lado, centralizados */}
+      <div className="flex items-start justify-center gap-4">
+        {/* Mandante */}
+        <div className="flex w-24 flex-col items-center gap-1">
+          <SlotFlag flagUrl={home.flagUrl} />
+          <span
+            className={cn(
+              "line-clamp-2 text-center text-xs leading-tight break-words",
+              homeWins ? "font-semibold text-win" : "text-foreground",
+            )}
+          >
+            {home.name}
+            {homeWins ? (
+              <>
+                <Crown size={12} aria-hidden="true" className="ml-1 inline" />
+                <span className="sr-only"> — vence</span>
+              </>
+            ) : null}
+          </span>
+        </div>
+
         <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-sm",
-            homeWins ? "font-semibold text-win" : "text-foreground",
-          )}
+          aria-hidden="true"
+          className="shrink-0 self-center text-xs text-muted-foreground"
         >
-          {home.name}
-          {homeWins ? (
-            <>
-              <Crown size={14} aria-hidden="true" className="ml-1 inline" />
-              <span className="sr-only"> — vence</span>
-            </>
-          ) : null}
+          x
         </span>
+
+        {/* Visitante */}
+        <div className="flex w-24 flex-col items-center gap-1">
+          <SlotFlag flagUrl={away.flagUrl} />
+          <span
+            className={cn(
+              "line-clamp-2 text-center text-xs leading-tight break-words",
+              awayWins ? "font-semibold text-win" : "text-foreground",
+            )}
+          >
+            {away.name}
+            {awayWins ? (
+              <>
+                <Crown size={12} aria-hidden="true" className="ml-1 inline" />
+                <span className="sr-only"> — vence</span>
+              </>
+            ) : null}
+          </span>
+        </div>
+      </div>
+
+      {/* Placares (embaixo) — mandante x visitante */}
+      <div className="flex items-center justify-center gap-3">
         <CompactScoreInput
           label={`Gols ${home.name}`}
           value={homeScore}
           locked={locked}
           onChange={(v) => onScoreChange(matchup.matchId, v, awayScore)}
         />
-      </div>
-
-      <span aria-hidden="true" className="text-center text-xs text-muted-foreground">
-        x
-      </span>
-
-      {/* Visitante */}
-      <div className="flex min-h-[44px] items-center gap-2">
-        <SlotFlag flagUrl={away.flagUrl} />
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-sm",
-            awayWins ? "font-semibold text-win" : "text-foreground",
-          )}
-        >
-          {away.name}
-          {awayWins ? (
-            <>
-              <Crown size={14} aria-hidden="true" className="ml-1 inline" />
-              <span className="sr-only"> — vence</span>
-            </>
-          ) : null}
+        <span aria-hidden="true" className="text-sm text-muted-foreground">
+          x
         </span>
         <CompactScoreInput
           label={`Gols ${away.name}`}
