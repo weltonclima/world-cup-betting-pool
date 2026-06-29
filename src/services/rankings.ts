@@ -3,12 +3,14 @@ import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/firebase";
 import {
   groupRankingSchema,
+  poolRankingResponseSchema,
   poolStatsSchema,
   rankingSchema,
   statisticsSchema,
 } from "@/schemas";
 import type {
   GroupRanking,
+  PoolRanking,
   PoolStats,
   Ranking,
   RankingEntry,
@@ -80,14 +82,16 @@ export async function triggerGroupRankingRecalc(): Promise<void> {
  * `rankings/pool-{groupId}-geral`. O client NÃO passa o pool (isolamento). Usuário
  * sem pool → `null`. Status não-OK propaga como erro (React Query trata isError).
  */
-export async function getPoolRanking(): Promise<Ranking | null> {
+export async function getPoolRanking(): Promise<PoolRanking | null> {
   const res = await fetch("/api/rankings/pool", { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Falha ao carregar ranking do grupo (${res.status}).`);
   }
   const json: unknown = await res.json();
   if (json === null) return null;
-  return rankingSchema.parse(json);
+  // Schema dedicado (split-phase-ranking TASK-02): carrega a flag `splitPhaseRanking`
+  // do pool junto do ranking. Ausência da flag = OFF (telas tratam como false).
+  return poolRankingResponseSchema.parse(json);
 }
 
 /** Ranking de um grupo individual (A–L). Doc `rankings/group-{groupId}`. */

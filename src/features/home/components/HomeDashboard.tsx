@@ -101,6 +101,7 @@ export function HomeDashboard() {
   // Dados e estado agregado do compositor
   const {
     heroSummary,
+    heroSummaryByScope,
     predictionBreakdown,
     nextMatch,
     recentResults,
@@ -137,7 +138,11 @@ export function HomeDashboard() {
       {!isLoading && <CurrentStageBanner stage={currentStage} />}
 
       {/* Hero — posição + tendência + aproveitamento + sparkline + régua (TASK-01 home-revamp) */}
-      {isLoading ? <HeroCardSkeleton /> : <HeroCard summary={heroSummary} />}
+      {isLoading ? (
+        <HeroCardSkeleton />
+      ) : (
+        <HeroCard summary={heroSummary} summaryByScope={heroSummaryByScope} />
+      )}
 
       {/* Próximo Jogo — card full-width */}
       {isLoading ? (

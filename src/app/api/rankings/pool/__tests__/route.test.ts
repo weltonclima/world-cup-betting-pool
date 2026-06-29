@@ -41,10 +41,18 @@ function mockDb(opts: {
   poolSnap?: { exists: boolean; data: () => unknown };
   // users vivos para a hidratação (uid → campos). Default: vazio (mantém snapshot).
   liveUsers?: Record<string, Record<string, unknown>>;
+  // doc do pool `pools/{groupId}` (split-phase-ranking TASK-02). `undefined` = doc
+  // ausente. Quando objeto, vira o data() do snapshot do pool.
+  poolDoc?: Record<string, unknown>;
 }) {
   const poolGet = vi
     .fn()
     .mockResolvedValue(opts.poolSnap ?? { exists: true, data: () => rankingDoc() });
+  const poolsGet = vi.fn().mockResolvedValue(
+    opts.poolDoc !== undefined
+      ? { exists: true, data: () => opts.poolDoc }
+      : { exists: false, data: () => undefined },
+  );
   const collection = vi.fn((name: string) => ({
     doc: vi.fn((uid?: string) => ({
       uid,
@@ -53,8 +61,10 @@ function mockDb(opts: {
           ? { exists: true, data: () => (opts.groupId ? { groupId: opts.groupId } : {}) }
           : { exists: false, data: () => undefined },
       ),
-      // só rankings usa o get capturado para inspeção do pool
+      // só rankings usa o get capturado para inspeção do ranking;
+      // pools usa o get próprio com o doc da flag.
       ...(name === "rankings" ? { get: poolGet } : {}),
+      ...(name === "pools" ? { get: poolsGet } : {}),
     })),
   }));
   // getAll: hidratação das entries → snaps de users vivos por uid.
@@ -65,7 +75,7 @@ function mockDb(opts: {
     }),
   );
   getFirestoreMock.mockReturnValue({ collection, getAll });
-  return { poolGet, getAll };
+  return { poolGet, poolsGet, getAll };
 }
 
 const approved = (uid = "u1") => requireApprovedMock.mockResolvedValue({ user: { uid } });
@@ -149,5 +159,71 @@ describe("GET /api/rankings/pool", () => {
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
+  });
+
+  // ── splitPhaseRanking no payload (split-phase-ranking TASK-02) ─────────────
+  it("anexa splitPhaseRanking: true quando o pool tem a flag ON", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: { splitPhaseRanking: true } });
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.splitPhaseRanking).toBe(true);
+    expect(body.entries).toHaveLength(1);
+  });
+
+  it("anexa splitPhaseRanking: false quando a flag é false explícito", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: { splitPhaseRanking: false } });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.splitPhaseRanking).toBe(false);
+  });
+
+  it("flag ausente no pool doc → payload sem splitPhaseRanking (OFF)", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: {} });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.splitPhaseRanking).toBeUndefined();
+    expect(body.entries).toHaveLength(1);
+  });
+
+  it("doc do pool ausente → payload sem splitPhaseRanking, ranking intacto", async () => {
+    approved();
+    mockDb({ groupId: "pool-1" }); // poolDoc undefined → pools/{id} não existe
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.splitPhaseRanking).toBeUndefined();
+    expect(body.entries).toHaveLength(1);
+  });
+
+  it("lê a flag do pool DA SESSÃO (pools/{groupId}), nunca do request", async () => {
+    approved();
+    const { poolsGet } = mockDb({ groupId: "pool-42", poolDoc: { splitPhaseRanking: true } });
+    await GET();
+    expect(poolsGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("NÃO vaza outros campos do pool no payload (só splitPhaseRanking)", async () => {
+    approved();
+    mockDb({
+      groupId: "pool-1",
+      poolDoc: {
+        splitPhaseRanking: true,
+        name: "Bolão Secreto",
+        photoBase64: "data:image/png;base64,XXX",
+        maxParticipants: 50,
+        predictionsLocked: true,
+      },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.splitPhaseRanking).toBe(true);
+    expect(body.name).not.toBe("Bolão Secreto");
+    expect(body).not.toHaveProperty("photoBase64");
+    expect(body).not.toHaveProperty("maxParticipants");
+    expect(body).not.toHaveProperty("predictionsLocked");
   });
 });

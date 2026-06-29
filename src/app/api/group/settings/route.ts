@@ -26,6 +26,7 @@ const settingsSchema = z
     maxParticipants: z.int().min(1).nullable().optional(),
     allowInvites: z.boolean().optional(),
     predictionsLocked: z.boolean().optional(),
+    splitPhaseRanking: z.boolean().optional(),
   })
   .strict();
 
@@ -75,8 +76,15 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   const updatedAt = new Date().toISOString();
   const patch: Record<string, unknown> = { updatedAt };
-  const { name, description, photoBase64, maxParticipants, allowInvites, predictionsLocked } =
-    parsed.data;
+  const {
+    name,
+    description,
+    photoBase64,
+    maxParticipants,
+    allowInvites,
+    predictionsLocked,
+    splitPhaseRanking,
+  } = parsed.data;
   if (name !== undefined) patch["name"] = name;
   if (description !== undefined) patch["description"] = description;
   if (photoBase64 !== undefined) patch["photoBase64"] = photoBase64;
@@ -93,6 +101,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   }
   if (allowInvites !== undefined) patch["allowInvites"] = allowInvites;
   if (predictionsLocked !== undefined) patch["predictionsLocked"] = predictionsLocked;
+  if (splitPhaseRanking !== undefined) patch["splitPhaseRanking"] = splitPhaseRanking;
 
   const db = getAdminFirestore();
   const poolRef = db.collection("pools").doc(groupId);

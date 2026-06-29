@@ -24,6 +24,7 @@ import type {
 } from "../lib/homeDashboardHelpers";
 import { useMatchesList } from "@/features/matches/hooks/useMatchesList";
 import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
+import { usePoolRankingByScope } from "@/features/rankings/hooks/usePoolRankingByScope";
 import { usePoolStats } from "@/features/rankings/hooks/usePoolStats";
 import { useNextMatch } from "./useNextMatch";
 import { usePredictions } from "./usePredictions";
@@ -35,6 +36,7 @@ import { useTeams } from "./useTeams";
 // Reexportar os tipos para consumo externo (barrel e UI).
 export type {
   HeroSummary,
+  HeroSummaryByScope,
   HomeDashboardData,
   HomePredictionStatus,
   NextMatchSummary,
@@ -67,6 +69,17 @@ export function useHomeDashboard(): HomeDashboardData {
   // Ranking FECHADO por pool (PRD-09): o card da Home mostra só o pool do usuário,
   // nunca o ranking global. Sem pool → query desabilitada (Hero sem posição).
   const rankingQuery = usePoolRanking(profile?.groupId);
+  // Split por fase (split-phase-ranking TASK-05): a flag vem embutida no payload
+  // do ranking do pool (TASK-02). Gating W2: as 2 leituras de escopo SÓ disparam
+  // quando a flag está ON — a Home (tela de TODOS) não paga 2 queries extras no
+  // caso comum (flag OFF). Hooks chamados incondicionalmente (regras de hooks);
+  // `enabled` controla o fetch.
+  const splitOn = rankingQuery.data?.splitPhaseRanking === true;
+  const splitEnabled = splitOn && Boolean(profile?.groupId);
+  const rankingGruposQuery = usePoolRankingByScope("grupos", { enabled: splitEnabled });
+  const rankingEliminatoriasQuery = usePoolRankingByScope("eliminatorias", {
+    enabled: splitEnabled,
+  });
   const statisticsQuery = useStatistics(uid);
   const poolStatsQuery = usePoolStats();
   const nextMatchQuery = useNextMatch();
@@ -83,6 +96,8 @@ export function useHomeDashboard(): HomeDashboardData {
   // portanto queries.some() é seguro em ambos os estados (uid presente ou null).
   const queries = [
     rankingQuery,
+    rankingGruposQuery,
+    rankingEliminatoriasQuery,
     statisticsQuery,
     poolStatsQuery,
     nextMatchQuery,
@@ -99,6 +114,8 @@ export function useHomeDashboard(): HomeDashboardData {
   // TanStack Query v5 garante estabilidade de identidade de .refetch entre renders.
   const refetch = useCallback(() => {
     void rankingQuery.refetch();
+    void rankingGruposQuery.refetch();
+    void rankingEliminatoriasQuery.refetch();
     void statisticsQuery.refetch();
     void poolStatsQuery.refetch();
     void nextMatchQuery.refetch();
@@ -109,6 +126,8 @@ export function useHomeDashboard(): HomeDashboardData {
     void matchesListData.refetch();
   }, [
     rankingQuery.refetch,
+    rankingGruposQuery.refetch,
+    rankingEliminatoriasQuery.refetch,
     statisticsQuery.refetch,
     poolStatsQuery.refetch,
     nextMatchQuery.refetch,
@@ -150,6 +169,22 @@ export function useHomeDashboard(): HomeDashboardData {
 
   // 7. Hero consolidado (TASK-01 home-revamp): ranking + statistics + pool_stats.
   const heroSummary = deriveHeroSummary(ranking, statistics, poolStats, uid);
+
+  // 7b. Hero dividido por fase (split-phase-ranking TASK-05). Só quando a flag ON.
+  // Reusa `deriveHeroSummary` por escopo; statistics/poolStats são `null` (não há
+  // granularidade por fase) → sparkline/ruler omitidos no ramo ON (decisão de UI).
+  // Eliminatórias: query `null` (doc inexistente) → `null` p/ a UI degradar.
+  let heroSummaryByScope: HomeDashboardData["heroSummaryByScope"];
+  if (splitOn) {
+    const rankingGrupos = rankingGruposQuery.data ?? null;
+    const rankingEliminatorias = rankingEliminatoriasQuery.data ?? null;
+    heroSummaryByScope = {
+      grupos: deriveHeroSummary(rankingGrupos, null, null, uid),
+      eliminatorias: rankingEliminatorias
+        ? deriveHeroSummary(rankingEliminatorias, null, null, uid)
+        : null,
+    };
+  }
 
   // 8. Raio-X dos palpites (TASK-03 home-revamp): scoring client-side sobre
   // a lista de partidas já carregada (finished × predictions).
@@ -213,6 +248,7 @@ export function useHomeDashboard(): HomeDashboardData {
 
   return {
     heroSummary,
+    heroSummaryByScope,
     predictionBreakdown,
     nextMatch: nextMatchSummary,
     recentResults,

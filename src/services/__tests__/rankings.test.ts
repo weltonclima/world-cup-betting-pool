@@ -152,6 +152,30 @@ describe("getPoolRanking", () => {
     fetchMock.mockResolvedValueOnce(fetchResp(null, false, 500));
     await expect(getPoolRanking()).rejects.toThrow(/500/);
   });
+
+  // ── splitPhaseRanking no payload (split-phase-ranking TASK-02) ────────────
+  it("carrega splitPhaseRanking quando presente no payload", async () => {
+    fetchMock.mockResolvedValueOnce(
+      fetchResp(rankingDoc({ splitPhaseRanking: true })),
+    );
+    const result = await getPoolRanking();
+    expect(result?.splitPhaseRanking).toBe(true);
+  });
+
+  it("parseia payload sem splitPhaseRanking (ausente = OFF)", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc()));
+    const result = await getPoolRanking();
+    expect(result?.splitPhaseRanking).toBeUndefined();
+    expect(result?.scope).toBe("geral");
+  });
+
+  it("carrega splitPhaseRanking false explícito", async () => {
+    fetchMock.mockResolvedValueOnce(
+      fetchResp(rankingDoc({ splitPhaseRanking: false })),
+    );
+    const result = await getPoolRanking();
+    expect(result?.splitPhaseRanking).toBe(false);
+  });
 });
 
 describe("getGroupRanking", () => {

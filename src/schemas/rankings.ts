@@ -44,6 +44,14 @@ export const rankingSchema = z
   })
   .strict();
 
+// Payload de resposta de `GET /api/rankings/pool` (split-phase-ranking TASK-02).
+// Estende `rankingSchema` com a flag de exibição `splitPhaseRanking` lida do pool.
+// NÃO mexer em `rankingSchema` (é `.strict()` e usado por outras rotas); `.extend()`
+// cria um schema dedicado. Flag optional: ausente = OFF (telas tratam como false).
+export const poolRankingResponseSchema = rankingSchema.extend({
+  splitPhaseRanking: z.boolean().optional(),
+});
+
 // Ranking por grupo individual (A–L). Doc `rankings/group-{groupId}`.
 // Reaproveita `rankingEntrySchema`; identificado por `groupId` (alinhado a match.groupId).
 export const groupRankingSchema = z

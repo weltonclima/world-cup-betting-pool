@@ -2,10 +2,16 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   groupRankingSchema,
+  poolRankingResponseSchema,
   rankingEntrySchema,
   rankingSchema,
 } from "@/schemas/rankings";
-import type { GroupRanking, Ranking, RankingEntry } from "@/types/rankings";
+import type {
+  GroupRanking,
+  PoolRanking,
+  Ranking,
+  RankingEntry,
+} from "@/types/rankings";
 
 const validEntry = {
   uid: "abc123",
@@ -218,6 +224,49 @@ describe("rankings", () => {
     expect(
       groupRankingSchema.safeParse({ ...validGroupRanking, extra: 1 }).success,
     ).toBe(false);
+  });
+
+  // ── poolRankingResponseSchema (split-phase-ranking TASK-02) ───────────────
+  it("faz parse de payload de pool com splitPhaseRanking true", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({ ...valid, splitPhaseRanking: true })
+        .success,
+    ).toBe(true);
+  });
+
+  it("faz parse de payload de pool com splitPhaseRanking false", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({
+        ...valid,
+        splitPhaseRanking: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("faz parse de payload de pool SEM splitPhaseRanking (ausente = OFF)", () => {
+    expect(poolRankingResponseSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("rejeita splitPhaseRanking não-booleano", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({
+        ...valid,
+        splitPhaseRanking: "sim",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita campo extra (.strict) no payload de pool", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({ ...valid, extra: 1 }).success,
+    ).toBe(false);
+  });
+
+  it("expõe splitPhaseRanking opcional no tipo inferido", () => {
+    expectTypeOf<PoolRanking["splitPhaseRanking"]>().toEqualTypeOf<
+      boolean | undefined
+    >();
+    expectTypeOf<PoolRanking["entries"]>().toEqualTypeOf<RankingEntry[]>();
   });
 
   it("inferência de tipo", () => {

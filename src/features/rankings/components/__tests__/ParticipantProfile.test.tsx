@@ -9,12 +9,14 @@ import type { ProfilePredictionsResult } from "@/features/rankings/hooks";
 
 const {
   usePoolRankingMock,
+  usePoolRankingByScopeMock,
   useParticipantProfileMock,
   useProfilePredictionsMock,
   useMatchesMock,
   authMock,
 } = vi.hoisted(() => ({
   usePoolRankingMock: vi.fn(),
+  usePoolRankingByScopeMock: vi.fn(),
   useParticipantProfileMock: vi.fn(),
   useProfilePredictionsMock: vi.fn(),
   useMatchesMock: vi.fn(),
@@ -23,6 +25,7 @@ const {
 
 vi.mock("@/features/rankings/hooks", () => ({
   usePoolRanking: usePoolRankingMock,
+  usePoolRankingByScope: usePoolRankingByScopeMock,
   useParticipantProfile: useParticipantProfileMock,
   useProfilePredictions: useProfilePredictionsMock,
 }));
@@ -87,6 +90,14 @@ const emptyPredictions: ProfilePredictionsResult = {
 function okRanking(rankingData: Ranking | null, statsData: Statistics | null) {
   usePoolRankingMock.mockReturnValue({
     data: rankingData,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  });
+  // Default: scope queries retornam null (splitPhaseRanking ausente → splitOn = false,
+  // mas o hook ainda é chamado com enabled:false — precisa de mock válido).
+  usePoolRankingByScopeMock.mockReturnValue({
+    data: null,
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -215,6 +226,12 @@ describe("ParticipantProfile", () => {
   });
 
   it("loading state: exibe RankingSkeleton quando qualquer query carrega", () => {
+    usePoolRankingByScopeMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
     usePoolRankingMock.mockReturnValue({
       data: null,
       isLoading: true,
@@ -236,6 +253,12 @@ describe("ParticipantProfile", () => {
   });
 
   it("error state: exibe RankingErrorState quando alguma query falha", () => {
+    usePoolRankingByScopeMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
     usePoolRankingMock.mockReturnValue({
       data: null,
       isLoading: false,
@@ -244,6 +267,36 @@ describe("ParticipantProfile", () => {
     });
     useParticipantProfileMock.mockReturnValue({
       data: null,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useProfilePredictionsMock.mockReturnValue(emptyPredictions);
+    useMatchesMock.mockReturnValue({ data: [], isLoading: false, isError: false });
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+    expect(screen.getByText("Tentar Novamente")).toBeTruthy();
+  });
+
+  it("CR-01: erro em scope query (flag ON) exibe RankingErrorState, não 'sem dados'", () => {
+    const splitRanking = {
+      ...ranking,
+      splitPhaseRanking: true,
+    } as unknown as Ranking;
+    usePoolRankingMock.mockReturnValue({
+      data: splitRanking,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    // grupos OK, eliminatorias falha → splitOn=true e isError deve propagar
+    usePoolRankingByScopeMock.mockImplementation((scope: string) => ({
+      data: null,
+      isLoading: false,
+      isError: scope === "eliminatorias",
+      refetch: vi.fn(),
+    }));
+    useParticipantProfileMock.mockReturnValue({
+      data: stats,
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
@@ -304,5 +357,109 @@ describe("ParticipantProfile", () => {
     expect(screen.getByText("Histórico de Palpites")).toBeTruthy();
     // Sub-bucket de grupo renderizado no accordion (label único)
     expect(screen.getByText("Grupo A")).toBeTruthy();
+  });
+});
+
+describe("ParticipantProfile — split-phase-ranking", () => {
+  it("flag OFF: CurrentPositionCard renderizado, sem blocos Grupos/Eliminatórias", () => {
+    okRanking(ranking, stats);
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+    expect(screen.getByText("Posição Atual")).toBeTruthy();
+    // Rótulos do DualPositionCard ausentes
+    expect(screen.queryByText("Grupos")).toBeNull();
+    expect(screen.queryByText("Eliminatórias")).toBeNull();
+  });
+
+  it("flag ON: DualPositionCard renderizado, CurrentPositionCard ausente", () => {
+    const splitRanking = { ...ranking, splitPhaseRanking: true };
+    usePoolRankingMock.mockReturnValue({
+      data: splitRanking,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    // Grupos: ranking com u-x; Eliminatórias: null (fase não existe ainda)
+    usePoolRankingByScopeMock.mockImplementation((scope: string) => ({
+      data: scope === "grupos" ? ranking : null,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    }));
+    useParticipantProfileMock.mockReturnValue({
+      data: stats,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useProfilePredictionsMock.mockReturnValue(emptyPredictions);
+    useMatchesMock.mockReturnValue({ data: [], isLoading: false, isError: false });
+
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+
+    expect(screen.getByText("Grupos")).toBeTruthy();
+    expect(screen.getByText("Eliminatórias")).toBeTruthy();
+    expect(screen.queryByText("Posição Atual")).toBeNull();
+  });
+
+  it("flag ON + eliminatorias null: bloco Eliminatórias mostra 'Ainda sem dados'", () => {
+    const splitRanking = { ...ranking, splitPhaseRanking: true };
+    usePoolRankingMock.mockReturnValue({
+      data: splitRanking,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    // Ambos escopos sem dados → ambos os blocos mostram "Ainda sem dados"
+    usePoolRankingByScopeMock.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useParticipantProfileMock.mockReturnValue({
+      data: stats,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useProfilePredictionsMock.mockReturnValue(emptyPredictions);
+    useMatchesMock.mockReturnValue({ data: [], isLoading: false, isError: false });
+
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+
+    expect(screen.getByLabelText(/Eliminatórias: ainda sem dados/i)).toBeTruthy();
+    // Pelo menos um bloco sem dados (eliminatorias)
+    expect(screen.getAllByText("Ainda sem dados").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("flag ON + grupos com dados: posição visível no bloco Grupos", () => {
+    const splitRanking = { ...ranking, splitPhaseRanking: true };
+    usePoolRankingMock.mockReturnValue({
+      data: splitRanking,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    usePoolRankingByScopeMock.mockImplementation((scope: string) => ({
+      // ranking tem u-x em position 5 de 2 participantes
+      data: scope === "grupos" ? ranking : null,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    }));
+    useParticipantProfileMock.mockReturnValue({
+      data: stats,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useProfilePredictionsMock.mockReturnValue(emptyPredictions);
+    useMatchesMock.mockReturnValue({ data: [], isLoading: false, isError: false });
+
+    render(<ParticipantProfile uid="u-x" />, { wrapper });
+
+    // Bloco Grupos tem posição: u-x position=5 de 2 participantes
+    expect(screen.getByLabelText(/Grupos: posição 5 de 2 participantes/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Eliminatórias: ainda sem dados/i)).toBeTruthy();
   });
 });

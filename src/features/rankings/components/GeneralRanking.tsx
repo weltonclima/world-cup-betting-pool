@@ -6,11 +6,12 @@ import { Crown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { usePoolRanking } from "@/features/rankings";
+import { usePoolRanking, usePoolRankingByScope } from "@/features/rankings";
 import { paginate } from "@/features/rankings/lib";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs";
 import type { RankingEntry } from "@/types";
 
 import { RankingSkeleton } from "./RankingSkeleton";
@@ -107,37 +108,49 @@ function displayName(entry: RankingEntry): string {
   return surnameInitials ? `${first} ${surnameInitials}` : first;
 }
 
-/** Tela 01 — Ranking do pool do usuário (PRD-05 TASK-08, fechado por pool PRD-09). */
-export function GeneralRanking() {
-  const auth = useAuth();
-  const groupId = auth.profile?.groupId;
-  const currentUid = auth.firebaseUser?.uid;
-  const { data, isLoading, isError, refetch } = usePoolRanking(groupId);
+/**
+ * Estado mínimo de query consumido por `RankingView` (estruturalmente compatível
+ * com `UseQueryResult<PoolRanking | Ranking | null>`). Tanto `PoolRanking` quanto
+ * `Ranking` expõem `entries`, então o split-phase reusa a mesma view por escopo.
+ */
+interface RankingViewQuery {
+  data: { entries: RankingEntry[] } | null | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => unknown;
+}
+
+/**
+ * Corpo reutilizável do ranking (pódio + lista paginada + estados). Cada instância
+ * tem paginação própria (`useState` local) — no split-phase, Grupos e Eliminatórias
+ * paginam de forma independente. Mensagem de vazio customizável por escopo.
+ */
+function RankingView({
+  query,
+  currentUid,
+  emptyMessage,
+  emptySubtitle,
+}: {
+  query: RankingViewQuery;
+  currentUid: string | undefined;
+  emptyMessage?: string;
+  emptySubtitle?: string;
+}) {
   const [page, setPage] = useState(1);
 
-  // Usuário sem pool não pertence a ranking nenhum (e nunca aparece em outro).
-  if (!groupId)
-    return (
-      <RankingEmptyState
-        message="Você ainda não está em um grupo"
-        subtitle="Entre ou crie um grupo para ver o ranking dos participantes."
-      />
-    );
-  if (isLoading) return <RankingSkeleton />;
-  if (isError) return <RankingErrorState onRetry={() => void refetch()} />;
-  if (!data || data.entries.length === 0) return <RankingEmptyState />;
+  if (query.isLoading) return <RankingSkeleton />;
+  if (query.isError)
+    return <RankingErrorState onRetry={() => void query.refetch()} />;
+  if (!query.data || query.data.entries.length === 0)
+    return <RankingEmptyState message={emptyMessage} subtitle={emptySubtitle} />;
 
-  const entries = data.entries;
+  const entries = query.data.entries;
   const podium = entries.slice(0, 3);
   const rest = entries.slice(3);
   const { items, page: current, totalPages } = paginate(rest, page, PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Ação admin: reprocessa o ranking do pool (só group_admin/super_admin;
-          retorna null p/ os demais — sem item flex, sem gap extra). */}
-      <RecalcGroupRankingButton onDone={() => void refetch()} />
-
       <RankingPodium top3={podium} currentUid={currentUid} />
 
       <ol className="flex flex-col gap-2">
@@ -172,6 +185,93 @@ export function GeneralRanking() {
             Próxima
           </Button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Tela 01 — Ranking do pool do usuário (PRD-05 TASK-08, fechado por pool PRD-09). */
+export function GeneralRanking() {
+  const auth = useAuth();
+  const groupId = auth.profile?.groupId;
+  const currentUid = auth.firebaseUser?.uid;
+  const generalQuery = usePoolRanking(groupId);
+
+  // Flag de exibição do pool (split-phase-ranking). Ausência/`false` = ramo OFF
+  // (geral cumulativo, comportamento legado intocado). Só `true` ativa o split.
+  const split = generalQuery.data?.splitPhaseRanking === true;
+
+  // Hooks de escopo SEMPRE chamados (regras de hooks); `enabled` gateia o fetch —
+  // no ramo OFF as 2 leituras não disparam (gating W2).
+  const gruposQuery = usePoolRankingByScope("grupos", { enabled: split });
+  const eliminatoriasQuery = usePoolRankingByScope("eliminatorias", {
+    enabled: split,
+  });
+
+  // Usuário sem pool não pertence a ranking nenhum (e nunca aparece em outro).
+  if (!groupId)
+    return (
+      <RankingEmptyState
+        message="Você ainda não está em um grupo"
+        subtitle="Entre ou crie um grupo para ver o ranking dos participantes."
+      />
+    );
+
+  // O ranking geral também carrega a flag — aguardar antes de decidir o ramo.
+  if (generalQuery.isLoading) return <RankingSkeleton />;
+  if (generalQuery.isError)
+    return <RankingErrorState onRetry={() => void generalQuery.refetch()} />;
+
+  // No split, a aba inicial depende da fase atual: se a eliminatória já tem
+  // pontos (mata-mata iniciado), abre direto nela; senão, abre em Grupos. Como
+  // `defaultValue` só é lido na montagem das Tabs, aguardar o escopo resolver
+  // para decidir com o dado certo (skeleton enquanto carrega).
+  if (split && eliminatoriasQuery.isLoading) return <RankingSkeleton />;
+  const knockoutActive = (eliminatoriasQuery.data?.entries.length ?? 0) > 0;
+  const defaultTab = knockoutActive ? "eliminatorias" : "grupos";
+
+  // Recalc reprocessa o pool inteiro (geral + escopos) — refazer todas as leituras
+  // exibidas para refletir o resultado.
+  const handleRecalcDone = () => {
+    void generalQuery.refetch();
+    if (split) {
+      void gruposQuery.refetch();
+      void eliminatoriasQuery.refetch();
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Ação admin: reprocessa o ranking do pool (só group_admin/super_admin;
+          retorna null p/ os demais — sem item flex, sem gap extra). */}
+      <RecalcGroupRankingButton onDone={handleRecalcDone} />
+
+      {split ? (
+        <Tabs defaultValue={defaultTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTab value="grupos" className="min-h-11">
+              Grupos
+            </TabsTab>
+            <TabsTab value="eliminatorias" className="min-h-11">
+              Eliminatórias
+            </TabsTab>
+          </TabsList>
+
+          <TabsPanel value="grupos" keepMounted>
+            <RankingView query={gruposQuery} currentUid={currentUid} />
+          </TabsPanel>
+
+          <TabsPanel value="eliminatorias" keepMounted>
+            <RankingView
+              query={eliminatoriasQuery}
+              currentUid={currentUid}
+              emptyMessage="Fase eliminatória ainda não começou"
+              emptySubtitle="Os pontos aparecem quando o mata-mata iniciar."
+            />
+          </TabsPanel>
+        </Tabs>
+      ) : (
+        <RankingView query={generalQuery} currentUid={currentUid} />
       )}
     </div>
   );

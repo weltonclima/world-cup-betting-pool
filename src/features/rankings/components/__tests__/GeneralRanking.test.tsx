@@ -2,14 +2,18 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { usePoolRankingMock, useAuthMock } = vi.hoisted(() => ({
-  usePoolRankingMock: vi.fn(),
-  useAuthMock: vi.fn(),
-}));
+const { usePoolRankingMock, usePoolRankingByScopeMock, useAuthMock } = vi.hoisted(
+  () => ({
+    usePoolRankingMock: vi.fn(),
+    usePoolRankingByScopeMock: vi.fn(),
+    useAuthMock: vi.fn(),
+  }),
+);
 
-// Mocka o barrel só para o hook (o componente importa usePoolRanking dele).
+// Mocka o barrel para os hooks consumidos pelo componente.
 vi.mock("@/features/rankings", () => ({
   usePoolRanking: usePoolRankingMock,
+  usePoolRankingByScope: usePoolRankingByScopeMock,
 }));
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: useAuthMock,
@@ -67,11 +71,18 @@ function okRanking() {
   };
 }
 
+/** Resultado de query vazio (sem dados) — default p/ os hooks de escopo. */
+function emptyScope() {
+  return { data: null, isLoading: false, isError: false, refetch: vi.fn() };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Por padrão: usuário COM pool.
   useAuthMock.mockReturnValue({ firebaseUser: { uid: "u-me" }, profile: { groupId: "pool-1" } });
   usePoolRankingMock.mockReturnValue(okRanking());
+  // Default: hooks de escopo não usados no ramo OFF (flag ausente).
+  usePoolRankingByScopeMock.mockReturnValue(emptyScope());
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -134,6 +145,122 @@ describe("GeneralRanking", () => {
     // hook é chamado (regras de hooks) mas desabilitado via enabled:false — aqui
     // garantimos só que a tela não renderiza lista/pódio.
     expect(screen.queryByText("Joao Silva")).toBeNull();
+  });
+
+  it("ramo OFF (flag ausente) NÃO dispara as leituras de escopo (enabled:false)", () => {
+    render(<GeneralRanking />);
+    // Os dois hooks de escopo são chamados (regras de hooks) mas gateados OFF.
+    expect(usePoolRankingByScopeMock).toHaveBeenCalledWith("grupos", {
+      enabled: false,
+    });
+    expect(usePoolRankingByScopeMock).toHaveBeenCalledWith("eliminatorias", {
+      enabled: false,
+    });
+    // E renderiza o ranking geral cumulativo (sem abas).
+    expect(screen.queryByText("Eliminatórias")).toBeNull();
+    expect(screen.getByText("Joao S.")).toBeTruthy();
+  });
+});
+
+// ── split-phase-ranking TASK-04: ramo ON (flag splitPhaseRanking = true) ──────
+describe("GeneralRanking — split por fase (flag ON)", () => {
+  const grupos = [entry("g1", 1, 40, "Grupo Lider"), entry("g2", 2, 30, "Grupo Dois")];
+  const elims = [entry("e1", 1, 20, "Elim Lider"), entry("e2", 2, 10, "Elim Dois")];
+
+  /** Liga a flag no payload do ranking geral. */
+  function splitOnRanking() {
+    return {
+      data: { scope: "geral", updatedAt: "x", entries, splitPhaseRanking: true },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+  }
+
+  function scopeOk(scopeEntries: ReturnType<typeof entry>[]) {
+    return { data: { scope: "x", updatedAt: "x", entries: scopeEntries }, isLoading: false, isError: false, refetch: vi.fn() };
+  }
+
+  beforeEach(() => {
+    usePoolRankingMock.mockReturnValue(splitOnRanking());
+  });
+
+  it("renderiza abas Grupos e Eliminatórias e habilita os dois escopos", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : scopeOk(elims),
+    );
+    render(<GeneralRanking />);
+
+    // Abas presentes.
+    expect(screen.getByText("Grupos")).toBeTruthy();
+    expect(screen.getByText("Eliminatórias")).toBeTruthy();
+    // Gating ON: ambos escopos chamados com enabled:true.
+    expect(usePoolRankingByScopeMock).toHaveBeenCalledWith("grupos", { enabled: true });
+    expect(usePoolRankingByScopeMock).toHaveBeenCalledWith("eliminatorias", { enabled: true });
+  });
+
+  it("mostra os dados de cada escopo (painéis keepMounted)", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : scopeOk(elims),
+    );
+    render(<GeneralRanking />);
+    // Pódio de cada escopo (nome compacto). keepMounted → ambos no DOM.
+    expect(screen.getByText("Grupo L.")).toBeTruthy();
+    expect(screen.getByText("Elim L.")).toBeTruthy();
+  });
+
+  it("empty-state dedicado em Eliminatórias sem dados; Grupos continua visível", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : emptyScope(),
+    );
+    render(<GeneralRanking />);
+    expect(screen.getByText("Grupo L.")).toBeTruthy();
+    expect(screen.getByText("Fase eliminatória ainda não começou")).toBeTruthy();
+  });
+
+  it("skeleton por escopo enquanto carrega (Grupos loading)", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos"
+        ? { data: null, isLoading: true, isError: false, refetch: vi.fn() }
+        : scopeOk(elims),
+    );
+    render(<GeneralRanking />);
+    // Aba de eliminatórias mostra dados; a de grupos, skeleton (sem pódio de grupos).
+    expect(screen.getByText("Elim L.")).toBeTruthy();
+    expect(screen.queryByText("Grupo L.")).toBeNull();
+  });
+
+  it("fase eliminatória ativa (escopo com dados): abre direto na aba Eliminatórias", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : scopeOk(elims),
+    );
+    render(<GeneralRanking />);
+    const tabs = screen.getAllByRole("tab");
+    const elimTab = tabs.find((t) => t.textContent === "Eliminatórias");
+    const gruposTab = tabs.find((t) => t.textContent === "Grupos");
+    expect(elimTab?.getAttribute("aria-selected")).toBe("true");
+    expect(gruposTab?.getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("eliminatória ainda sem dados: abre na aba Grupos (default)", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : emptyScope(),
+    );
+    render(<GeneralRanking />);
+    const tabs = screen.getAllByRole("tab");
+    const gruposTab = tabs.find((t) => t.textContent === "Grupos");
+    expect(gruposTab?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("aguarda o escopo de eliminatórias resolver antes de montar as abas (skeleton)", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "eliminatorias"
+        ? { data: null, isLoading: true, isError: false, refetch: vi.fn() }
+        : scopeOk(grupos),
+    );
+    render(<GeneralRanking />);
+    // Enquanto eliminatórias carrega, não decide a aba inicial → sem tablist ainda.
+    expect(screen.queryByRole("tab")).toBeNull();
   });
 });
 
