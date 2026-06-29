@@ -12,7 +12,7 @@
  *  - A2: read-before-write → audit anterior→novo;
  *  - recalc in-process (recalcRankingsBestEffort), nunca /score.
  *
- * Mocks: server-only, authorize, getAdminFirestore, fetchAllMatches, recalc,
+ * Mocks: server-only, authorize, getAdminFirestore, getEffectiveMatches, recalc,
  * writeAuditLog. predictionSchema/helpers REAIS.
  */
 
@@ -39,7 +39,9 @@ vi.mock("@/app/api/group/_authorize", () => ({
   authorizeGroupAdminOfPool: authorizeMock,
 }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
-vi.mock("@/server/copaData", () => ({ fetchAllMatches: fetchMatchesMock }));
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: fetchMatchesMock,
+}));
 vi.mock("@/server/rankings/recalc", () => ({
   recalcRankingsBestEffort: recalcBestEffortMock,
 }));
