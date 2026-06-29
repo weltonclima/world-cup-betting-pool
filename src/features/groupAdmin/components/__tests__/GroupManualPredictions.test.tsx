@@ -88,7 +88,9 @@ afterEach(() => {
 describe("GroupManualPredictions", () => {
   it("loading → não renderiza o form (sem botão Salvar palpite)", () => {
     useGroupUsersMock.mockReturnValue({ isLoading: true, isError: false });
-    useMatchesMock.mockReturnValue({ isLoading: true, isError: false });
+    // refetch sempre presente no hook real (React Query); o componente o dispara
+    // no mount para realinhar o lock com o servidor.
+    useMatchesMock.mockReturnValue({ isLoading: true, isError: false, refetch: vi.fn() });
     useTeamsMock.mockReturnValue({ isLoading: true, isError: false });
     useCreateManualPredictionMock.mockReturnValue(mutationStub());
 
@@ -134,6 +136,25 @@ describe("GroupManualPredictions", () => {
     expect(
       screen.getByText("Nenhum jogo bloqueado para lançar palpite."),
     ).toBeTruthy();
+  });
+
+  it("mount: refetch dos jogos é disparado (realinha o lock com o servidor)", () => {
+    // Regressão: a lista do dropdown vinha de cache (staleTime 30min) e podia
+    // ofertar um jogo cujo lock já mudou no servidor → 409 confuso. O refetch no
+    // mount realinha a UI à verdade do servidor antes de o admin escolher.
+    const matchesRefetch = vi.fn();
+    useGroupUsersMock.mockReturnValue(ok<GroupUser[]>([fakeMember("u1")]));
+    useMatchesMock.mockReturnValue({
+      data: [lockedMatch("m1")],
+      isLoading: false,
+      isError: false,
+      refetch: matchesRefetch,
+    });
+    useTeamsMock.mockReturnValue(ok(teams));
+    useCreateManualPredictionMock.mockReturnValue(mutationStub());
+
+    render(<GroupManualPredictions />);
+    expect(matchesRefetch).toHaveBeenCalledTimes(1);
   });
 
   it("happy: seleciona participante + jogo → confirma → mutate com payload correto", () => {

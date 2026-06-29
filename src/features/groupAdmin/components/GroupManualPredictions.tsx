@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import { toast } from "sonner";
 import { LoaderCircle } from "lucide-react";
 
@@ -31,8 +31,28 @@ export function GroupManualPredictions(): JSX.Element {
   const teamsQuery = useTeams();
   const mutation = useCreateManualPrediction();
 
-  // `now` fixado uma vez (lazy) — evita recomputar o filtro a cada render.
-  const [now] = useState(() => new Date());
+  // O dropdown de jogos só pode oferecer o que o servidor de fato aceita: a
+  // validação real do lock é server-side (POST /api/group/predictions usa
+  // `fetchAllMatches` fresco). Sem isto, o cache da lista (`useMatches`,
+  // staleTime 30min) pode listar um jogo cujo lock já mudou no servidor → o
+  // admin escolhe e leva um 409 confuso. Refetch no mount realinha a lista.
+  const { refetch: refetchMatches } = matchesQuery;
+  useEffect(() => {
+    void refetchMatches();
+  }, [refetchMatches]);
+
+  // `now` ancorado no instante do snapshot de jogos (`dataUpdatedAt`), não
+  // congelado no mount: avalia o lock por kickoff contra a mesma referência
+  // temporal dos dados exibidos e recomputa quando a lista é refetchada — em vez
+  // de um instante velho que diverge do servidor. Sem dado ainda → relógio atual
+  // (a lista de bloqueados é vazia nesse caso, então o valor é indiferente).
+  const now = useMemo(
+    () =>
+      matchesQuery.dataUpdatedAt
+        ? new Date(matchesQuery.dataUpdatedAt)
+        : new Date(),
+    [matchesQuery.dataUpdatedAt],
+  );
 
   const [targetUid, setTargetUid] = useState("");
   const [matchId, setMatchId] = useState("");
