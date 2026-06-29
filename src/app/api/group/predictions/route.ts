@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
-import { fetchAllMatches } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import { writeAuditLog } from "@/server/admin/auditLog";
 import {
@@ -98,9 +98,14 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // ─── 4. Jogo + override de lock (A1) ─────────────────────────────────────
-  let matches: Awaited<ReturnType<typeof fetchAllMatches>>;
+  // Fonte EFETIVA (PRD-13: ESPN primária + overrides manuais), a MESMA que a UI
+  // consome via /api/matches. Usar `fetchAllMatches` cru (openfootball, fallback
+  // de emergência) divergia da lista que o admin vê: o dropdown listava o jogo
+  // como bloqueado (ESPN ao vivo/encerrado) mas a checagem aqui o via aberto
+  // (openfootball ainda "scheduled") → 409 espúrio. `getEffectiveMatches` realinha.
+  let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
-    matches = await fetchAllMatches();
+    matches = await getEffectiveMatches();
   } catch (err) {
     return copaDataErrorResponse(err);
   }
