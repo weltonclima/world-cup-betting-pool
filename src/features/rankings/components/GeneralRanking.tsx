@@ -222,6 +222,14 @@ export function GeneralRanking() {
   if (generalQuery.isError)
     return <RankingErrorState onRetry={() => void generalQuery.refetch()} />;
 
+  // No split, a aba inicial depende da fase atual: se a eliminatória já tem
+  // pontos (mata-mata iniciado), abre direto nela; senão, abre em Grupos. Como
+  // `defaultValue` só é lido na montagem das Tabs, aguardar o escopo resolver
+  // para decidir com o dado certo (skeleton enquanto carrega).
+  if (split && eliminatoriasQuery.isLoading) return <RankingSkeleton />;
+  const knockoutActive = (eliminatoriasQuery.data?.entries.length ?? 0) > 0;
+  const defaultTab = knockoutActive ? "eliminatorias" : "grupos";
+
   // Recalc reprocessa o pool inteiro (geral + escopos) — refazer todas as leituras
   // exibidas para refletir o resultado.
   const handleRecalcDone = () => {
@@ -239,7 +247,7 @@ export function GeneralRanking() {
       <RecalcGroupRankingButton onDone={handleRecalcDone} />
 
       {split ? (
-        <Tabs defaultValue="grupos">
+        <Tabs defaultValue={defaultTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTab value="grupos" className="min-h-11">
               Grupos

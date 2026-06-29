@@ -229,6 +229,39 @@ describe("GeneralRanking — split por fase (flag ON)", () => {
     expect(screen.getByText("Elim L.")).toBeTruthy();
     expect(screen.queryByText("Grupo L.")).toBeNull();
   });
+
+  it("fase eliminatória ativa (escopo com dados): abre direto na aba Eliminatórias", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : scopeOk(elims),
+    );
+    render(<GeneralRanking />);
+    const tabs = screen.getAllByRole("tab");
+    const elimTab = tabs.find((t) => t.textContent === "Eliminatórias");
+    const gruposTab = tabs.find((t) => t.textContent === "Grupos");
+    expect(elimTab?.getAttribute("aria-selected")).toBe("true");
+    expect(gruposTab?.getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("eliminatória ainda sem dados: abre na aba Grupos (default)", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "grupos" ? scopeOk(grupos) : emptyScope(),
+    );
+    render(<GeneralRanking />);
+    const tabs = screen.getAllByRole("tab");
+    const gruposTab = tabs.find((t) => t.textContent === "Grupos");
+    expect(gruposTab?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("aguarda o escopo de eliminatórias resolver antes de montar as abas (skeleton)", () => {
+    usePoolRankingByScopeMock.mockImplementation((scope: string) =>
+      scope === "eliminatorias"
+        ? { data: null, isLoading: true, isError: false, refetch: vi.fn() }
+        : scopeOk(grupos),
+    );
+    render(<GeneralRanking />);
+    // Enquanto eliminatórias carrega, não decide a aba inicial → sem tablist ainda.
+    expect(screen.queryByRole("tab")).toBeNull();
+  });
 });
 
 // ── TASK-06: redesign do pódio (posição visível + foto/fallback) ────────────
