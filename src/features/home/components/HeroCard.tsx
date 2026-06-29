@@ -15,7 +15,10 @@ import { ArrowDown, ArrowUp, Flame, Minus, TrendingUp } from "lucide-react";
 import { Line, LineChart, YAxis } from "recharts";
 
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
-import type { HeroSummary } from "@/features/home/lib/homeDashboardHelpers";
+import type {
+  HeroSummary,
+  HeroSummaryByScope,
+} from "@/features/home/lib/homeDashboardHelpers";
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
 
@@ -162,12 +165,75 @@ function PercentileRuler({ ruler }: { ruler: NonNullable<HeroSummary["ruler"]> }
   );
 }
 
+/**
+ * Bloco compacto de um escopo no ramo split (split-phase-ranking TASK-05).
+ * Mostra só o essencial por fase: posição/total + pontos. Sparkline/régua/
+ * métricas secundárias NÃO entram aqui (não há statistics por escopo). Quando
+ * `summary` é `null` (doc da fase inexistente) ou `isEmpty` (usuário sem entry),
+ * degrada para "Ainda sem dados".
+ */
+function HeroScopeBlock({ label, summary }: { label: string; summary: HeroSummary | null }) {
+  const position = summary != null && !summary.isEmpty ? summary.position : null;
+
+  if (summary == null || position == null) {
+    return (
+      <div
+        className="flex flex-col gap-1 rounded-md border border-border bg-background/50 p-3"
+        aria-label={`${label}: ainda sem dados`}
+      >
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </span>
+        <span className="text-3xl font-bold tabular-nums text-muted-foreground">—</span>
+        <span className="text-xs text-muted-foreground">Ainda sem dados</span>
+      </div>
+    );
+  }
+
+  const { totalParticipants, points } = summary;
+
+  return (
+    <div
+      className="flex flex-col gap-1 rounded-md border border-border bg-background/50 p-3"
+      aria-label={
+        `${label}: posição ${position} de ${totalParticipants ?? "?"}` +
+        (points != null ? `, ${points} pontos` : "")
+      }
+    >
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-3xl font-bold tabular-nums text-foreground">
+          {`#${numberFormatter.format(position)}`}
+        </span>
+        {totalParticipants != null && (
+          <span className="text-xs text-muted-foreground">
+            de {numberFormatter.format(totalParticipants)}
+          </span>
+        )}
+      </div>
+      {points != null && (
+        <span className="text-sm font-medium tabular-nums text-foreground">
+          {numberFormatter.format(points)} pts
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 export interface HeroCardProps {
   summary: HeroSummary;
+  /**
+   * Hero dividido por fase (split-phase-ranking TASK-05). Quando presente (flag
+   * ON), renderiza dois blocos compactos (Grupos | Eliminatórias) no lugar do
+   * hero único. `undefined` → hero único atual (ramo OFF, retrocompat).
+   */
+  summaryByScope?: HeroSummaryByScope;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +243,26 @@ export interface HeroCardProps {
 /**
  * Hero da Home. Renderiza estado empty intencional para conta nova/pré-torneio.
  */
-export function HeroCard({ summary }: HeroCardProps) {
+export function HeroCard({ summary, summaryByScope }: HeroCardProps) {
+  // Ramo split (flag ON): dois blocos compactos lado a lado (Grupos|Eliminatórias).
+  // Omite sparkline/régua/métricas — não há statistics por escopo (ver ui-spec §2).
+  if (summaryByScope) {
+    return (
+      <article
+        aria-label="Sua posição no bolão por fase"
+        className="rounded-lg border border-border bg-card p-4 shadow-sm flex flex-col gap-3"
+      >
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Sua posição no bolão
+        </span>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <HeroScopeBlock label="Grupos" summary={summaryByScope.grupos} />
+          <HeroScopeBlock label="Eliminatórias" summary={summaryByScope.eliminatorias} />
+        </div>
+      </article>
+    );
+  }
+
   if (summary.isEmpty) {
     return (
       <article

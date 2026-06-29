@@ -129,10 +129,27 @@ export interface HeroSummary {
   isEmpty: boolean;
 }
 
+/**
+ * Hero dividido por fase (split-phase-ranking TASK-05). Presente APENAS quando a
+ * flag `splitPhaseRanking` do pool está ON; `undefined` no ramo OFF (retrocompat).
+ * `eliminatorias` é `null` quando o doc de ranking da fase ainda não existe
+ * (torneio só na fase de grupos) — a UI degrada graciosamente.
+ */
+export interface HeroSummaryByScope {
+  grupos: HeroSummary;
+  eliminatorias: HeroSummary | null;
+}
+
 /** Saída completa do compositor useHomeDashboard. */
 export interface HomeDashboardData {
   /** Hero consolidado (TASK-01 home-revamp). */
   heroSummary: HeroSummary;
+  /**
+   * Hero por fase (split-phase-ranking TASK-05). `undefined` quando a flag do
+   * pool está OFF — nesse caso a UI usa `heroSummary` (geral). Quando presente,
+   * a UI renderiza os dois escopos lado a lado em vez do hero único.
+   */
+  heroSummaryByScope?: HeroSummaryByScope;
   /** Raio-X dos palpites (TASK-03 home-revamp). */
   predictionBreakdown: PredictionBreakdown;
   nextMatch: NextMatchSummary | null;

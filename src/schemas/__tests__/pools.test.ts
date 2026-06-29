@@ -138,6 +138,23 @@ describe("pools › poolSchema", () => {
       poolSchema.safeParse({ ...valid, predictionsLocked: "true" }).success,
     ).toBe(false);
   });
+
+  it("splitPhaseRanking: ausente → parse ok (default-na-leitura = OFF)", () => {
+    // Pools criados antes do feature de divisão não têm o campo → backward-compat.
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("splitPhaseRanking: aceita true e false, rejeita não-boolean", () => {
+    expect(
+      poolSchema.safeParse({ ...valid, splitPhaseRanking: true }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, splitPhaseRanking: false }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, splitPhaseRanking: "true" }).success,
+    ).toBe(false);
+  });
 });
 
 describe("pools › poolStatusSchema", () => {
@@ -215,6 +232,9 @@ describe("pools › inferência de tipos", () => {
     expectTypeOf<Pool["photoBase64"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<Pool["status"]>().toEqualTypeOf<PoolStatus>();
     expectTypeOf<Pool["predictionsLocked"]>().toEqualTypeOf<
+      boolean | undefined
+    >();
+    expectTypeOf<Pool["splitPhaseRanking"]>().toEqualTypeOf<
       boolean | undefined
     >();
     expectTypeOf<PoolInput["name"]>().toEqualTypeOf<string>();

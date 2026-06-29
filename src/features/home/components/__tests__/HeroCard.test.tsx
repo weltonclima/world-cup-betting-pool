@@ -18,7 +18,7 @@ vi.mock("@/components/ui/chart", () => ({
   ),
 }));
 
-import type { HeroSummary } from "@/features/home/lib/homeDashboardHelpers";
+import type { HeroSummary, HeroSummaryByScope } from "@/features/home/lib/homeDashboardHelpers";
 
 import { HeroCard, HeroCardSkeleton } from "../HeroCard";
 
@@ -172,5 +172,92 @@ describe("HeroCardSkeleton", () => {
     render(<HeroCardSkeleton />);
     const sk = screen.getByRole("status");
     expect(sk.getAttribute("aria-busy")).toBe("true");
+  });
+});
+
+// ── split-phase-ranking (summaryByScope) ─────────────────────────────────────
+
+describe("HeroCard — split-phase-ranking (summaryByScope)", () => {
+  const scopeWithData = makeHero({
+    position: 2,
+    totalParticipants: 15,
+    points: 45,
+    isEmpty: false,
+  });
+
+  it("renderiza layout de dois blocos em vez do hero único quando summaryByScope presente", () => {
+    const byScope: HeroSummaryByScope = { grupos: scopeWithData, eliminatorias: scopeWithData };
+    render(<HeroCard summary={makeHero()} summaryByScope={byScope} />);
+    const article = screen.getByRole("article");
+    expect(article.getAttribute("aria-label")).toBe("Sua posição no bolão por fase");
+    // Métricas do hero único ausentes (não entra no ramo normal)
+    expect(screen.queryByText("Aproveitamento")).toBeNull();
+    expect(screen.queryByText("Maior sequência")).toBeNull();
+  });
+
+  it("rótulos 'Grupos' e 'Eliminatórias' visíveis no split", () => {
+    render(
+      <HeroCard
+        summary={makeHero()}
+        summaryByScope={{ grupos: scopeWithData, eliminatorias: scopeWithData }}
+      />,
+    );
+    expect(screen.getByText("Grupos")).toBeTruthy();
+    expect(screen.getByText("Eliminatórias")).toBeTruthy();
+  });
+
+  it("posição e pontos visíveis no bloco com dados", () => {
+    render(
+      <HeroCard
+        summary={makeHero()}
+        summaryByScope={{ grupos: scopeWithData, eliminatorias: null }}
+      />,
+    );
+    expect(screen.getByText("#2")).toBeTruthy();
+    expect(screen.getByText("45 pts")).toBeTruthy();
+  });
+
+  it("eliminatorias null → bloco mostra '—' e 'Ainda sem dados'", () => {
+    render(
+      <HeroCard
+        summary={makeHero()}
+        summaryByScope={{ grupos: scopeWithData, eliminatorias: null }}
+      />,
+    );
+    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.getByText("Ainda sem dados")).toBeTruthy();
+  });
+
+  it("grupos isEmpty true → bloco mostra '—' e 'Ainda sem dados'", () => {
+    const emptyScope = makeHero({ isEmpty: true, position: null });
+    render(
+      <HeroCard
+        summary={makeHero()}
+        summaryByScope={{ grupos: emptyScope, eliminatorias: null }}
+      />,
+    );
+    // Ambos blocos em estado vazio
+    expect(screen.getAllByText("Ainda sem dados")).toHaveLength(2);
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("aria-label do bloco com dados descreve posição, total e pontos", () => {
+    render(
+      <HeroCard
+        summary={makeHero()}
+        summaryByScope={{ grupos: scopeWithData, eliminatorias: null }}
+      />,
+    );
+    expect(screen.getByLabelText(/Grupos: posição 2 de 15, 45 pontos/)).toBeTruthy();
+  });
+
+  it("aria-label do bloco sem dados: 'ainda sem dados'", () => {
+    render(
+      <HeroCard
+        summary={makeHero()}
+        summaryByScope={{ grupos: scopeWithData, eliminatorias: null }}
+      />,
+    );
+    expect(screen.getByLabelText(/Eliminatórias: ainda sem dados/i)).toBeTruthy();
   });
 });

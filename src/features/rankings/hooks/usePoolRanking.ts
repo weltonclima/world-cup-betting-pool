@@ -3,7 +3,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { getPoolRanking } from "@/services";
-import type { Ranking } from "@/types";
+import type { PoolRanking } from "@/types";
 
 import { rankingKeys } from "./rankingKeys";
 
@@ -15,7 +15,7 @@ import { rankingKeys } from "./rankingKeys";
  */
 export function usePoolRanking(
   groupId: string | undefined,
-): UseQueryResult<Ranking | null> {
+): UseQueryResult<PoolRanking | null> {
   return useQuery({
     queryKey: rankingKeys.pool(groupId ?? "none"),
     queryFn: getPoolRanking,

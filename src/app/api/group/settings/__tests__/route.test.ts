@@ -174,4 +174,36 @@ describe("PATCH /api/group/settings", () => {
     expect(body["error"]).toBe("Dados inválidos.");
     expect(body["issues"]).toBeUndefined();
   });
+
+  it("200 splitPhaseRanking true → persiste true", async () => {
+    mockDb({ data: pool({ splitPhaseRanking: true }) });
+    const res = await PATCH(makeReq({ body: { splitPhaseRanking: true } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["splitPhaseRanking"]).toBe(true);
+  });
+
+  it("200 splitPhaseRanking false → persiste false (desligar)", async () => {
+    mockDb({ data: pool({ splitPhaseRanking: false }) });
+    const res = await PATCH(makeReq({ body: { splitPhaseRanking: false } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["splitPhaseRanking"]).toBe(false);
+  });
+
+  it("200 sem splitPhaseRanking → campo ausente no patch (não toca o valor existente)", async () => {
+    mockDb({ data: pool({ splitPhaseRanking: true }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("splitPhaseRanking" in patch).toBe(false);
+  });
+
+  it("422 splitPhaseRanking string → rejeitado (strict type)", async () => {
+    const res = await PATCH(makeReq({ body: { splitPhaseRanking: "yes" } }));
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["error"]).toBe("Dados inválidos.");
+    expect(body["issues"]).toBeUndefined();
+  });
 });

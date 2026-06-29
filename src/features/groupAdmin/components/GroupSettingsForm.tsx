@@ -56,6 +56,7 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
   );
   const [allowInvites, setAllowInvites] = useState(pool.allowInvites !== false);
+  const [splitPhaseRanking, setSplitPhaseRanking] = useState(pool.splitPhaseRanking === true);
 
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -70,6 +71,7 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
       pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
     );
     setAllowInvites(pool.allowInvites !== false);
+    setSplitPhaseRanking(pool.splitPhaseRanking === true);
   }, [pool]);
 
   async function onPickPhoto(file: File | undefined): Promise<void> {
@@ -116,6 +118,9 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     if (allowInvites !== (pool.allowInvites !== false)) {
       patch.allowInvites = allowInvites;
     }
+    if (splitPhaseRanking !== (pool.splitPhaseRanking === true)) {
+      patch.splitPhaseRanking = splitPhaseRanking;
+    }
 
     if (Object.keys(patch).length === 0) {
       setSaved(true);
@@ -130,7 +135,8 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     description.trim() !== (pool.description ?? "") ||
     (photo !== pool.photoBase64 && photo !== undefined) ||
     maxNum !== (pool.maxParticipants ?? null) ||
-    allowInvites !== (pool.allowInvites !== false);
+    allowInvites !== (pool.allowInvites !== false) ||
+    splitPhaseRanking !== (pool.splitPhaseRanking === true);
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
@@ -261,6 +267,27 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
           checked={allowInvites}
           onCheckedChange={(v) => {
             setAllowInvites(v);
+            setSaved(false);
+          }}
+        />
+      </div>
+
+      {/* Dividir ranking por fase */}
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-border p-4">
+        <div className="min-w-0">
+          <Label htmlFor="group-split-phase-ranking" className="font-medium">
+            Dividir ranking por fase
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Exibe rankings separados para a fase de grupos e eliminatórias.
+          </p>
+        </div>
+        <Switch
+          id="group-split-phase-ranking"
+          checked={splitPhaseRanking}
+          disabled={update.isPending}
+          onCheckedChange={(v) => {
+            setSplitPhaseRanking(v);
             setSaved(false);
           }}
         />

@@ -14,10 +14,11 @@ import {
 import {
   useParticipantProfile,
   usePoolRanking,
+  usePoolRankingByScope,
   useProfilePredictions,
 } from "@/features/rankings/hooks";
 import { useAuth } from "@/hooks/useAuth";
-import type { RankingEntry, Statistics } from "@/types";
+import type { Ranking, RankingEntry, Statistics } from "@/types";
 
 import { RankingEmptyState } from "./RankingEmptyState";
 import { RankingErrorState } from "./RankingErrorState";
@@ -71,6 +72,12 @@ export function ParticipantProfile({
 
   const myGroupId = profile?.groupId;
   const rankingQuery = usePoolRanking(myGroupId);
+  // Split por fase (split-phase-ranking TASK-05): flag embutida no payload do
+  // ranking do pool (TASK-02). Gating: as 2 leituras de escopo só disparam quando
+  // a flag está ON (`enabled`). Hooks chamados sempre (regras de hooks).
+  const splitOn = rankingQuery.data?.splitPhaseRanking === true;
+  const gruposQuery = usePoolRankingByScope("grupos", { enabled: splitOn });
+  const eliminatoriasQuery = usePoolRankingByScope("eliminatorias", { enabled: splitOn });
   const statsQuery = useParticipantProfile(uid);
   const predictionsQuery = useProfilePredictions(uid, isSelf);
   // Own predictions only needed for ProfileComparisonCard when viewing another profile
@@ -82,10 +89,14 @@ export function ParticipantProfile({
 
   const isLoading =
     rankingQuery.isLoading ||
+    gruposQuery.isLoading ||
+    eliminatoriasQuery.isLoading ||
     statsQuery.isLoading ||
     predictionsQuery.isLoading;
   const isError =
     rankingQuery.isError ||
+    gruposQuery.isError ||
+    eliminatoriasQuery.isError ||
     statsQuery.isError ||
     predictionsQuery.isError;
 
@@ -157,10 +168,17 @@ export function ParticipantProfile({
         nickname={entry.nickname}
         isSelf={isSelf}
       />
-      <CurrentPositionCard
-        position={entry.position}
-        total={rankingQuery.data?.entries.length ?? 0}
-      />
+      {splitOn ? (
+        <DualPositionCard
+          grupos={findScopePosition(gruposQuery.data, uid)}
+          eliminatorias={findScopePosition(eliminatoriasQuery.data, uid)}
+        />
+      ) : (
+        <CurrentPositionCard
+          position={entry.position}
+          total={rankingQuery.data?.entries.length ?? 0}
+        />
+      )}
       <ProfileStatsGrid exactHits={exactHits} wins={wins} draws={draws} longestStreak={stats?.longestStreak} />
       <StagePerformance stats={stats} />
 
@@ -242,6 +260,80 @@ function CurrentPositionCard({
         de {total} participantes
       </p>
     </section>
+  );
+}
+
+/** Posição/total de um usuário num escopo, ou `null` se ausente. */
+interface ScopePosition {
+  position: number;
+  total: number;
+}
+
+/**
+ * Localiza posição/total de um usuário num ranking de escopo (split-phase-ranking
+ * TASK-05). `null` quando o doc da fase não existe ainda (`ranking == null`) ou o
+ * usuário não tem entry nesse escopo — a UI degrada para "—".
+ */
+function findScopePosition(
+  ranking: Ranking | null | undefined,
+  uid: string,
+): ScopePosition | null {
+  if (!ranking) return null;
+  const entry = ranking.entries.find((e) => e.uid === uid);
+  if (!entry) return null;
+  return { position: entry.position, total: ranking.entries.length };
+}
+
+/**
+ * Card de posição dividido por fase (split-phase-ranking TASK-05). Dois blocos
+ * lado a lado: "Grupos" e "Eliminatórias". Bloco sem dados (`null`) mostra "—".
+ */
+function DualPositionCard({
+  grupos,
+  eliminatorias,
+}: {
+  grupos: ScopePosition | null;
+  eliminatorias: ScopePosition | null;
+}): JSX.Element {
+  return (
+    <section className="grid grid-cols-2 gap-3">
+      <ScopePositionBlock label="Grupos" data={grupos} />
+      <ScopePositionBlock label="Eliminatórias" data={eliminatorias} />
+    </section>
+  );
+}
+
+function ScopePositionBlock({
+  label,
+  data,
+}: {
+  label: string;
+  data: ScopePosition | null;
+}): JSX.Element {
+  return (
+    <div
+      className="rounded-xl border border-border bg-card p-4 text-center shadow-sm"
+      aria-label={
+        data
+          ? `${label}: posição ${data.position} de ${data.total} participantes`
+          : `${label}: ainda sem dados`
+      }
+    >
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      {data ? (
+        <>
+          <p className="text-4xl font-bold tabular-nums text-primary">#{data.position}</p>
+          <p className="text-sm tabular-nums text-muted-foreground">
+            de {data.total} participantes
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-4xl font-bold tabular-nums text-muted-foreground">—</p>
+          <p className="text-sm text-muted-foreground">Ainda sem dados</p>
+        </>
+      )}
+    </div>
   );
 }
 

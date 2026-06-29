@@ -48,8 +48,19 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(null, { status: 200 });
   }
 
+  // Flag de exibição do pool (split-phase-ranking TASK-02): lida SÓ da sessão
+  // (pools/{groupId}), nunca do request. Ausente/não-booleano = OFF (omitido do
+  // payload; telas tratam ausência como false). Expomos APENAS este campo a
+  // membros — nenhum outro dado do pool vaza no payload de ranking.
+  const poolSnap = await db.collection("pools").doc(groupId).get();
+  const rawFlag: unknown = poolSnap.data()?.["splitPhaseRanking"];
+  const splitPhaseRanking = typeof rawFlag === "boolean" ? rawFlag : undefined;
+
   // Foto/nome de exibição resolvidos AO VIVO (não do snapshot do recalc): garante que
   // trocar avatar/apelido reflita no ranking sem depender de um recalc disparar.
   const entries = await hydrateRankingEntries(db, parsed.data.entries);
-  return NextResponse.json({ ...parsed.data, entries }, { status: 200 });
+  return NextResponse.json(
+    { ...parsed.data, entries, splitPhaseRanking },
+    { status: 200 },
+  );
 }

@@ -196,6 +196,7 @@ export interface UpdateGroupSettingsInput {
   maxParticipants?: number | null;
   allowInvites?: boolean;
   predictionsLocked?: boolean;
+  splitPhaseRanking?: boolean;
 }
 
 export async function updateGroupSettings(

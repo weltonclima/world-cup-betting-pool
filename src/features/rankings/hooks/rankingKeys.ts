@@ -8,7 +8,9 @@ export const rankingKeys = {
   all: () => ["ranking"] as const,
   scope: (scope: RankingScope) => ["ranking", "scope", scope] as const,
   pool: (groupId: string) => ["ranking", "pool", groupId] as const, // ranking fechado do pool (PRD-09)
-  poolScope: (scope: RankingScope) => ["ranking", "pool-scope", scope] as const, // fase recortada ao pool (PRD-09 Tela 03)
+  poolScope: (groupId: string, scope: RankingScope) =>
+    ["ranking", "pool-scope", groupId, scope] as const, // fase recortada ao pool (PRD-09 Tela 03); groupId separa cache por pool
+
   group: (groupId: string) => ["ranking", "group", groupId] as const, // grupo da Copa recortado ao pool (PRD-09 Tela 03)
   user: (uid: string) => ["ranking", "user", uid] as const, // linha do usuário no geral (UserRankingResult)
   profile: (uid: string) => ["ranking", "profile", uid] as const, // statistics/{uid} (Statistics)

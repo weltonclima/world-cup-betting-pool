@@ -39,6 +39,7 @@ vi.mock("../useRecentResults");
 vi.mock("../useTeams");
 vi.mock("../usePredictions");
 vi.mock("../useSystemSettings");
+vi.mock("@/features/rankings/hooks/usePoolRankingByScope");
 
 // ── imports pós-mock ─────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ import { useRecentResults } from "../useRecentResults";
 import { useTeams } from "../useTeams";
 import { usePredictions } from "../usePredictions";
 import { useSystemSettings } from "../useSystemSettings";
+import { usePoolRankingByScope } from "@/features/rankings/hooks/usePoolRankingByScope";
 
 import { useHomeDashboard } from "../useHomeDashboard";
 
@@ -67,7 +69,8 @@ const mockRecentResults = vi.mocked(useRecentResults);
 const mockTeams        = vi.mocked(useTeams);
 const mockPredictions  = vi.mocked(usePredictions);
 const mockSettings     = vi.mocked(useSystemSettings);
-const mockMatchesList  = vi.mocked(useMatchesList);
+const mockMatchesList        = vi.mocked(useMatchesList);
+const mockPoolRankingByScope = vi.mocked(usePoolRankingByScope);
 
 /** Item de jogo aberto para palpitar (flatList do useMatchesList). */
 function makeOpenItem(id: string, overrides: Partial<MatchListItem> = {}): MatchListItem {
@@ -257,6 +260,8 @@ function setupMocks({
   matchesListLoading = false,
   matchesListError = false,
   matchesListRefetch = vi.fn() as () => void,
+  rankingGruposData = null as Ranking | null,
+  rankingEliminatoriasData = null as Ranking | null,
 }: {
   uid?: string | null;
   rankingData?: Ranking | null;
@@ -295,6 +300,8 @@ function setupMocks({
   matchesListLoading?: boolean;
   matchesListError?: boolean;
   matchesListRefetch?: () => void;
+  rankingGruposData?: Ranking | null;
+  rankingEliminatoriasData?: Ranking | null;
 } = {}) {
   mockUseAuth.mockReturnValue({
     firebaseUser: uid ? ({ uid } as import("firebase/auth").User) : null,
@@ -320,6 +327,13 @@ function setupMocks({
     isLoading: matchesListLoading,
     isError: matchesListError,
     refetch: matchesListRefetch,
+  });
+
+  // usePoolRankingByScope é chamado 2× (grupos + eliminatorias) com enabled controlado pela flag.
+  // O mock retorna dados independente do enabled (o enabled controla o fetch real, não o mock).
+  mockPoolRankingByScope.mockImplementation((scope) => {
+    const data = scope === "grupos" ? rankingGruposData : rankingEliminatoriasData;
+    return fakeQuery({ data });
   });
 }
 
@@ -654,5 +668,71 @@ describe("useHomeDashboard — coleções vazias", () => {
 
     const { result } = renderHook(() => useHomeDashboard());
     expect(result.current.notices).toEqual([]);
+  });
+});
+
+describe("useHomeDashboard — split-phase-ranking (heroSummaryByScope)", () => {
+  it("heroSummaryByScope undefined quando splitPhaseRanking ausente (flag OFF)", () => {
+    // makeRanking não inclui splitPhaseRanking → splitOn = false
+    setupMocks({ rankingData: makeRanking("user-01", 1, 10) });
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.heroSummaryByScope).toBeUndefined();
+  });
+
+  it("heroSummaryByScope undefined quando splitPhaseRanking=false", () => {
+    const rankingOff = { ...makeRanking("user-01", 1, 10), splitPhaseRanking: false };
+    setupMocks({ rankingData: rankingOff as unknown as Ranking });
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.heroSummaryByScope).toBeUndefined();
+  });
+
+  it("heroSummaryByScope presente quando splitPhaseRanking=true", () => {
+    const rankingOn = { ...makeRanking("user-01", 1, 10), splitPhaseRanking: true };
+    const rankingGrupos = makeRanking("user-01", 2, 45);
+    const rankingEliminatorias = makeRanking("user-01", 1, 30);
+
+    setupMocks({
+      rankingData: rankingOn as unknown as Ranking,
+      rankingGruposData: rankingGrupos,
+      rankingEliminatoriasData: rankingEliminatorias,
+    });
+
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.heroSummaryByScope).toBeDefined();
+    // Grupos: posição 2 (makeRanking coloca user-01 em position 2)
+    expect(result.current.heroSummaryByScope?.grupos.position).toBe(2);
+    // Eliminatórias: posição 1
+    expect(result.current.heroSummaryByScope?.eliminatorias?.position).toBe(1);
+  });
+
+  it("heroSummaryByScope.eliminatorias null quando doc da fase não existe", () => {
+    const rankingOn = { ...makeRanking("user-01", 1, 10), splitPhaseRanking: true };
+
+    setupMocks({
+      rankingData: rankingOn as unknown as Ranking,
+      rankingGruposData: makeRanking("user-01", 2, 45),
+      rankingEliminatoriasData: null, // fase eliminatória ainda não existe
+    });
+
+    const { result } = renderHook(() => useHomeDashboard());
+    expect(result.current.heroSummaryByScope?.eliminatorias).toBeNull();
+    // Grupos ainda presente
+    expect(result.current.heroSummaryByScope?.grupos).toBeDefined();
+  });
+
+  it("heroSummary (geral) continua presente mesmo com split ON (retrocompat)", () => {
+    const rankingOn = { ...makeRanking("user-01", 1, 10), splitPhaseRanking: true };
+    setupMocks({ rankingData: rankingOn as unknown as Ranking });
+    const { result } = renderHook(() => useHomeDashboard());
+    // heroSummary sempre derivado do ranking geral
+    expect(result.current.heroSummary).toBeDefined();
+    expect(result.current.heroSummary.position).toBe(1);
+  });
+
+  it("W2: usePoolRankingByScope chamado com enabled:false quando flag OFF (sem 2 leituras extras)", () => {
+    setupMocks({ rankingData: makeRanking("user-01", 1, 10) });
+    renderHook(() => useHomeDashboard());
+    expect(mockPoolRankingByScope).toHaveBeenCalledWith("grupos", { enabled: false });
+    expect(mockPoolRankingByScope).toHaveBeenCalledWith("eliminatorias", { enabled: false });
   });
 });

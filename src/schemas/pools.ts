@@ -39,6 +39,11 @@ export const poolSchema = z
     // `undefined` = palpites liberados (sem `.default(false)` no schema). `true` =
     // bloqueado p/ todos os participantes do pool. Enforcement server-side em TASK-02.
     predictionsLocked: z.boolean().optional(),
+    // NET-NEW divisão de ranking por fase (split-phase-ranking TASK-01) — aditivo
+    // optional. Default NA LEITURA: `undefined` = divisão OFF (sem `.default(false)`
+    // no schema). `true` = telas exibem rankings de grupos e eliminatórias separados.
+    // Só exibição; sem impacto em scoring/recalc.
+    splitPhaseRanking: z.boolean().optional(),
   })
   .strict();
 
