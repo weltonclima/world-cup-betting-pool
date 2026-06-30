@@ -46,6 +46,9 @@ export function PhaseSection({ label, matches, className }: PhaseSectionProps) {
     >
       <h2 id={headingId} className="text-sm font-semibold text-foreground">
         {label}
+        <span className="ml-1.5 font-normal text-muted-foreground">
+          · {matches.length === 1 ? "1 jogo" : `${matches.length} jogos`}
+        </span>
       </h2>
 
       <div className="flex flex-col gap-3">

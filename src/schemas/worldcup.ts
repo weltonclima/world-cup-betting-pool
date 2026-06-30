@@ -56,6 +56,20 @@ export const groupTableSchema = z
   })
   .strict();
 
+// ─── Venue (local) ───────────────────────────────────────────────────────────
+
+/**
+ * Estádio de uma partida de mata-mata.
+ * Mesma shape de venueSchema em matches.ts — definida localmente para evitar
+ * acoplamento entre módulos de schema.
+ */
+const knockoutVenueSchema = z
+  .object({
+    name: nonEmptyString,
+    city: nonEmptyString,
+  })
+  .strict();
+
 // ─── Mata-mata ───────────────────────────────────────────────────────────────
 
 /**
@@ -73,9 +87,10 @@ export const knockoutPhaseSchema = z.enum([
 
 /** Status de uma partida de mata-mata. */
 export const knockoutMatchStatusSchema = z.enum([
-  "aguardando", // time(s) ainda não definido(s) — placeholder
-  "definido",   // ambas as seleções conhecidas, partida não encerrada
-  "encerrado",  // partida finalizada com placar
+  "aguardando",    // time(s) ainda não definido(s) — placeholder
+  "definido",      // ambas as seleções conhecidas, partida não iniciada
+  "em-andamento",  // partida em andamento (ao vivo) — placar parcial presente
+  "encerrado",     // partida finalizada com placar
 ]);
 
 /**
@@ -96,8 +111,8 @@ export const knockoutSideSchema = z
  * Partida de mata-mata com regras de consistência placar ↔ status ↔ lados.
  *
  * Regras:
- * 1. status "encerrado" → ambos os placares presentes.
- * 2. status ≠ "encerrado" → ambos os placares ausentes.
+ * 1. status "encerrado" ou "em-andamento" → ambos os placares presentes.
+ * 2. status "aguardando" ou "definido" → ambos os placares ausentes.
  * 3. status "aguardando" → pelo menos um lado com defined:false.
  * 4. Qualquer lado com defined:false → status deve ser "aguardando".
  */
@@ -110,27 +125,29 @@ export const knockoutMatchSchema = z
     homeScore: z.int().min(0).optional(),
     awayScore: z.int().min(0).optional(),
     status: knockoutMatchStatusSchema,
+    kickoffAt: z.string().optional(),
+    venue: knockoutVenueSchema.optional(),
   })
   .strict()
   .refine(
     (v) =>
-      v.status === "encerrado"
+      v.status === "encerrado" || v.status === "em-andamento"
         ? v.homeScore !== undefined && v.awayScore !== undefined
         : true,
     {
       message:
-        'Partida "encerrada" deve ter ambos os placares preenchidos',
+        'Partida "encerrada" ou "em-andamento" deve ter ambos os placares preenchidos',
       path: ["homeScore"],
     },
   )
   .refine(
     (v) =>
-      v.status !== "encerrado"
+      v.status === "aguardando" || v.status === "definido"
         ? v.homeScore === undefined && v.awayScore === undefined
         : true,
     {
       message:
-        'Partida não encerrada não deve ter placares preenchidos',
+        'Partida "aguardando" ou "definida" não deve ter placares preenchidos',
       path: ["homeScore"],
     },
   )

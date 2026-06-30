@@ -19,14 +19,60 @@ import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { isFresh, readSnapshot, writeSnapshot } from "@/server/worldcup/cache";
 import { deriveBracket } from "@/server/worldcup/bracket";
 import { bracketResponseSchema } from "@/schemas/worldcup";
+import type { BracketResponse } from "@/types/worldcup";
 
 // Força modo dinâmico — sem ISR; cache gerenciado pelo helper Firestore.
 export const dynamic = "force-dynamic";
 
+/** Achata todos os 6 buckets do bracket numa lista única de confrontos. */
+function allMatches(payload: BracketResponse) {
+  return [
+    payload.roundOf32,
+    payload.roundOf16,
+    payload.quarterFinals,
+    payload.semiFinals,
+    payload.thirdPlace,
+    payload.final,
+  ].flat();
+}
+
+/**
+ * Snapshot legado (pré-PRD-16 TASK-01) não carrega `kickoffAt` nos confrontos —
+ * `kickoffAt` é opcional no schema, então um snapshot velho parseia mas a UI
+ * mostra "Data a confirmar". Como a ESPN SEMPRE traz a data, um payload onde
+ * algum confronto não tem `kickoffAt` é um snapshot desatualizado: tratamos como
+ * cache miss para recomputar da fonte (auto-cura, sem intervenção no Firestore).
+ *
+ * Vazio → `true` (nada a recomputar por causa de data).
+ */
+function snapshotHasKickoff(payload: BracketResponse): boolean {
+  return allMatches(payload).every((m) => m.kickoffAt !== undefined);
+}
+
+/**
+ * Detecta o congelamento "chicken-egg": um snapshot gravado ANTES do kickoff
+ * marca `hasLiveGroupMatch=false` → TTL de 24h em `isFresh`, então a rota nunca
+ * recomputa quando o jogo começa e o placar ao vivo/resultado final fica preso.
+ *
+ * Um confronto com horário já no passado (`kickoffAt <= now`) cujo status ainda
+ * é `definido` (não começou no snapshot) ou `em-andamento` (placar ao vivo pode
+ * estar velho) significa que o snapshot ficou para trás da realidade da ESPN.
+ * Tratamos como cache miss → recomputa (auto-cura). `aguardando`/`encerrado` são
+ * estados estáveis e não forçam recomputo.
+ */
+function snapshotHasDueMatch(payload: BracketResponse, now: number): boolean {
+  return allMatches(payload).some(
+    (m) =>
+      (m.status === "definido" || m.status === "em-andamento") &&
+      m.kickoffAt !== undefined &&
+      Date.parse(m.kickoffAt) <= now,
+  );
+}
+
 /**
  * Monta o header Cache-Control conforme presença de jogo ao vivo.
  *
- * @param hasLive `true` quando há partida ao vivo na fase de grupos.
+ * @param hasLive `true` quando há qualquer partida ao vivo (grupos ou mata-mata).
  * Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo, evitando servir dado
  * desatualizado de CDN durante partidas em andamento.
  */
@@ -47,13 +93,21 @@ export async function GET(): Promise<NextResponse> {
   // Snapshot corrompido é tratado como cache miss — cai no caminho de recomputo.
   if (snap && isFresh(snap, now)) {
     const parsed = bracketResponseSchema.safeParse(snap.payload);
-    if (parsed.success) {
+    if (
+      parsed.success &&
+      snapshotHasKickoff(parsed.data) &&
+      !snapshotHasDueMatch(parsed.data, now)
+    ) {
       return NextResponse.json(parsed.data, {
         headers: cacheControl(snap.hasLiveGroupMatch),
       });
     }
     console.error(
-      "[worldcup/bracket] snapshot em cache fora do contrato — recomputando",
+      !parsed.success
+        ? "[worldcup/bracket] snapshot em cache fora do contrato — recomputando"
+        : !snapshotHasKickoff(parsed.data)
+          ? "[worldcup/bracket] snapshot fresco sem kickoffAt (legado) — recomputando"
+          : "[worldcup/bracket] snapshot fresco mas jogo já passou do kickoff (placar preso) — recomputando",
     );
   }
 
@@ -61,9 +115,11 @@ export async function GET(): Promise<NextResponse> {
   try {
     const [matches, teams] = await Promise.all([getEffectiveMatches(), fetchAllTeams()]);
 
-    const hasLive = matches.some(
-      (m) => m.stage === "grupos" && m.status === "live",
-    );
+    // Qualquer jogo ao vivo (não só de grupos): no mata-mata um confronto live
+    // precisa encurtar o TTL para 60s — senão o bracket congela 24h durante o
+    // jogo (knockout-live blind spot). Jogo de grupo ao vivo também encurta, pois
+    // seu encerramento pode definir um lado do bracket (aguardando → definido).
+    const hasLive = matches.some((m) => m.status === "live");
 
     // Fix 2 (WR-06): valida o payload computado antes de gravar/retornar.
     // Bracket body é puro (sem hasLiveGroupMatch) para não violar contrato TASK-01.

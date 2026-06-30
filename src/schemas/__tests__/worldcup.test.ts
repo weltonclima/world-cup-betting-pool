@@ -52,6 +52,17 @@ const matchDefinido = {
   status: "definido",
 } as const;
 
+// Partida "em-andamento" (ao vivo): ambos definidos + placar parcial presente
+const matchAoVivo = {
+  id: "jogo-74",
+  phase: "semifinal",
+  homeTeam: { name: "Brasil", code: "BRA", defined: true },
+  awayTeam: { name: "Argentina", code: "ARG", defined: true },
+  homeScore: 1,
+  awayScore: 1,
+  status: "em-andamento",
+} as const;
+
 // Partida "encerrado": ambos definidos + ambos placares presentes
 const matchEncerrado = {
   id: "jogo-74",
@@ -146,6 +157,49 @@ describe("knockoutMatchSchema", () => {
     expect(knockoutMatchSchema.safeParse(matchDefinido).success).toBe(true);
   });
 
+  // Status: em-andamento (ao vivo)
+  it("faz parse de partida em-andamento (ambos definidos + placar parcial)", () => {
+    expect(knockoutMatchSchema.safeParse(matchAoVivo).success).toBe(true);
+  });
+
+  it("aceita em-andamento com placar 0 x 0 (início do jogo)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        homeScore: 0,
+        awayScore: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita em-andamento sem placares (ambos ausentes)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        homeScore: undefined,
+        awayScore: undefined,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita em-andamento com apenas um placar", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        awayScore: undefined,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita em-andamento com lado defined:false (exige ambos definidos)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        homeTeam: { name: "Vencedor Jogo 60", defined: false },
+      }).success,
+    ).toBe(false);
+  });
+
   // Status: encerrado
   it("faz parse de partida encerrada (ambos os lados definidos + ambos placares)", () => {
     expect(knockoutMatchSchema.safeParse(matchEncerrado).success).toBe(true);
@@ -218,9 +272,55 @@ describe("knockoutMatchSchema", () => {
     ).toBe(false);
   });
 
+  // kickoffAt e venue — novos campos opcionais (TASK-01)
+  it("aceita kickoffAt quando presente (ISO string)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        kickoffAt: "2026-07-01T20:00:00-03:00",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita partida sem kickoffAt — backward compat com snapshots stale", () => {
+    // matchDefinido não tem kickoffAt; deve continuar parseando após a mudança.
+    expect(knockoutMatchSchema.safeParse(matchDefinido).success).toBe(true);
+  });
+
+  it("aceita venue válido quando presente", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        venue: { name: "MetLife Stadium", city: "Nova Jersey" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita partida sem venue — campo optional", () => {
+    expect(knockoutMatchSchema.safeParse(matchDefinido).success).toBe(true);
+  });
+
+  it("rejeita venue com campo extra (.strict no knockoutVenueSchema)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        venue: { name: "MetLife Stadium", city: "Nova Jersey", country: "USA" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita venue sem city (campo obrigatório)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        venue: { name: "MetLife Stadium" },
+      }).success,
+    ).toBe(false);
+  });
+
   it("inferência de tipo: status e phase", () => {
     expectTypeOf<KnockoutMatch["status"]>().toEqualTypeOf<
-      "aguardando" | "definido" | "encerrado"
+      "aguardando" | "definido" | "em-andamento" | "encerrado"
     >();
     expectTypeOf<KnockoutMatch["phase"]>().toEqualTypeOf<
       | "dezesseis-avos"
@@ -229,6 +329,15 @@ describe("knockoutMatchSchema", () => {
       | "semifinal"
       | "terceiro"
       | "final"
+    >();
+  });
+
+  it("inferência de tipo: kickoffAt é string opcional e venue é objeto opcional", () => {
+    expectTypeOf<KnockoutMatch["kickoffAt"]>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<KnockoutMatch["venue"]>().toEqualTypeOf<
+      { name: string; city: string } | undefined
     >();
   });
 });

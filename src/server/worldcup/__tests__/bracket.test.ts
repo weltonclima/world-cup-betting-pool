@@ -50,10 +50,16 @@ function mkMatch(
   stage: MatchWithId["stage"],
   homeTeamId: string,
   awayTeamId: string,
-  opts?: { status?: "finished" | "scheduled"; homeScore?: number; awayScore?: number },
+  opts?: {
+    status?: "finished" | "scheduled" | "live";
+    homeScore?: number;
+    awayScore?: number;
+  },
 ): MatchWithId {
   const status = opts?.status ?? "scheduled";
-  const hasScores = status === "finished";
+  // "finished" tem placar default; "live" só tem placar quando passado
+  // explicitamente (null = início do jogo, ainda 0x0 na fonte).
+  const scored = status === "finished";
   return {
     id,
     homeTeamId,
@@ -63,8 +69,8 @@ function mkMatch(
     groupId: null,
     venue: null,
     status,
-    homeScore: hasScores ? (opts?.homeScore ?? 1) : null,
-    awayScore: hasScores ? (opts?.awayScore ?? 0) : null,
+    homeScore: opts?.homeScore ?? (scored ? 1 : null),
+    awayScore: opts?.awayScore ?? (scored ? 0 : null),
   };
 }
 
@@ -251,6 +257,30 @@ describe("deriveBracket", () => {
       expect(km.homeScore).toBe(2);
       expect(km.awayScore).toBe(1);
     });
+
+    it("em-andamento quando ambos reais e match live — placar parcial presente", () => {
+      const match = mkMatch("m73", "dezesseis-avos", "bra", "arg", {
+        status: "live",
+        homeScore: 1,
+        awayScore: 0,
+      });
+      const result = deriveBracket([match], [teamBra, teamArg]);
+      const km = result.roundOf32[0]!;
+      expect(km.status).toBe("em-andamento");
+      expect(km.homeScore).toBe(1);
+      expect(km.awayScore).toBe(0);
+      // Saída ao vivo deve respeitar o contrato (placar parcial é válido).
+      expect(() => bracketResponseSchema.parse(result)).not.toThrow();
+    });
+
+    it("em-andamento com 0 x 0 quando match live sem placar (início do jogo)", () => {
+      const match = mkMatch("m73", "dezesseis-avos", "bra", "arg", { status: "live" });
+      const result = deriveBracket([match], [teamBra, teamArg]);
+      const km = result.roundOf32[0]!;
+      expect(km.status).toBe("em-andamento");
+      expect(km.homeScore).toBe(0);
+      expect(km.awayScore).toBe(0);
+    });
   });
 
   // ── Caso 6: Misto real + placeholder → aguardando, sem placares ──────────
@@ -328,6 +358,35 @@ describe("deriveBracket", () => {
       }).not.toThrow();
 
       expect(() => bracketResponseSchema.parse(result)).not.toThrow();
+    });
+  });
+
+  // ── Caso 10: Propagação de kickoffAt e venue ─────────────────────────────
+  describe("propagação de kickoffAt e venue", () => {
+    it("kickoffAt do match é propagado para KnockoutMatch", () => {
+      const match = mkMatch("m73", "dezesseis-avos", "bra", "arg");
+      const result = deriveBracket([match], [teamBra, teamArg]);
+      // mkMatch usa "2026-07-01T20:00:00-03:00" como kickoffAt fixo.
+      expect(result.roundOf32[0]!.kickoffAt).toBe("2026-07-01T20:00:00-03:00");
+    });
+
+    it("venue é propagado quando match.venue está presente", () => {
+      const matchWithVenue: MatchWithId = {
+        ...mkMatch("m80", "oitavas", "bra", "arg"),
+        venue: { name: "MetLife Stadium", city: "Nova Jersey" },
+      };
+      const result = deriveBracket([matchWithVenue], [teamBra, teamArg]);
+      expect(result.roundOf16[0]!.venue).toEqual({
+        name: "MetLife Stadium",
+        city: "Nova Jersey",
+      });
+    });
+
+    it("chave venue está ausente (não undefined) quando match.venue é null", () => {
+      // mkMatch padrão: venue: null
+      const match = mkMatch("m73", "dezesseis-avos", "bra", "arg");
+      const result = deriveBracket([match], [teamBra, teamArg]);
+      expect(result.roundOf32[0]!).not.toHaveProperty("venue");
     });
   });
 

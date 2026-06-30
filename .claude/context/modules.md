@@ -16,7 +16,7 @@
 | `superAdmin` | Global super_admin console (PRD-09/11): manage all pools, admins, worldcup sync, matches edit. |
 | `groupAdmin` | Pool-scoped group_admin console (PRD-09/10): own pool members (approve/block/reject/remove/promote), invites (`GroupInvites.tsx` — generate/copy/share link), settings, recalc. |
 | `groups` | Pool discovery/join: search active pools, create pool, join via invite. `schemas.ts` local. |
-| `worldcup` | Tournament views (groups standings, bracket) — consumes `/api/worldcup/*`. |
+| `worldcup` | Tournament views (groups standings, bracket) — consumes `/api/worldcup/*`. Page `/matches/eliminatorias` exists with `BracketView` (flat phase list + `KnockoutMatchCard`). **PRD-16 (chaveamento visual):** TASK-01 done (`knockoutMatchSchema` + `kickoffAt?`/`venue?`, `deriveBracket` propagates); TASK-02 done (`src/features/worldcup/lib/knockoutHelpers.ts` — `getWinningSide`+`formatKickoffBr`, fuso local); TASK-03 implement+test done (awaiting review) — `KnockoutMatchCard` redesigned: metadata header (date/venue.city), winner badge (ring+Trophy), 3-status variants; TASK-04 pending — `BracketView`+`PhaseSection` phase progression. |
 | `passkeys` | WebAuthn/passkey biometric login (register/login flows, credential mgmt). API under `api/auth/webauthn/*`. |
 | `statistics` | Pool-wide stats (small). |
 

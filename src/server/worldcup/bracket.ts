@@ -181,8 +181,10 @@ function resolveSide(teamId: string, teamIndex: Map<string, TeamWithId>): Knocko
  * Deriva o status e os placares (opcionais) de um KnockoutMatch.
  * Regras (spec §6, regras 4–5):
  *  - Qualquer lado não-defined → "aguardando" (sem placares).
- *  - Ambos defined + finished  → "encerrado"  (com placares).
- *  - Ambos defined + demais    → "definido"   (sem placares).
+ *  - Ambos defined + finished  → "encerrado"     (com placares).
+ *  - Ambos defined + live      → "em-andamento"  (com placar parcial; ?? 0
+ *    cobre o início do tempo, quando a ESPN ainda não reportou gols).
+ *  - Ambos defined + demais    → "definido"      (sem placares).
  */
 function deriveStatus(
   homeSide: KnockoutSide,
@@ -203,7 +205,17 @@ function deriveStatus(
     };
   }
 
-  // Ambos defined + não finished → definido (sem placares).
+  // Ambos defined + live → em-andamento com placar parcial (ao vivo).
+  // Placares `null` no início do jogo viram 0 (o schema exige ambos presentes).
+  if (match.status === "live") {
+    return {
+      status: "em-andamento",
+      homeScore: match.homeScore ?? 0,
+      awayScore: match.awayScore ?? 0,
+    };
+  }
+
+  // Ambos defined + não iniciado → definido (sem placares).
   return { status: "definido" };
 }
 
@@ -247,10 +259,12 @@ export function deriveBracket(
 
     // Monta o KnockoutMatch.
     const km: KnockoutMatch = {
-      id:       match.id,
-      phase:    match.stage as KnockoutMatch["phase"],
-      homeTeam: homeSide,
-      awayTeam: awaySide,
+      id:        match.id,
+      phase:     match.stage as KnockoutMatch["phase"],
+      homeTeam:  homeSide,
+      awayTeam:  awaySide,
+      kickoffAt: match.kickoffAt,
+      ...(match.venue ? { venue: match.venue } : {}),
       ...statusFields,
     };
 
