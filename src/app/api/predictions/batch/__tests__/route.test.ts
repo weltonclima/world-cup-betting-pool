@@ -62,13 +62,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   verifySessionCookieMock,
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
+  fetchAllMatchesBarrelMock,
   cookiesMock,
   isPredictionLockedMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
+  fetchAllMatchesBarrelMock: vi.fn(),
   cookiesMock: vi.fn(),
   isPredictionLockedMock: vi.fn(),
 }));
@@ -84,21 +86,27 @@ vi.mock("next/headers", () => ({
   cookies: cookiesMock,
 }));
 
-// Mock: fetchAllMatches (copaData barrel — importado pelo route handler).
-// Reaproveita as classes reais de erro para que instanceof funcione corretamente
-// no copaDataErrorResponse.
+// Mock: copaData barrel — só as classes reais de erro, para que instanceof
+// funcione corretamente no copaDataErrorResponse. A rota busca partidas via
+// getEffectiveMatches (matchSource), mockada logo abaixo.
 vi.mock("@/server/copaData", async () => {
   const client = await vi.importActual<typeof import("@/server/copaData/client")>(
     "@/server/copaData/client",
   );
   return {
-    fetchAllMatches: fetchAllMatchesMock,
+    fetchAllMatches: fetchAllMatchesBarrelMock,
     fetchAllTeams: vi.fn(),
     CopaDataTimeoutError: client.CopaDataTimeoutError,
     CopaDataFetchError: client.CopaDataFetchError,
     CopaDataParseError: client.CopaDataParseError,
   };
 });
+
+// Mock: getEffectiveMatches (matchSource) — fonte efetiva consumida pela rota
+// de escrita do palpite (ESPN + overrides manuais), espelhando /api/matches.
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
 
 // Mock: isPredictionLocked (barrel — nunca path direto)
 // Usamos importActual para preservar predictionDocId real e mockar apenas isPredictionLocked.
@@ -328,7 +336,7 @@ describe("POST /api/predictions/batch", () => {
     // Por padrão: isPredictionLocked retorna false (partida aberta)
     isPredictionLockedMock.mockReturnValue(false);
     // Por padrão: fetchAllMatches retorna lista com as partidas válidas
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_UNLOCKED_2]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_UNLOCKED_2]);
   });
 
   afterEach(() => {
@@ -508,7 +516,7 @@ describe("POST /api/predictions/batch", () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock, batch: vi.fn() });
 
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+      getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
 
       const response = await POST(postRequest(VALID_BODY));
       expect(response.status).toBe(502);
@@ -519,7 +527,7 @@ describe("POST /api/predictions/batch", () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock, batch: vi.fn() });
 
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataTimeoutError(5000));
+      getEffectiveMatchesMock.mockRejectedValue(new CopaDataTimeoutError(5000));
 
       const response = await POST(postRequest(VALID_BODY));
       expect(response.status).toBe(504);
@@ -529,6 +537,31 @@ describe("POST /api/predictions/batch", () => {
   // -------------------------------------------------------------------------
   // § 8.5 Processamento por item — resposta 200 com saved/rejected
   // -------------------------------------------------------------------------
+
+  // §8.4.1 Fonte do lock — regressão (bug "prazo encerrado" em jogo aberto).
+  // O lote DEVE classificar lock contra a fonte EFETIVA (getEffectiveMatches),
+  // não contra fetchAllMatches cru (openfootball), que divergia da UI.
+  describe("§8.4.1 fonte do lock (regressão)", () => {
+    it("consome getEffectiveMatches, nunca fetchAllMatches cru (openfootball)", async () => {
+      const { userCollectionMock } = setupSession({ userStatus: "approved" });
+      const { batchMock, collectionMock } = makeFirestoreMockBatch({
+        existingDocIds: [],
+      });
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          return collectionMock();
+        }),
+        batch: batchMock,
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+
+      expect(response.status).toBe(200);
+      expect(getEffectiveMatchesMock).toHaveBeenCalledTimes(1);
+      expect(fetchAllMatchesBarrelMock).not.toHaveBeenCalled();
+    });
+  });
 
   describe("§8.5 processamento por item", () => {
     // Caso 13
@@ -619,7 +652,7 @@ describe("POST /api/predictions/batch", () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       const { batchMock, collectionMock } = makeFirestoreMockBatch();
 
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_LOCKED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_LOCKED]);
       isPredictionLockedMock.mockReturnValue(true);
 
       getFirestoreMock.mockReturnValue({
@@ -680,7 +713,7 @@ describe("POST /api/predictions/batch", () => {
       });
 
       // Match 1001 aberto, Match 1003 locked, 9999 inexistente
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_LOCKED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_LOCKED]);
       isPredictionLockedMock.mockImplementation(
         (match: { id: string }) => match.id === MOCK_MATCH_LOCKED.id,
       );
@@ -903,7 +936,7 @@ describe("POST /api/predictions/batch", () => {
       const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Os palpites deste grupo estão bloqueados.");
       // Lock executa antes de buscar partidas.
-      expect(fetchAllMatchesMock).not.toHaveBeenCalled();
+      expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
     });
 
     // Case B: predictionsLocked false → segue e grava o lote normalmente.

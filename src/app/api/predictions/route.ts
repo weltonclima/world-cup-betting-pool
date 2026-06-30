@@ -10,7 +10,7 @@ import {
   isPredictionLocked,
   predictionDocId,
 } from "@/features/predictions/lib";
-import { fetchAllMatches } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { copaDataErrorResponse } from "../_lib/copaDataError";
 
 // Node runtime: firebase-admin + cookies() de next/headers exigem Node.
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
  * 1. Lê e valida o session cookie httpOnly via Admin SDK (verifySessionCookie) → uid.
  * 2. Busca users/{uid} no Firestore → 403 se não aprovado.
  * 3. Valida body com predictionInputSchema → 422 se inválido.
- * 4. Busca partida em fetchAllMatches → 404 se inexistente.
+ * 4. Busca partida em getEffectiveMatches → 404 se inexistente.
  * 5. Verifica bloqueio via isPredictionLocked → 423 se travado.
  * 6. Grava predictions/${predictionDocId(uid, matchId)} via set({ merge: true }).
  *    - Nunca grava status nem points (responsabilidade de TASK-04).
@@ -104,9 +104,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { matchId, homeScore, awayScore } = parsed.data;
 
   // ─── 4. Busca da partida ──────────────────────────────────────────────────
-  let matches: Awaited<ReturnType<typeof fetchAllMatches>>;
+  // Fonte EFETIVA (PRD-13: ESPN primária + overrides manuais), a MESMA que a UI
+  // consome via /api/matches. `fetchAllMatches` cru (openfootball, fallback de
+  // emergência) divergia do que o participante vê: a tela exibia o jogo aberto
+  // (ESPN/manual ainda "scheduled", kickoff futuro) mas o lock aqui o via
+  // bloqueado (openfootball com horário/status divergente) → 423 espúrio.
+  let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
-    matches = await fetchAllMatches();
+    matches = await getEffectiveMatches();
   } catch (err) {
     return copaDataErrorResponse(err);
   }

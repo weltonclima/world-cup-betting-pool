@@ -43,13 +43,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   verifySessionCookieMock,
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
+  fetchAllMatchesBarrelMock,
   cookiesMock,
   isPredictionLockedMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
+  fetchAllMatchesBarrelMock: vi.fn(),
   cookiesMock: vi.fn(),
   isPredictionLockedMock: vi.fn(),
 }));
@@ -65,21 +67,27 @@ vi.mock("next/headers", () => ({
   cookies: cookiesMock,
 }));
 
-// Mock: fetchAllMatches (copaData barrel — importado pelo route handler).
-// Reaproveita as classes reais de erro para que instanceof funcione corretamente
-// no copaDataErrorResponse.
+// Mock: copaData barrel — só as classes reais de erro, para que instanceof
+// funcione corretamente no copaDataErrorResponse. A rota busca partidas via
+// getEffectiveMatches (matchSource), mockada logo abaixo.
 vi.mock("@/server/copaData", async () => {
   const client = await vi.importActual<typeof import("@/server/copaData/client")>(
     "@/server/copaData/client",
   );
   return {
-    fetchAllMatches: fetchAllMatchesMock,
+    fetchAllMatches: fetchAllMatchesBarrelMock,
     fetchAllTeams: vi.fn(),
     CopaDataTimeoutError: client.CopaDataTimeoutError,
     CopaDataFetchError: client.CopaDataFetchError,
     CopaDataParseError: client.CopaDataParseError,
   };
 });
+
+// Mock: getEffectiveMatches (matchSource) — fonte efetiva consumida pela rota
+// de escrita do palpite (ESPN + overrides manuais), espelhando /api/matches.
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
 
 // Mock: isPredictionLocked (barrel — nunca path direto)
 // Usamos importActual para preservar predictionDocId real e mockar apenas isPredictionLocked.
@@ -281,7 +289,7 @@ describe("POST /api/predictions", () => {
     // Por padrão: isPredictionLocked retorna false (partida aberta)
     isPredictionLockedMock.mockReturnValue(false);
     // Por padrão: fetchAllMatches retorna lista com a partida válida
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED]);
   });
 
   afterEach(() => {
@@ -420,7 +428,7 @@ describe("POST /api/predictions", () => {
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock });
 
       // fetchAllMatches retorna lista sem a partida requisitada
-      fetchAllMatchesMock.mockResolvedValue([]);
+      getEffectiveMatchesMock.mockResolvedValue([]);
 
       const response = await POST(
         postRequest({ matchId: "999999", homeScore: 1, awayScore: 0 }),
@@ -441,7 +449,7 @@ describe("POST /api/predictions", () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock });
 
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_LOCKED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_LOCKED]);
       isPredictionLockedMock.mockReturnValue(true);
 
       const response = await POST(
@@ -534,6 +542,33 @@ describe("POST /api/predictions", () => {
   });
 
   // -------------------------------------------------------------------------
+  // 6.1. Fonte do lock — regressão (bug "prazo encerrado" em jogo aberto)
+  // -------------------------------------------------------------------------
+  // A rota DEVE avaliar o lock contra a fonte EFETIVA (getEffectiveMatches:
+  // ESPN + overrides manuais), a mesma que a UI consome. Usar fetchAllMatches
+  // cru (openfootball) divergia do que o usuário vê e gerava 423 espúrio.
+  describe("fonte do lock (regressão)", () => {
+    it("consome getEffectiveMatches, nunca fetchAllMatches cru (openfootball)", async () => {
+      const { userCollectionMock } = setupSession({ userStatus: "approved" });
+      const { collectionMock } = makeFirestoreMock({ docExists: false });
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          return collectionMock();
+        }),
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+
+      // Jogo aberto na fonte efetiva → palpite aceito.
+      expect(response.status).toBe(201);
+      // Fonte efetiva consultada; openfootball cru jamais tocado.
+      expect(getEffectiveMatchesMock).toHaveBeenCalledTimes(1);
+      expect(fetchAllMatchesBarrelMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 7. Update bem-sucedido — 200
   // -------------------------------------------------------------------------
 
@@ -613,7 +648,7 @@ describe("POST /api/predictions", () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock });
 
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+      getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
 
       const response = await POST(postRequest(VALID_BODY));
       expect(response.status).toBe(502);
@@ -777,7 +812,7 @@ describe("POST /api/predictions", () => {
       const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Os palpites deste grupo estão bloqueados.");
       // Pool lock retorna antes de fetchAllMatches — confirma ordem de verificação
-      expect(fetchAllMatchesMock).not.toHaveBeenCalled();
+      expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
     });
 
     // Case G: erro no read do pool → fail-open (não bloqueia o palpite)

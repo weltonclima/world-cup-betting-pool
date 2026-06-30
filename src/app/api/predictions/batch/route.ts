@@ -10,7 +10,7 @@ import {
   isPredictionLocked,
   predictionDocId,
 } from "@/features/predictions/lib";
-import { fetchAllMatches } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
 // Schema/constantes em módulo irmão: arquivo de rota não pode exportar símbolos
 // que não sejam de rota (contrato de tipos do Next 15). Ver `_schema.ts`.
@@ -48,7 +48,7 @@ interface RejectedItem {
  * 2. Busca users/{uid} no Firestore → 401 se não existe; 403 se status !== "approved".
  * 3. Parseia body → 400 se JSON inválido.
  * 4. Valida body com batchInputSchema → 422 se inválido (predictions ausente, vazio, cap).
- * 5. Chama fetchAllMatches() → erros via copaDataErrorResponse (502/504/500).
+ * 5. Chama getEffectiveMatches() → erros via copaDataErrorResponse (502/504/500).
  * 6. Captura now = new Date() (timestamp único por requisição).
  * 7. Para cada predictions[i]:
  *    a. Valida item com predictionInputSchema → rejected(reason="invalid") se falhar.
@@ -137,9 +137,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { predictions: rawPredictions } = parsedBatch.data;
 
   // ─── 5. Buscar partidas ───────────────────────────────────────────────────
-  let matches: Awaited<ReturnType<typeof fetchAllMatches>>;
+  // Fonte EFETIVA (PRD-13: ESPN primária + overrides manuais), a MESMA que a UI
+  // consome via /api/matches. `fetchAllMatches` cru (openfootball, fallback de
+  // emergência) divergia do que o participante vê e marcava itens como `locked`
+  // (status/kickoff divergente) ainda que a tela mostrasse o jogo aberto.
+  let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
-    matches = await fetchAllMatches();
+    matches = await getEffectiveMatches();
   } catch (err) {
     return copaDataErrorResponse(err);
   }
