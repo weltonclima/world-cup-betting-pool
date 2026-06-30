@@ -2,16 +2,16 @@
  * Testes do Route Handler GET /api/matches.
  *
  * `@/server/copaData/matchSource` é mockado para controlar `getEffectiveMatches`
- * (fonte efetiva = openfootball + overlay do banco, PRD-11). Verifica sucesso
- * (MatchWithId[]) e erros (CopaDataTimeoutError → 504, etc.).
+ * (fonte efetiva = ESPN + overlay do banco, PRD-11). Verifica sucesso
+ * (MatchWithId[]) e erros (EspnTimeoutError → 504, etc.).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CopaDataTimeoutError,
-  CopaDataFetchError,
-} from "@/server/copaData/client";
+  EspnTimeoutError,
+  EspnFetchError,
+} from "@/server/copaData/espnClient";
 
 const { getEffectiveMatchesMock } = vi.hoisted(() => ({
   getEffectiveMatchesMock: vi.fn(),
@@ -62,15 +62,15 @@ describe("GET /api/matches", () => {
     expect(body[0]?.stage).toBe("grupos");
   });
 
-  it("responde 504 quando getEffectiveMatches lança CopaDataTimeoutError", async () => {
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
+  it("responde 504 quando getEffectiveMatches lança EspnTimeoutError", async () => {
+    getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
     const response = await GET();
     expect(response.status).toBe(504);
   });
 
-  it("responde 502 quando getEffectiveMatches lança CopaDataFetchError", async () => {
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+  it("responde 502 quando getEffectiveMatches lança EspnFetchError", async () => {
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
     expect(response.status).toBe(502);

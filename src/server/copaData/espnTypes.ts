@@ -18,7 +18,17 @@
 import { z } from "zod";
 
 export const espnTeamSchema = z
-  .object({ abbreviation: z.string() })
+  .object({
+    abbreviation: z.string(),
+    // Campos de linkagem da chave (TASK-01). Opcionais — placeholders de slot
+    // (`isActive:false`) trazem `displayName` codificando o slot
+    // ("Round of 32 3 Winner"); times resolvidos trazem `isActive:true` + dados
+    // reais. Derivação de slot/label fica para TASK-02 (aqui só validação).
+    id: z.string().optional(),
+    displayName: z.string().optional(),
+    shortDisplayName: z.string().optional(),
+    isActive: z.boolean().optional(),
+  })
   .passthrough();
 
 /** Endereço da venue ESPN — campos tolerantes (API não-oficial). */
@@ -53,6 +63,11 @@ export const espnCompetitorSchema = z
     // ESPN entrega score como string ("1", "0") em pre/in/post → coerção.
     score: z.coerce.number().int().min(0),
     winner: z.boolean().optional(),
+    // Campos de desempate/avanço (TASK-01). Opcionais — só presentes no mata-mata.
+    // `advance`: quem avançou (autoritativo). `shootoutScore`: placar de pênaltis
+    // (int já numérico na ESPN). INVARIANTE (TASK-02): jamais somado a `score`.
+    advance: z.boolean().optional(),
+    shootoutScore: z.number().int().min(0).optional(),
     team: espnTeamSchema,
   })
   .passthrough();
@@ -61,6 +76,10 @@ export const espnStatusTypeSchema = z
   .object({
     state: z.enum(["pre", "in", "post"]),
     detail: z.string(),
+    // Status técnico (TASK-01). Opcional — ex.: "STATUS_FULL_TIME",
+    // "STATUS_FINAL_PEN", "STATUS_OVERTIME". Só validado aqui; interpretação
+    // PEN/OT → outcome fica para TASK-02.
+    name: z.string().optional(),
   })
   .passthrough();
 
@@ -97,6 +116,7 @@ export type EspnScoreboard = z.infer<typeof espnScoreboardSchema>;
 export type EspnEvent = z.infer<typeof espnEventSchema>;
 export type EspnCompetition = z.infer<typeof espnCompetitionSchema>;
 export type EspnCompetitor = z.infer<typeof espnCompetitorSchema>;
+export type EspnTeam = z.infer<typeof espnTeamSchema>;
 export type EspnSeason = z.infer<typeof espnSeasonSchema>;
 export type EspnVenue = z.infer<typeof espnVenueSchema>;
 export type EspnAddress = z.infer<typeof espnAddressSchema>;

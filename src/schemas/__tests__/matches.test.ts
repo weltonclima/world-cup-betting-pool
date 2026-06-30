@@ -255,3 +255,187 @@ describe("matches", () => {
     ).toBe(true);
   });
 });
+
+// ─── TASK-02: campos de linkagem/desempate do mata-mata ──────────────────────
+
+const koFinished = {
+  homeTeamId: "bra",
+  awayTeamId: "arg",
+  kickoffAt: "2026-07-10T20:00:00Z",
+  stage: "oitavas",
+  groupId: null,
+  status: "finished",
+  homeScore: 1,
+  awayScore: 1,
+} as const;
+
+describe("matches — TASK-02 bracketSlot / placeholderLabel (por-lado)", () => {
+  it("aceita homeBracketSlot + awayBracketSlot (ambos placeholder)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        homeBracketSlot: { round: "round-of-32", game: 3 },
+        awayBracketSlot: { round: "round-of-32", game: 4 },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita homePlaceholderLabel + awayPlaceholderLabel", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        homePlaceholderLabel: "Vencedor R32 jogo 3",
+        awayPlaceholderLabel: "Vencedor R32 jogo 4",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita apenas um lado placeholder (home resolvido, away slot)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        awayBracketSlot: { round: "round-of-16", game: 2 },
+        awayPlaceholderLabel: "Vencedor R16 jogo 2",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita homeBracketSlot.game 0 (< 1)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        homeBracketSlot: { round: "round-of-32", game: 0 },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita homeBracketSlot sem round", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        homeBracketSlot: { game: 3 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("matches — TASK-02 advanceSide", () => {
+  it("aceita advanceSide 'home'", () => {
+    expect(
+      matchSchema.safeParse({ ...koFinished, advanceSide: "home" }).success,
+    ).toBe(true);
+  });
+
+  it("aceita advanceSide null", () => {
+    expect(
+      matchSchema.safeParse({ ...koFinished, advanceSide: null }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita advanceSide fora do enum", () => {
+    expect(
+      matchSchema.safeParse({ ...koFinished, advanceSide: "draw" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("matches — TASK-02 outcome", () => {
+  it("aceita outcome 'normal'", () => {
+    expect(
+      matchSchema.safeParse({ ...koFinished, outcome: "normal" }).success,
+    ).toBe(true);
+  });
+
+  it("aceita outcome 'overtime'", () => {
+    expect(
+      matchSchema.safeParse({ ...koFinished, outcome: "overtime" }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita outcome fora do enum", () => {
+    expect(
+      matchSchema.safeParse({ ...koFinished, outcome: "shootout" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("matches — TASK-02 invariante de pênaltis", () => {
+  it("outcome 'penalties' com ambos shootout inteiros é válido", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "penalties",
+        homeShootout: 4,
+        awayShootout: 3,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("outcome 'penalties' sem homeShootout é rejeitado", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "penalties",
+        homeShootout: null,
+        awayShootout: 3,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("outcome 'penalties' sem nenhum shootout é rejeitado", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "penalties",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("outcome 'normal' com shootout preenchido é rejeitado", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "normal",
+        homeShootout: 4,
+        awayShootout: 3,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("outcome ausente com shootout preenchido é rejeitado", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        homeShootout: 4,
+        awayShootout: 3,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("aceita homeShootout/awayShootout null com outcome 'normal'", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "normal",
+        homeShootout: null,
+        awayShootout: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita shootout negativo em outcome 'penalties'", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "penalties",
+        homeShootout: -1,
+        awayShootout: 3,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("regressão grupo: match sem campos novos continua válido", () => {
+    expect(matchSchema.safeParse(scheduled).success).toBe(true);
+    expect(matchSchema.safeParse(finished).success).toBe(true);
+  });
+});

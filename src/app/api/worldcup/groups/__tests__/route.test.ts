@@ -1,7 +1,8 @@
 /**
  * Testes do Route Handler GET /api/worldcup/groups.
  *
- * Mocks: @/server/copaData (fetch), @/server/worldcup/cache (snapshot).
+ * Mocks: @/server/copaData/matchSource (getEffectiveMatches — fonte ESPN),
+ *        @/server/copaData (fetchAllTeams), @/server/worldcup/cache (snapshot).
  * Cobre: cache fresco, stale, ausente, fetch falha + snap, fetch falha + sem snap,
  *        headers Cache-Control, writeSnapshot lança → 200 (best-effort),
  *        snapshot corrompido → fallthrough para recomputo (Fix 1),
@@ -13,31 +14,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ─── Mocks hoisted ────────────────────────────────────────────────────────────
 
 const {
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
   fetchAllTeamsMock,
   readSnapshotMock,
   writeSnapshotMock,
   isFreshMock,
 } = vi.hoisted(() => ({
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
   fetchAllTeamsMock: vi.fn(),
   readSnapshotMock: vi.fn(),
   writeSnapshotMock: vi.fn(),
   isFreshMock: vi.fn(),
 }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: fetchAllTeamsMock,
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
+
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: fetchAllTeamsMock,
+}));
 
 vi.mock("@/server/worldcup/cache", () => ({
   readSnapshot: readSnapshotMock,
@@ -55,7 +51,7 @@ vi.mock("next/server", async (importOriginal) => {
 // server-only é importado pelos módulos de servidor
 vi.mock("server-only", () => ({}));
 
-import { CopaDataFetchError, CopaDataTimeoutError } from "@/server/copaData/client";
+import { EspnFetchError, EspnTimeoutError } from "@/server/copaData/espnClient";
 import { GET } from "@/app/api/worldcup/groups/route";
 import type { GroupsResponse } from "@/types/worldcup";
 
@@ -113,7 +109,7 @@ const MOCK_SNAPSHOT = {
 
 describe("GET /api/worldcup/groups", () => {
   beforeEach(() => {
-    fetchAllMatchesMock.mockReset();
+    getEffectiveMatchesMock.mockReset();
     fetchAllTeamsMock.mockReset();
     readSnapshotMock.mockReset();
     writeSnapshotMock.mockReset();
@@ -128,14 +124,14 @@ describe("GET /api/worldcup/groups", () => {
 
   // ── Cache fresco ────────────────────────────────────────────────────────────
 
-  it("retorna payload do snapshot quando fresco, sem chamar fetchAllMatches", async () => {
+  it("retorna payload do snapshot quando fresco, sem chamar getEffectiveMatches", async () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(true);
 
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(fetchAllMatchesMock).not.toHaveBeenCalled();
+    expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
     expect(fetchAllTeamsMock).not.toHaveBeenCalled();
 
     const body = (await response.json()) as GroupsResponse;
@@ -175,13 +171,13 @@ describe("GET /api/worldcup/groups", () => {
     };
     readSnapshotMock.mockResolvedValue(corruptSnap);
     isFreshMock.mockReturnValue(true);
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
     const response = await GET();
 
     // Deve ter caído no caminho de recomputo, não usado o cache corrompido
-    expect(fetchAllMatchesMock).toHaveBeenCalledOnce();
+    expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as GroupsResponse;
@@ -194,13 +190,13 @@ describe("GET /api/worldcup/groups", () => {
   it("faz fetch + computa + chama writeSnapshot quando cache stale", async () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(fetchAllMatchesMock).toHaveBeenCalledOnce();
+    expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
     expect(fetchAllTeamsMock).toHaveBeenCalledOnce();
     expect(writeSnapshotMock).toHaveBeenCalledOnce();
 
@@ -214,20 +210,20 @@ describe("GET /api/worldcup/groups", () => {
   it("faz fetch + computa quando snapshot ausente (null)", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(fetchAllMatchesMock).toHaveBeenCalledOnce();
+    expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
     expect(writeSnapshotMock).toHaveBeenCalledOnce();
   });
 
   it("inclui header Cache-Control correto após recomputação sem partida ao vivo", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]); // status = scheduled
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]); // status = scheduled
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
     const response = await GET();
@@ -240,7 +236,7 @@ describe("GET /api/worldcup/groups", () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
     const liveMatch = { ...MOCK_MATCH, status: "live" as const };
-    fetchAllMatchesMock.mockResolvedValue([liveMatch]);
+    getEffectiveMatchesMock.mockResolvedValue([liveMatch]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
     const response = await GET();
@@ -255,7 +251,7 @@ describe("GET /api/worldcup/groups", () => {
   it("retorna snapshot stale com Cache-Control: no-store quando fetch falha e snap existe", async () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
 
@@ -268,19 +264,19 @@ describe("GET /api/worldcup/groups", () => {
 
   // ── Fetch falha + sem snapshot ──────────────────────────────────────────────
 
-  it("retorna 502 quando fetch lança CopaDataFetchError e não há snapshot", async () => {
+  it("retorna 502 quando fetch lança EspnFetchError e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
     expect(response.status).toBe(502);
   });
 
-  it("retorna 504 quando fetch lança CopaDataTimeoutError e não há snapshot", async () => {
+  it("retorna 504 quando fetch lança EspnTimeoutError e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
     const response = await GET();
     expect(response.status).toBe(504);
@@ -289,7 +285,7 @@ describe("GET /api/worldcup/groups", () => {
   it("retorna 500 quando fetch lança Error genérico e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockRejectedValue(new Error("erro inesperado"));
+    getEffectiveMatchesMock.mockRejectedValue(new Error("erro inesperado"));
 
     const response = await GET();
     expect(response.status).toBe(500);
@@ -300,7 +296,7 @@ describe("GET /api/worldcup/groups", () => {
   it("retorna 200 mesmo quando writeSnapshot lança (best-effort)", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
     // writeSnapshot já engole o erro internamente; simula retorno ok (o mock não lança)
     // Para testar o cenário real, o erro seria engolido DENTRO de writeSnapshot.

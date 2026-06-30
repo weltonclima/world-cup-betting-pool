@@ -1,47 +1,47 @@
 /**
  * Helper compartilhado pelos Route Handlers da camada copaData.
  *
- * Centraliza o mapeamento de erros do CopaDataClient → resposta HTTP,
+ * Centraliza o mapeamento de erros da fonte ESPN → resposta HTTP,
  * com mensagens em português e SEM vazar detalhes internos.
  *
  * Mapeamento:
- *  - CopaDataTimeoutError → 504
- *  - CopaDataFetchError   → 502
- *  - CopaDataParseError   → 500
- *  - ZodError (parse)     → 500
- *  - genérico             → 500
+ *  - EspnTimeoutError → 504
+ *  - EspnFetchError   → 502
+ *  - EspnParseError   → 500
+ *  - ZodError (parse) → 500
+ *  - genérico         → 500
  */
 
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import {
-  CopaDataTimeoutError,
-  CopaDataFetchError,
-  CopaDataParseError,
-} from "@/server/copaData";
+  EspnTimeoutError,
+  EspnFetchError,
+  EspnParseError,
+} from "@/server/copaData/espnClient";
 
 /**
  * Converte um erro lançado durante o handling de uma rota copaData em uma
  * resposta JSON `{ error }` com o status HTTP apropriado.
  */
 export function copaDataErrorResponse(err: unknown): NextResponse {
-  if (err instanceof CopaDataTimeoutError) {
+  if (err instanceof EspnTimeoutError) {
     return NextResponse.json(
       { error: "A fonte de dados demorou para responder." },
       { status: 504 },
     );
   }
 
-  if (err instanceof CopaDataFetchError) {
+  if (err instanceof EspnFetchError) {
     return NextResponse.json(
       { error: "Falha ao buscar dados da Copa." },
       { status: 502 },
     );
   }
 
-  if (err instanceof CopaDataParseError) {
-    console.error("[copaData] Dados fora do contrato (CopaDataParseError):", err.message);
+  if (err instanceof EspnParseError) {
+    console.error("[copaData] Dados fora do contrato (EspnParseError):", err.message);
     return NextResponse.json(
       { error: "Dados recebidos fora do contrato esperado." },
       { status: 500 },

@@ -5,7 +5,7 @@
  * Importa diretamente de ../espnClient (módulo sem `server-only`).
  * NUNCA faz chamadas reais de rede — usa vi.stubGlobal("fetch", ...).
  *
- * EC-02 / FS-05 (revalidate: 300) são critério de aceite explícito do plano.
+ * EC-02 / FS-05 (revalidate: 60) são critério de aceite explícito do plano.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -42,14 +42,14 @@ describe("EspnScoreClient — EC-01..EC-08", () => {
     expect(data.events).toHaveLength(3);
   });
 
-  it("EC-02: fetch chamado com next.revalidate=300 (cache 5min)", async () => {
+  it("EC-02: fetch chamado com next.revalidate=60 (cache 1min)", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(ESPN_SCOREBOARD_REAL));
     vi.stubGlobal("fetch", fetchMock);
 
     await new EspnScoreClient().fetchScoreboard(DATE);
 
     const [, init] = fetchMock.mock.calls[0]!;
-    expect(init).toMatchObject({ next: { revalidate: 300 } });
+    expect(init).toMatchObject({ next: { revalidate: 60 } });
     expect(init).toHaveProperty("signal");
   });
 
@@ -203,14 +203,14 @@ describe("EspnScoreClient.fetchSchedule — FS-01..FS-10", () => {
     expect(events.map((e) => e.id).sort()).toEqual(["1", "2", "3"]);
   });
 
-  it("FS-05: cada chamada usa next.revalidate=300", async () => {
+  it("FS-05: cada chamada usa next.revalidate=60", async () => {
     const fetchMock = vi.fn().mockImplementation(async () => mockJsonResponse({ events: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
     await new EspnScoreClient().fetchSchedule();
 
     for (const [, init] of fetchMock.mock.calls) {
-      expect(init).toMatchObject({ next: { revalidate: 300 } });
+      expect(init).toMatchObject({ next: { revalidate: 60 } });
     }
   });
 

@@ -52,6 +52,17 @@ const matchDefinido = {
   status: "definido",
 } as const;
 
+// Partida "em-andamento" (ao vivo): ambos definidos + placar parcial presente
+const matchAoVivo = {
+  id: "jogo-74",
+  phase: "semifinal",
+  homeTeam: { name: "Brasil", code: "BRA", defined: true },
+  awayTeam: { name: "Argentina", code: "ARG", defined: true },
+  homeScore: 1,
+  awayScore: 1,
+  status: "em-andamento",
+} as const;
+
 // Partida "encerrado": ambos definidos + ambos placares presentes
 const matchEncerrado = {
   id: "jogo-74",
@@ -146,6 +157,49 @@ describe("knockoutMatchSchema", () => {
     expect(knockoutMatchSchema.safeParse(matchDefinido).success).toBe(true);
   });
 
+  // Status: em-andamento (ao vivo)
+  it("faz parse de partida em-andamento (ambos definidos + placar parcial)", () => {
+    expect(knockoutMatchSchema.safeParse(matchAoVivo).success).toBe(true);
+  });
+
+  it("aceita em-andamento com placar 0 x 0 (início do jogo)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        homeScore: 0,
+        awayScore: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita em-andamento sem placares (ambos ausentes)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        homeScore: undefined,
+        awayScore: undefined,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita em-andamento com apenas um placar", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        awayScore: undefined,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita em-andamento com lado defined:false (exige ambos definidos)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAoVivo,
+        homeTeam: { name: "Vencedor Jogo 60", defined: false },
+      }).success,
+    ).toBe(false);
+  });
+
   // Status: encerrado
   it("faz parse de partida encerrada (ambos os lados definidos + ambos placares)", () => {
     expect(knockoutMatchSchema.safeParse(matchEncerrado).success).toBe(true);
@@ -218,9 +272,193 @@ describe("knockoutMatchSchema", () => {
     ).toBe(false);
   });
 
+  // kickoffAt e venue — novos campos opcionais (TASK-01)
+  it("aceita kickoffAt quando presente (ISO string)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        kickoffAt: "2026-07-01T20:00:00-03:00",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita partida sem kickoffAt — backward compat com snapshots stale", () => {
+    // matchDefinido não tem kickoffAt; deve continuar parseando após a mudança.
+    expect(knockoutMatchSchema.safeParse(matchDefinido).success).toBe(true);
+  });
+
+  it("aceita venue válido quando presente", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        venue: { name: "MetLife Stadium", city: "Nova Jersey" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita partida sem venue — campo optional", () => {
+    expect(knockoutMatchSchema.safeParse(matchDefinido).success).toBe(true);
+  });
+
+  it("rejeita venue com campo extra (.strict no knockoutVenueSchema)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        venue: { name: "MetLife Stadium", city: "Nova Jersey", country: "USA" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita venue sem city (campo obrigatório)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchDefinido,
+        venue: { name: "MetLife Stadium" },
+      }).success,
+    ).toBe(false);
+  });
+
+  // ─── TASK-02: campos de desempate/linkagem no knockout ─────────────────────
+
+  it("aceita bracketSlot no lado placeholder (knockoutSideSchema)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAguardando,
+        homeTeam: {
+          name: "Vencedor R32 jogo 3",
+          defined: false,
+          bracketSlot: { round: "round-of-32", game: 3 },
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita homeShootout/awayShootout + outcome 'penalties' em encerrado", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        homeScore: 1,
+        awayScore: 1,
+        homeShootout: 4,
+        awayShootout: 3,
+        outcome: "penalties",
+        advanceSide: "home",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita outcome 'overtime' sem shootout", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "overtime",
+        advanceSide: "away",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita advanceSide null", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        advanceSide: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita outcome fora do enum", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "shootout",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita advanceSide fora do enum", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        advanceSide: "draw",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("WR-03: rejeita outcome 'penalties' sem shootout (refine espelhado do matchSchema)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "penalties",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("WR-03: rejeita shootout com outcome não-pênaltis", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "normal",
+        homeShootout: 4,
+        awayShootout: 3,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("backward compat: snapshot legado sem campos TASK-02 continua válido", () => {
+    expect(knockoutMatchSchema.safeParse(matchEncerrado).success).toBe(true);
+  });
+
+  // ─── TASK-08: parentMatchIds — arestas reais pai→filho ────────────────────
+
+  it("TASK-08: aceita partida encerrada com parentMatchIds presente", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        parentMatchIds: ["m73", "m75"],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("TASK-08: aceita partida sem parentMatchIds — backward compat com snapshots legados", () => {
+    expect(knockoutMatchSchema.safeParse(matchEncerrado).success).toBe(true);
+  });
+
+  it("TASK-08: aceita partida aguardando com parentMatchIds", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAguardando,
+        parentMatchIds: ["m73", "m75"],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("TASK-08: rejeita parentMatchIds com apenas 1 elemento (tuple exige exatamente 2)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        parentMatchIds: ["m73"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("TASK-08: rejeita parentMatchIds vazio (tuple exige exatamente 2)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        parentMatchIds: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("TASK-08: inferência de tipo — parentMatchIds é [string, string] | undefined", () => {
+    expectTypeOf<KnockoutMatch["parentMatchIds"]>().toEqualTypeOf<
+      [string, string] | undefined
+    >();
+  });
+
   it("inferência de tipo: status e phase", () => {
     expectTypeOf<KnockoutMatch["status"]>().toEqualTypeOf<
-      "aguardando" | "definido" | "encerrado"
+      "aguardando" | "definido" | "em-andamento" | "encerrado"
     >();
     expectTypeOf<KnockoutMatch["phase"]>().toEqualTypeOf<
       | "dezesseis-avos"
@@ -229,6 +467,15 @@ describe("knockoutMatchSchema", () => {
       | "semifinal"
       | "terceiro"
       | "final"
+    >();
+  });
+
+  it("inferência de tipo: kickoffAt é string opcional e venue é objeto opcional", () => {
+    expectTypeOf<KnockoutMatch["kickoffAt"]>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<KnockoutMatch["venue"]>().toEqualTypeOf<
+      { name: string; city: string } | undefined
     >();
   });
 });

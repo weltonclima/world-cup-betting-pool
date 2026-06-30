@@ -1,7 +1,8 @@
 /**
  * Testes TDD (red-first) do Route Handler POST /api/rankings/recalc (TASK-03).
  *
- * Mocks: firebaseAdmin (auth + firestore), next/headers (cookies), copaData (fetchAllMatches),
+ * Mocks: firebaseAdmin (auth + firestore), next/headers (cookies),
+ * matchSource (getEffectiveMatches — fonte efetiva ESPN+overrides),
  * server-only. scorePrediction usa implementação REAL (binário) via importActual.
  *
  * Cobre: auth dupla, exclusão de blocked/pending, pontuação PONDERADA por escopo/group
@@ -15,13 +16,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   verifySessionCookieMock,
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
   cookiesMock,
   notifyRankingUpsMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
   cookiesMock: vi.fn(),
   notifyRankingUpsMock: vi.fn(),
 }));
@@ -33,18 +34,15 @@ vi.mock("@/server/firebaseAdmin", () => ({
 
 vi.mock("next/headers", () => ({ cookies: cookiesMock }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: vi.fn(),
+}));
+
+// Fonte efetiva (ESPN base + overrides manuais) — o que recalcRankings realmente
+// consome (src/server/rankings/recalc.ts importa getEffectiveMatches do matchSource).
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
 
 vi.mock("server-only", () => ({}));
 
@@ -55,7 +53,7 @@ vi.mock("@/server/notifications", () => ({
 }));
 
 import { POST } from "@/app/api/rankings/recalc/route";
-import { CopaDataFetchError } from "@/server/copaData/client";
+import { EspnFetchError } from "@/server/copaData/espnClient";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 // ───────────────────────── Fixtures ─────────────────────────
@@ -218,7 +216,7 @@ describe("POST /api/rankings/recalc", () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.stubEnv("RANKINGS_SECRET", SECRET);
-    fetchAllMatchesMock.mockResolvedValue([M_GRUPOS, M_OITAVAS, M_SCHEDULED]);
+    getEffectiveMatchesMock.mockResolvedValue([M_GRUPOS, M_OITAVAS, M_SCHEDULED]);
     notifyRankingUpsMock.mockResolvedValue(undefined);
   });
   afterEach(() => {
@@ -525,9 +523,9 @@ describe("POST /api/rankings/recalc", () => {
       expect(find(writes, "rankings/geral")).toBeDefined();
     });
 
-    it("502 quando fetchAllMatches lança CopaDataFetchError", async () => {
+    it("502 quando getEffectiveMatches lança EspnFetchError", async () => {
       makeDb();
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+      getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
       expect((await POST(withSecret(SECRET))).status).toBe(502);
     });
   });

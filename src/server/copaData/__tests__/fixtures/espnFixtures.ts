@@ -96,6 +96,91 @@ export function espnGroupEvent(opts: {
   };
 }
 
+/**
+ * Lado de mata-mata "rico" (TASK-02) — estende o competitor mínimo com os campos
+ * de linkagem/desempate que a ESPN entrega só no mata-mata: `displayName`/`isActive`
+ * (placeholder de slot), `advance` (quem avançou), `shootoutScore` (pênaltis).
+ */
+export interface EspnKoSide {
+  abbr: string;
+  score: string;
+  winner?: boolean;
+  displayName?: string;
+  isActive?: boolean;
+  advance?: boolean;
+  shootoutScore?: number;
+}
+
+/** Competitor de mata-mata com campos ricos opcionais (TASK-02). */
+export function espnKoCompetitor(homeAway: "home" | "away", side: EspnKoSide) {
+  return {
+    homeAway,
+    score: side.score,
+    ...(side.winner !== undefined ? { winner: side.winner } : {}),
+    ...(side.advance !== undefined ? { advance: side.advance } : {}),
+    ...(side.shootoutScore !== undefined ? { shootoutScore: side.shootoutScore } : {}),
+    team: {
+      abbreviation: side.abbr,
+      ...(side.displayName !== undefined ? { displayName: side.displayName } : {}),
+      ...(side.isActive !== undefined ? { isActive: side.isActive } : {}),
+    },
+  };
+}
+
+/**
+ * Evento ESPN de MATA-MATA "rico" (TASK-02) — como `espnKnockoutEvent` mas com
+ * lados que carregam slot/placeholder (`displayName`/`isActive`), `advance`,
+ * `shootoutScore` e `status.type.name` (ex.: "STATUS_FINAL_PEN", "STATUS_OVERTIME").
+ * Usado para exercitar a derivação de bracketSlot/placeholderLabel/outcome/pênaltis.
+ */
+export function espnKnockoutRichEvent(opts: {
+  date: string;
+  state: "pre" | "in" | "post";
+  detail: string;
+  slug: string;
+  statusName?: string;
+  home: EspnKoSide;
+  away: EspnKoSide;
+  venue?: { fullName?: string; city?: string } | null;
+  id?: string;
+}) {
+  const venue = opts.venue ?? null;
+  const type = KO_SEASON_TYPE[opts.slug];
+  return {
+    id: opts.id ?? `${opts.date}-${opts.home.abbr}-${opts.away.abbr}`,
+    date: opts.date,
+    season: {
+      year: 2026,
+      slug: opts.slug,
+      ...(type !== undefined ? { type } : {}),
+    },
+    competitions: [
+      {
+        status: {
+          type: {
+            state: opts.state,
+            detail: opts.detail,
+            ...(opts.statusName !== undefined ? { name: opts.statusName } : {}),
+          },
+        },
+        ...(venue === null
+          ? {}
+          : {
+              venue: {
+                ...(venue.fullName !== undefined ? { fullName: venue.fullName } : {}),
+                ...(venue.city !== undefined ? { address: { city: venue.city } } : {}),
+              },
+            }),
+        altGameNote: "FIFA World Cup",
+        competitors: [
+          espnKoCompetitor("home", opts.home),
+          espnKoCompetitor("away", opts.away),
+        ],
+      },
+    ],
+  };
+}
+
 /** `season.type` real por slug de mata-mata (spike TASK-00). */
 const KO_SEASON_TYPE: Readonly<Record<string, number>> = {
   "round-of-32": 13801,

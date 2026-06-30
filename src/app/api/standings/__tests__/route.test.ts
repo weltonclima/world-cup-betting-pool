@@ -6,25 +6,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CopaDataParseError,
-} from "@/server/copaData/client";
+  EspnParseError,
+} from "@/server/copaData/espnClient";
 
 const { fetchAllTeamsMock } = vi.hoisted(() => ({
   fetchAllTeamsMock: vi.fn(),
 }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: vi.fn(),
-    fetchAllTeams: fetchAllTeamsMock,
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: fetchAllTeamsMock,
+}));
 
 vi.mock("server-only", () => ({}));
 
@@ -93,8 +84,8 @@ describe("GET /api/standings", () => {
     expect(names).toHaveLength(2);
   });
 
-  it("responde 500 em CopaDataParseError", async () => {
-    fetchAllTeamsMock.mockRejectedValue(new CopaDataParseError("campo ausente"));
+  it("responde 500 em EspnParseError", async () => {
+    fetchAllTeamsMock.mockRejectedValue(new EspnParseError("campo ausente"));
 
     const response = await GET();
     expect(response.status).toBe(500);

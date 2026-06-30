@@ -98,11 +98,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // ─── 4. Jogo + override de lock (A1) ─────────────────────────────────────
-  // Fonte EFETIVA (PRD-13: ESPN primária + overrides manuais), a MESMA que a UI
-  // consome via /api/matches. Usar `fetchAllMatches` cru (openfootball, fallback
-  // de emergência) divergia da lista que o admin vê: o dropdown listava o jogo
-  // como bloqueado (ESPN ao vivo/encerrado) mas a checagem aqui o via aberto
-  // (openfootball ainda "scheduled") → 409 espúrio. `getEffectiveMatches` realinha.
+  // Fonte EFETIVA (PRD-13: ESPN única + overrides manuais), a MESMA que a UI
+  // consome via /api/matches. Avaliar o lock contra esta fonte (não uma fonte
+  // crua divergente) evita 409 espúrio: o dropdown listava o jogo como bloqueado
+  // mas a checagem aqui o via aberto por status/kickoff divergente.
   let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
     matches = await getEffectiveMatches();

@@ -7,7 +7,7 @@
  * Mocks:
  * - `@/server/firebaseAdmin`     → getAdminAuth (verifySessionCookie) + getAdminFirestore (com batch())
  * - `next/headers`               → cookies (httpOnly session cookie)
- * - `@/server/copaData`          → fetchAllMatches
+ * - `@/server/copaData/matchSource` → getEffectiveMatches
  * - `@/features/predictions/lib` → isPredictionLocked (spy — usa implementação real para casos válidos)
  * - `server-only`                → stub vazio
  *
@@ -29,9 +29,9 @@
  *  9. `predictions` com 105 itens → 422 (cap excedido)
  * 10. Body com campo `uid` injetado → uid da sessão prevalece; batch.set usa uid da sessão
  *
- * § 8.4 fetchAllMatches — erros de upstream (502/503/504)
- * 11. fetchAllMatches lança CopaDataFetchError → 502
- * 12. fetchAllMatches lança CopaDataTimeoutError → 504
+ * § 8.4 getEffectiveMatches — erros de upstream (502/503/504)
+ * 11. getEffectiveMatches lança EspnFetchError → 502
+ * 12. getEffectiveMatches lança EspnTimeoutError → 504
  *
  * § 8.5 Processamento por item — resposta 200 com saved/rejected
  * 13. Lote de 1 item válido, match aberto, doc não existe → saved[0].created === true
@@ -62,13 +62,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   verifySessionCookieMock,
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
   cookiesMock,
   isPredictionLockedMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
   cookiesMock: vi.fn(),
   isPredictionLockedMock: vi.fn(),
 }));
@@ -84,21 +84,18 @@ vi.mock("next/headers", () => ({
   cookies: cookiesMock,
 }));
 
-// Mock: fetchAllMatches (copaData barrel — importado pelo route handler).
-// Reaproveita as classes reais de erro para que instanceof funcione corretamente
-// no copaDataErrorResponse.
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+// Mock: copaData barrel — fetchAllTeams stub. A rota busca partidas via
+// getEffectiveMatches (matchSource), mockada logo abaixo. As classes de erro
+// vivem em espnClient e são mapeadas por copaDataErrorResponse.
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: vi.fn(),
+}));
+
+// Mock: getEffectiveMatches (matchSource) — fonte efetiva consumida pela rota
+// de escrita do palpite (ESPN + overrides manuais), espelhando /api/matches.
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
 
 // Mock: isPredictionLocked (barrel — nunca path direto)
 // Usamos importActual para preservar predictionDocId real e mockar apenas isPredictionLocked.
@@ -123,7 +120,7 @@ import { POST } from "@/app/api/predictions/batch/route";
 // ---------------------------------------------------------------------------
 // Import de erros reais para instanceof funcionar corretamente no handler.
 // ---------------------------------------------------------------------------
-import { CopaDataFetchError, CopaDataTimeoutError } from "@/server/copaData/client";
+import { EspnFetchError, EspnTimeoutError } from "@/server/copaData/espnClient";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 // ---------------------------------------------------------------------------
@@ -328,7 +325,7 @@ describe("POST /api/predictions/batch", () => {
     // Por padrão: isPredictionLocked retorna false (partida aberta)
     isPredictionLockedMock.mockReturnValue(false);
     // Por padrão: fetchAllMatches retorna lista com as partidas válidas
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_UNLOCKED_2]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_UNLOCKED_2]);
   });
 
   afterEach(() => {
@@ -499,27 +496,27 @@ describe("POST /api/predictions/batch", () => {
   });
 
   // -------------------------------------------------------------------------
-  // § 8.4 fetchAllMatches — erros de upstream
+  // § 8.4 getEffectiveMatches — erros de upstream
   // -------------------------------------------------------------------------
 
-  describe("§8.4 erros de upstream (fetchAllMatches)", () => {
+  describe("§8.4 erros de upstream (getEffectiveMatches)", () => {
     // Caso 11
-    it("(11) retorna 502 quando fetchAllMatches lança CopaDataFetchError", async () => {
+    it("(11) retorna 502 quando getEffectiveMatches lança EspnFetchError", async () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock, batch: vi.fn() });
 
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+      getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
       const response = await POST(postRequest(VALID_BODY));
       expect(response.status).toBe(502);
     });
 
     // Caso 12
-    it("(12) retorna 504 quando fetchAllMatches lança CopaDataTimeoutError", async () => {
+    it("(12) retorna 504 quando getEffectiveMatches lança EspnTimeoutError", async () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       getFirestoreMock.mockReturnValue({ collection: userCollectionMock, batch: vi.fn() });
 
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataTimeoutError(5000));
+      getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(5000));
 
       const response = await POST(postRequest(VALID_BODY));
       expect(response.status).toBe(504);
@@ -529,6 +526,30 @@ describe("POST /api/predictions/batch", () => {
   // -------------------------------------------------------------------------
   // § 8.5 Processamento por item — resposta 200 com saved/rejected
   // -------------------------------------------------------------------------
+
+  // §8.4.1 Fonte do lock — regressão (bug "prazo encerrado" em jogo aberto).
+  // O lote DEVE classificar lock contra a fonte EFETIVA (getEffectiveMatches),
+  // a mesma que a UI consome.
+  describe("§8.4.1 fonte do lock (regressão)", () => {
+    it("consome getEffectiveMatches", async () => {
+      const { userCollectionMock } = setupSession({ userStatus: "approved" });
+      const { batchMock, collectionMock } = makeFirestoreMockBatch({
+        existingDocIds: [],
+      });
+      getFirestoreMock.mockReturnValue({
+        collection: vi.fn().mockImplementation((name: string) => {
+          if (name === "users") return userCollectionMock();
+          return collectionMock();
+        }),
+        batch: batchMock,
+      });
+
+      const response = await POST(postRequest(VALID_BODY));
+
+      expect(response.status).toBe(200);
+      expect(getEffectiveMatchesMock).toHaveBeenCalledTimes(1);
+    });
+  });
 
   describe("§8.5 processamento por item", () => {
     // Caso 13
@@ -619,7 +640,7 @@ describe("POST /api/predictions/batch", () => {
       const { userCollectionMock } = setupSession({ userStatus: "approved" });
       const { batchMock, collectionMock } = makeFirestoreMockBatch();
 
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_LOCKED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_LOCKED]);
       isPredictionLockedMock.mockReturnValue(true);
 
       getFirestoreMock.mockReturnValue({
@@ -680,7 +701,7 @@ describe("POST /api/predictions/batch", () => {
       });
 
       // Match 1001 aberto, Match 1003 locked, 9999 inexistente
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_LOCKED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_UNLOCKED, MOCK_MATCH_LOCKED]);
       isPredictionLockedMock.mockImplementation(
         (match: { id: string }) => match.id === MOCK_MATCH_LOCKED.id,
       );
@@ -903,7 +924,7 @@ describe("POST /api/predictions/batch", () => {
       const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Os palpites deste grupo estão bloqueados.");
       // Lock executa antes de buscar partidas.
-      expect(fetchAllMatchesMock).not.toHaveBeenCalled();
+      expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
     });
 
     // Case B: predictionsLocked false → segue e grava o lote normalmente.

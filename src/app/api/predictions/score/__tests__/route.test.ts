@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Testes TDD (red-first) do Route Handler POST /api/predictions/score (TASK-04).
  *
  * A rota ainda NÃO existe — todos os testes devem falhar (red) porque o
@@ -7,7 +7,7 @@
  * Mocks:
  * - `@/server/firebaseAdmin`        → getAdminAuth (verifySessionCookie) + getAdminFirestore
  * - `next/headers`                  → cookies (httpOnly session cookie)
- * - `@/server/copaData` → fetchAllMatches
+ * - `@/server/copaData/matchSource` → getEffectiveMatches (fonte efetiva ESPN)
  * - `@/features/predictions/lib`    → scorePrediction (spy — usa implementação real para casos de binário)
  * - `server-only`                   → {} (sem erro fora do contexto Next.js)
  *
@@ -24,7 +24,7 @@
  * 10.  partida finished sem palpites → zero writes, scoredMatches=1, updatedPredictions=0
  * 11.  idempotência — rodar duas vezes produz os mesmos valores gravados
  * 12.  sumário correto: { scoredMatches, updatedPredictions }
- * 13.  502 — fetchAllMatches lança CopaDataFetchError
+ * 13.  502/504/500 — getEffectiveMatches lança EspnFetchError/Timeout/Parse
  * 14.  set() chamado com { merge: true } e apenas { status, points }
  */
 
@@ -38,13 +38,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   verifySessionCookieMock,
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
   cookiesMock,
   scorePredictionMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
   cookiesMock: vi.fn(),
   scorePredictionMock: vi.fn(),
 }));
@@ -60,21 +60,16 @@ vi.mock("next/headers", () => ({
   cookies: cookiesMock,
 }));
 
-// Mock: fetchAllMatches (copaData barrel — importado pelo route handler).
-// Reaproveita as classes reais de erro para que instanceof funcione corretamente
-// no copaDataErrorResponse.
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+// Mock: getEffectiveMatches (fonte efetiva ESPN — importada pelo route handler).
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
+
+// Mock: barrel copaData — fetchAllTeams stub. As classes de erro ESPN vivem em
+// espnClient e são mapeadas por copaDataErrorResponse.
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: vi.fn(),
+}));
 
 // Mock: scorePrediction (barrel — nunca path direto)
 // Usamos importActual para preservar predictionDocId e outros exports reais.
@@ -99,7 +94,11 @@ import { POST } from "@/app/api/predictions/score/route";
 // ---------------------------------------------------------------------------
 // Import de erros reais para instanceof funcionar corretamente no handler.
 // ---------------------------------------------------------------------------
-import { CopaDataFetchError } from "@/server/copaData/client";
+import {
+  EspnTimeoutError,
+  EspnFetchError,
+  EspnParseError,
+} from "@/server/copaData/espnClient";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 // ---------------------------------------------------------------------------
@@ -302,7 +301,7 @@ describe("POST /api/predictions/score", () => {
     // Por padrão: SCORE_SECRET definida
     vi.stubEnv("SCORE_SECRET", MOCK_SCORE_SECRET);
     // Por padrão: fetchAllMatches retorna partida finished
-    fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_FINISHED]);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_FINISHED]);
     // Por padrão: scorePrediction usa implementação real
     scorePredictionMock.mockImplementation(
       (prediction: typeof MOCK_PREDICTION_CORRECT, match: typeof MOCK_MATCH_FINISHED) => {
@@ -402,7 +401,7 @@ describe("POST /api/predictions/score", () => {
 
     it("não chama cookies() quando autorizado por secret", async () => {
       makeFirestoreMock({ matchPredictionsMap: {} });
-      fetchAllMatchesMock.mockResolvedValue([]);
+      getEffectiveMatchesMock.mockResolvedValue([]);
 
       await POST(postRequestWithSecret(MOCK_SCORE_SECRET));
 
@@ -538,7 +537,7 @@ describe("POST /api/predictions/score", () => {
 
   describe("partida não-finished é ignorada", () => {
     it("não processa palpites quando partida tem status 'scheduled'", async () => {
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_SCHEDULED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_SCHEDULED]);
 
       const whereMock = vi.fn();
       getFirestoreMock.mockReturnValue({
@@ -560,7 +559,7 @@ describe("POST /api/predictions/score", () => {
     });
 
     it("retorna scoredMatches=0 quando todas as partidas são scheduled/live", async () => {
-      fetchAllMatchesMock.mockResolvedValue([
+      getEffectiveMatchesMock.mockResolvedValue([
         MOCK_MATCH_SCHEDULED,
         { ...MOCK_MATCH_SCHEDULED, id: "5003", status: "live" as const },
       ]);
@@ -662,7 +661,7 @@ describe("POST /api/predictions/score", () => {
         homeScore: 0,
         awayScore: 0,
       };
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_FINISHED, MATCH_2]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_FINISHED, MATCH_2]);
 
       getFirestoreMock.mockReturnValue({
         collection: vi.fn().mockImplementation((name: string) => {
@@ -699,7 +698,7 @@ describe("POST /api/predictions/score", () => {
     });
 
     it("retorna { scoredMatches: 0, updatedPredictions: 0 } quando não há partidas finished", async () => {
-      fetchAllMatchesMock.mockResolvedValue([MOCK_MATCH_SCHEDULED]);
+      getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH_SCHEDULED]);
       getFirestoreMock.mockReturnValue({
         collection: vi.fn().mockReturnValue({ where: vi.fn() }),
       });
@@ -716,19 +715,38 @@ describe("POST /api/predictions/score", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 10. Erros de upstream — fetchAllMatches lança
+  // 10. Erros de upstream — getEffectiveMatches (ESPN) lança
   // -------------------------------------------------------------------------
 
-  describe("erros de integração com copaData", () => {
-    it("retorna 502 quando fetchAllMatches lança CopaDataFetchError", async () => {
-      fetchAllMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
-
+  describe("erros de integração com a fonte ESPN", () => {
+    function stubFirestoreForError() {
       getFirestoreMock.mockReturnValue({
         collection: vi.fn().mockReturnValue({}),
       });
+    }
+
+    it("retorna 502 quando getEffectiveMatches lança EspnFetchError", async () => {
+      getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
+      stubFirestoreForError();
 
       const response = await POST(postRequestWithSecret(MOCK_SCORE_SECRET));
       expect(response.status).toBe(502);
+    });
+
+    it("retorna 504 quando getEffectiveMatches lança EspnTimeoutError", async () => {
+      getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(5000));
+      stubFirestoreForError();
+
+      const response = await POST(postRequestWithSecret(MOCK_SCORE_SECRET));
+      expect(response.status).toBe(504);
+    });
+
+    it("retorna 500 quando getEffectiveMatches lança EspnParseError", async () => {
+      getEffectiveMatchesMock.mockRejectedValue(new EspnParseError("shape inválido"));
+      stubFirestoreForError();
+
+      const response = await POST(postRequestWithSecret(MOCK_SCORE_SECRET));
+      expect(response.status).toBe(500);
     });
   });
 });

@@ -1,11 +1,11 @@
 /**
  * Cliente HTTP do scoreboard ESPN (API pública não-oficial `site.api.espn.com`).
  *
- * Espelha `HttpCopaDataClient` (./client.ts): mesma sequência
- * abort → fetch → status check → json → validação de shape, com erros tipados.
+ * Sequência abort → fetch → status check → json → validação de shape, com
+ * erros tipados (`EspnTimeoutError`/`EspnFetchError`/`EspnParseError`).
  *
- * Busca placar/estado AO VIVO da Copa (liga `fifa.world`). Cache 5min via
- * Next.js data cache (`next: { revalidate: 300 }`) — alinhado ao tier de live.
+ * Busca placar/estado AO VIVO da Copa (liga `fifa.world`). Cache 1min via
+ * Next.js data cache (`next: { revalidate: 60 }`) — alinhado ao tier de live.
  *
  * Achados empíricos (spike TASK-00, 2026-06-14):
  * - `?dates=YYYYMMDD` é OBRIGATÓRIO — a janela default cobre só 1 dia.
@@ -45,8 +45,8 @@ export class EspnParseError extends Error {
 const ESPN_SCOREBOARD_URL =
   "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
 
-/** Cache 5min — janela ao vivo (não confundir com REVALIDATE_MATCHES=3600). */
-const REVALIDATE_LIVE = 300;
+/** Cache 1min — janela ao vivo (status/placar ESPN refrescam a cada 60s). */
+const REVALIDATE_LIVE = 60;
 
 /**
  * Ranges disjuntos (`YYYYMMDD-YYYYMMDD`) que cobrem o torneio inteiro (104 jogos).

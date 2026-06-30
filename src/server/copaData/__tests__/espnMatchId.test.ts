@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { espnEventSchema, type EspnEvent } from "../espnTypes";
 import { buildEspnMatchId, isGroupStage } from "../espnMatchId";
 import { OF_NAME_BY_CODE, TEAM_REGISTRY } from "../teamRegistry";
-import { buildMatchId } from "../mapper";
+import { buildMatchId } from "../matchId";
 
 const FIXTURES_DIR = join(__dirname, "..", "__fixtures__");
 
@@ -278,7 +278,7 @@ describe("buildEspnMatchId — paridade byte-a-byte com buildMatchId", () => {
       const espnId = buildEspnMatchId(
         groupEvent({ date: utc, homeAbbr, awayAbbr, city }),
       );
-      const ofId = buildMatchId({ round: "Matchday 1", date: ofDate, team1, team2 });
+      const ofId = buildMatchId({ date: ofDate, team1, team2 });
       expect(espnId).toBe(ofId);
     },
   );

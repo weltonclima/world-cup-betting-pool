@@ -1,10 +1,9 @@
 /**
  * Testes do Route Handler GET /api/matches/[id].
  *
- * Regressão D1: a rota deve ler de `getEffectiveMatches` (openfootball + overrides
- * manuais, PRD-11) — NÃO de `fetchAllMatches` (base crua). Sem o overlay, o
- * detalhe do jogo renderizava sempre o openfootball, ignorando a edição manual do
- * super_admin.
+ * Regressão D1: a rota deve ler de `getEffectiveMatches` (ESPN + overrides
+ * manuais, PRD-11) — NÃO da base crua. Sem o overlay, o detalhe do jogo
+ * renderizava sempre a base, ignorando a edição manual do super_admin.
  *
  * `@/server/copaData/matchSource` é mockado para controlar a fonte efetiva.
  */
@@ -12,9 +11,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CopaDataTimeoutError,
-  CopaDataFetchError,
-} from "@/server/copaData/client";
+  EspnTimeoutError,
+  EspnFetchError,
+} from "@/server/copaData/espnClient";
 
 const { getEffectiveMatchesMock } = vi.hoisted(() => ({
   getEffectiveMatchesMock: vi.fn(),
@@ -74,7 +73,7 @@ describe("GET /api/matches/[id]", () => {
       isManualOverride: boolean;
     };
     expect(body.id).toBe("m73");
-    // Placar e flag vêm do override, não do openfootball cru.
+    // Placar e flag vêm do override, não da base crua.
     expect(body.homeScore).toBe(2);
     expect(body.isManualOverride).toBe(true);
     // Lê da fonte efetiva (overlay), não da base crua.
@@ -88,15 +87,15 @@ describe("GET /api/matches/[id]", () => {
     expect(response.status).toBe(404);
   });
 
-  it("504 quando getEffectiveMatches lança CopaDataTimeoutError", async () => {
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
+  it("504 quando getEffectiveMatches lança EspnTimeoutError", async () => {
+    getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
     const response = await GET(new Request("http://x/api/matches/m73"), ctx("m73"));
     expect(response.status).toBe(504);
   });
 
-  it("502 quando getEffectiveMatches lança CopaDataFetchError", async () => {
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+  it("502 quando getEffectiveMatches lança EspnFetchError", async () => {
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET(new Request("http://x/api/matches/m73"), ctx("m73"));
     expect(response.status).toBe(502);
