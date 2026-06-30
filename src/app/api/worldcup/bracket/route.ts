@@ -14,9 +14,14 @@
 import { after, NextResponse } from "next/server";
 
 import { copaDataErrorResponse } from "@/app/api/_lib/copaDataError";
-import { fetchAllTeams } from "@/server/copaData";
+import { fetchAllTeams, fetchEspnBracketMap } from "@/server/copaData";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
-import { isFresh, readSnapshot, writeSnapshot } from "@/server/worldcup/cache";
+import {
+  isCurrentVersion,
+  isFresh,
+  readSnapshot,
+  writeSnapshot,
+} from "@/server/worldcup/cache";
 import { deriveBracket } from "@/server/worldcup/bracket";
 import { bracketResponseSchema } from "@/schemas/worldcup";
 import type { BracketResponse } from "@/types/worldcup";
@@ -91,7 +96,7 @@ export async function GET(): Promise<NextResponse> {
 
   // Fix 1 (CR-01 + WR-04): valida o payload do snapshot antes de servir.
   // Snapshot corrompido é tratado como cache miss — cai no caminho de recomputo.
-  if (snap && isFresh(snap, now)) {
+  if (snap && isFresh(snap, now) && isCurrentVersion(snap)) {
     const parsed = bracketResponseSchema.safeParse(snap.payload);
     if (
       parsed.success &&
@@ -113,7 +118,13 @@ export async function GET(): Promise<NextResponse> {
 
   // 2/3/4. Cache stale, ausente ou corrompido → recomputa.
   try {
-    const [matches, teams] = await Promise.all([getEffectiveMatches(), fetchAllTeams()]);
+    // fetchEspnBracketMap em paralelo: nunca lança (degrada para mapa vazio) e
+    // compartilha o data cache de 60s da ESPN com getEffectiveMatches.
+    const [matches, teams, bracketMap] = await Promise.all([
+      getEffectiveMatches(),
+      fetchAllTeams(),
+      fetchEspnBracketMap(),
+    ]);
 
     // Qualquer jogo ao vivo (não só de grupos): no mata-mata um confronto live
     // precisa encurtar o TTL para 60s — senão o bracket congela 24h durante o
@@ -125,7 +136,9 @@ export async function GET(): Promise<NextResponse> {
     // Bracket body é puro (sem hasLiveGroupMatch) para não violar contrato TASK-01.
     // .parse lança ZodError se nosso próprio código produziu shape inválido —
     // sinaliza bug real; capturado pelo catch abaixo → 500 via copaDataErrorResponse.
-    const payload = bracketResponseSchema.parse(deriveBracket(matches, teams));
+    const payload = bracketResponseSchema.parse(
+      deriveBracket(matches, teams, bracketMap),
+    );
 
     // Fix 3 (CR-02): desacopla escrita de cache do response usando after().
     // writeSnapshot engole seus próprios erros; after() garante execução pós-response.

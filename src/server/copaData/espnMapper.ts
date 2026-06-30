@@ -23,7 +23,7 @@ import { stageSchema } from "@/schemas/shared";
 import type { MatchWithId } from "@/types/matches";
 
 import { buildEspnMatchId, isGroupStage } from "./espnMatchId";
-import type { EspnCompetition, EspnEvent } from "./espnTypes";
+import type { EspnCompetition, EspnCompetitor, EspnEvent } from "./espnTypes";
 import { resolveTeamByCode } from "./teamRegistry";
 
 /** Patch parcial derivado de um competition ESPN. Status narrow (sem postponed/canceled). */
@@ -44,6 +44,78 @@ export function mapEspnState(
       return "live";
     case "post":
       return "finished";
+  }
+}
+
+/**
+ * Slot da chave derivado de um `displayName` placeholder ESPN (TASK-02).
+ * `round` = slug ESPN da fase-fonte; `game` = nº do jogo-fonte; `label` = rótulo
+ * pt-BR exibível.
+ */
+export interface BracketSlot {
+  round: string;
+  game: number;
+  label: string;
+}
+
+/** Config de parsing por fase-fonte: regex do `displayName` + slug + prefixo do rótulo. */
+const BRACKET_SLOT_PATTERNS: ReadonlyArray<{
+  re: RegExp;
+  round: string;
+  /** Prefixo do rótulo ("R32", "QF", …). */
+  prefix: string;
+}> = [
+  { re: /^Round of 32 (\d+) (Winner|Loser)$/i, round: "round-of-32", prefix: "R32" },
+  { re: /^Round of 16 (\d+) (Winner|Loser)$/i, round: "round-of-16", prefix: "R16" },
+  { re: /^Quarterfinal (\d+) (Winner|Loser)$/i, round: "quarterfinals", prefix: "QF" },
+  { re: /^Semifinal (\d+) (Winner|Loser)$/i, round: "semifinals", prefix: "SF" },
+];
+
+/**
+ * Converte o `displayName` de um time-placeholder ESPN ("Round of 32 3 Winner")
+ * no slot da chave + rótulo pt-BR. Retorna `null` para qualquer string que não
+ * descreva um slot (time real, fase de grupos, vazio) OU jogo-fonte inválido
+ * (`game < 1`) — degrada sem lançar. Rótulo uniforme "jogo N" em todas as fases.
+ * Pura — sem I/O.
+ */
+export function parseBracketSlot(displayName: string): BracketSlot | null {
+  for (const p of BRACKET_SLOT_PATTERNS) {
+    const m = displayName.match(p.re);
+    if (!m) {
+      continue;
+    }
+    const game = Number(m[1]);
+    if (game < 1) {
+      // Jogo-fonte 0 não existe (numeração FIFA é 1-based); degrada p/ null em
+      // vez de produzir um slot inválido que abortaria o parse do schema.
+      return null;
+    }
+    const outcome = m[2]!.toLowerCase() === "loser" ? "Perdedor" : "Vencedor";
+    return { round: p.round, game, label: `${outcome} ${p.prefix} jogo ${game}` };
+  }
+  return null;
+}
+
+/**
+ * Deriva o desfecho de um jogo de mata-mata a partir de `status.type.name` ESPN.
+ * Só faz sentido em jogo finalizado (`state === "post"`) — antes disso retorna
+ * `undefined`. `STATUS_FINAL_PEN` → pênaltis; `STATUS_OVERTIME` → prorrogação;
+ * qualquer outro nome (ou ausente) em jogo finalizado → tempo normal. Pura.
+ */
+export function mapOutcome(
+  statusTypeName: string | undefined,
+  state: "pre" | "in" | "post",
+): "normal" | "overtime" | "penalties" | undefined {
+  if (state !== "post") {
+    return undefined;
+  }
+  switch (statusTypeName) {
+    case "STATUS_FINAL_PEN":
+      return "penalties";
+    case "STATUS_OVERTIME":
+      return "overtime";
+    default:
+      return "normal";
   }
 }
 
@@ -122,6 +194,67 @@ function resolveTeamId(abbr: string): string {
 }
 
 /**
+ * Slot/label de um lado, quando placeholder. A evidência autoritativa é o
+ * `displayName` casar um padrão de slot — times reais carregam nome de país, que
+ * jamais casa as regexes ancoradas. `isActive` é OPCIONAL na ESPN (pode faltar
+ * num placeholder), então NÃO se gateia por ele: gatear perderia o slot/label
+ * sempre que a flag estivesse ausente. Resolvido → `parseBracketSlot` retorna null.
+ */
+function sideSlot(
+  competitor: EspnCompetitor,
+): { slot: { round: string; game: number }; label: string } | null {
+  const parsed = parseBracketSlot(competitor.team.displayName ?? "");
+  if (!parsed) {
+    return null;
+  }
+  return { slot: { round: parsed.round, game: parsed.game }, label: parsed.label };
+}
+
+/**
+ * Campos de enriquecimento de MATA-MATA (TASK-02) — slot/label por-lado,
+ * lado que avançou, desfecho e pênaltis. Só chamado para jogos de mata-mata;
+ * fase de grupos não recebe nenhum destes campos. Pênaltis ficam em campos
+ * próprios, SEPARADOS de homeScore/awayScore (invariante validada no refine).
+ */
+function buildKnockoutFields(
+  state: "pre" | "in" | "post",
+  statusName: string | undefined,
+  home: EspnCompetitor,
+  away: EspnCompetitor,
+): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+
+  const homeSide = sideSlot(home);
+  if (homeSide) {
+    fields.homeBracketSlot = homeSide.slot;
+    fields.homePlaceholderLabel = homeSide.label;
+  }
+  const awaySide = sideSlot(away);
+  if (awaySide) {
+    fields.awayBracketSlot = awaySide.slot;
+    fields.awayPlaceholderLabel = awaySide.label;
+  }
+
+  // Lado que avançou (autoritativo ESPN); null quando ninguém avançou ainda.
+  fields.advanceSide =
+    home.advance === true ? "home" : away.advance === true ? "away" : null;
+
+  const outcome = mapOutcome(statusName, state);
+  if (outcome !== undefined) {
+    fields.outcome = outcome;
+  }
+
+  // Pênaltis só quando o jogo foi decidido nos pênaltis. shootoutScore ausente
+  // aqui dispara o refine de pênaltis (falha ruidosa, ID/dado errado é pior).
+  if (outcome === "penalties") {
+    fields.homeShootout = home.shootoutScore ?? null;
+    fields.awayShootout = away.shootoutScore ?? null;
+  }
+
+  return fields;
+}
+
+/**
  * Converte um `EspnEvent` já validado num `MatchWithId` completo (todos os campos
  * do `matchSchema`), distinto do patch parcial de `mapEspnCompetition`.
  *
@@ -174,6 +307,12 @@ export function mapEspnEventToMatch(
     status: patch.status,
     homeScore: patch.homeScore,
     awayScore: patch.awayScore,
+    // Enriquecimento de mata-mata (TASK-02). Fase de grupos não recebe nenhum
+    // destes campos (ficam ausentes). Slot/label são por-lado; pênaltis só
+    // quando decididos nos pênaltis, sempre SEPARADOS do placar de tempo normal.
+    ...(isGroupStage(event)
+      ? {}
+      : buildKnockoutFields(competition.status.type.state, competition.status.type.name, home, away)),
   };
 
   // Falha ruidosa: ID silenciosamente errado é pior que throw.

@@ -1,8 +1,8 @@
 /**
  * Cliente HTTP do scoreboard ESPN (API pública não-oficial `site.api.espn.com`).
  *
- * Espelha `HttpCopaDataClient` (./client.ts): mesma sequência
- * abort → fetch → status check → json → validação de shape, com erros tipados.
+ * Sequência abort → fetch → status check → json → validação de shape, com
+ * erros tipados (`EspnTimeoutError`/`EspnFetchError`/`EspnParseError`).
  *
  * Busca placar/estado AO VIVO da Copa (liga `fifa.world`). Cache 1min via
  * Next.js data cache (`next: { revalidate: 60 }`) — alinhado ao tier de live.

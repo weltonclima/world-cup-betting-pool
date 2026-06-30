@@ -290,3 +290,228 @@ describe("espnScoreboardSchema", () => {
     expect(comp(data, 2, 1).winner).toBe(true);
   });
 });
+
+// ─── TASK-01: campos de linkagem da chave + desempate por pênaltis ────────────
+// ES-21..ES-31. Campos novos OPCIONAIS (API não-oficial). Schema com
+// `.passthrough()` já PRESERVA chaves extras — por isso o ganho real desta task
+// é a VALIDAÇÃO de tipo (rejeitar `isActive` não-bool, `shootoutScore` inválido)
+// e a tipagem. Os RED genuínos são as rejeições (ES-23, ES-28, ES-29).
+
+/**
+ * Evento mata-mata com slot placeholder ESPN: time `home` não-resolvido
+ * (`isActive:false` + `displayName` codificando o slot), time `away` resolvido.
+ * `home` tem `advance`/`shootoutScore`; estrutura espelha o payload real (§2–3
+ * da análise). Construído como literal inline (passado a `safeParse: unknown`).
+ */
+function knockoutSlotScoreboard() {
+  return {
+    events: [
+      {
+        id: "760480",
+        date: "2026-06-29T19:00Z",
+        season: { year: 2026, type: 13801, slug: "round-of-32" },
+        competitions: [
+          {
+            status: { type: { state: "post", detail: "FT (Pens)", name: "STATUS_FINAL_PEN" } },
+            altGameNote: "FIFA World Cup",
+            competitors: [
+              {
+                homeAway: "home",
+                score: "1",
+                winner: false,
+                advance: false,
+                shootoutScore: 3,
+                team: {
+                  id: "131527",
+                  abbreviation: "RD32",
+                  displayName: "Round of 32 3 Winner",
+                  shortDisplayName: "RD32 W3",
+                  isActive: false,
+                },
+              },
+              {
+                homeAway: "away",
+                score: "1",
+                winner: true,
+                advance: true,
+                shootoutScore: 4,
+                team: {
+                  id: "202",
+                  abbreviation: "PAR",
+                  displayName: "Paraguay",
+                  shortDisplayName: "Paraguay",
+                  isActive: true,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+describe("espnScoreboardSchema — linkagem/desempate (TASK-01)", () => {
+  it("ES-21: team com id/displayName/shortDisplayName/isActive → success + valores preservados", () => {
+    const res = parseEspnScoreboard(knockoutSlotScoreboard());
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    const home = comp(res.data, 0, 0).team;
+    expect(home.id).toBe("131527");
+    expect(home.displayName).toBe("Round of 32 3 Winner");
+    expect(home.shortDisplayName).toBe("RD32 W3");
+    expect(home.isActive).toBe(false);
+  });
+
+  it("ES-22: team sem campos novos → success (todos opcionais)", () => {
+    const parsed = espnScoreboardSchema.parse(validScoreboard());
+    const home = comp(parsed, 0, 0).team;
+    expect(home.id).toBeUndefined();
+    expect(home.displayName).toBeUndefined();
+    expect(home.shortDisplayName).toBeUndefined();
+    expect(home.isActive).toBeUndefined();
+  });
+
+  it("ES-23: isActive não-boolean → failure", () => {
+    const sb = {
+      events: [
+        {
+          id: "1",
+          date: "2026-06-14T19:00Z",
+          competitions: [
+            {
+              status: { type: { state: "post", detail: "FT" } },
+              competitors: [
+                { homeAway: "home", score: "1", team: { abbreviation: "BRA", isActive: "yes" } },
+                { homeAway: "away", score: "0", team: { abbreviation: "ARG" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(espnScoreboardSchema.safeParse(sb).success).toBe(false);
+  });
+
+  it("ES-24: advance true/false preservado nos competitors", () => {
+    const res = parseEspnScoreboard(knockoutSlotScoreboard());
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(comp(res.data, 0, 0).advance).toBe(false);
+    expect(comp(res.data, 0, 1).advance).toBe(true);
+  });
+
+  it("ES-25: advance ausente → undefined (opcional)", () => {
+    const parsed = espnScoreboardSchema.parse(validScoreboard());
+    expect(comp(parsed, 0, 0).advance).toBeUndefined();
+  });
+
+  it("ES-26: shootoutScore int preservado", () => {
+    const res = parseEspnScoreboard(knockoutSlotScoreboard());
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(comp(res.data, 0, 0).shootoutScore).toBe(3);
+    expect(comp(res.data, 0, 1).shootoutScore).toBe(4);
+  });
+
+  it("ES-27: shootoutScore ausente → undefined (opcional)", () => {
+    const parsed = espnScoreboardSchema.parse(validScoreboard());
+    expect(comp(parsed, 0, 0).shootoutScore).toBeUndefined();
+  });
+
+  it("ES-28: shootoutScore negativo → failure (min 0)", () => {
+    const sb = {
+      events: [
+        {
+          id: "1",
+          date: "2026-06-14T19:00Z",
+          competitions: [
+            {
+              status: { type: { state: "post", detail: "FT" } },
+              competitors: [
+                { homeAway: "home", score: "1", shootoutScore: -1, team: { abbreviation: "BRA" } },
+                { homeAway: "away", score: "1", team: { abbreviation: "ARG" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(espnScoreboardSchema.safeParse(sb).success).toBe(false);
+  });
+
+  it("ES-29: shootoutScore não-numérico → failure", () => {
+    const sb = {
+      events: [
+        {
+          id: "1",
+          date: "2026-06-14T19:00Z",
+          competitions: [
+            {
+              status: { type: { state: "post", detail: "FT" } },
+              competitors: [
+                { homeAway: "home", score: "1", shootoutScore: "três", team: { abbreviation: "BRA" } },
+                { homeAway: "away", score: "1", team: { abbreviation: "ARG" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(espnScoreboardSchema.safeParse(sb).success).toBe(false);
+  });
+
+  it("ES-30: status.type.name string preservado; ausente → undefined", () => {
+    const res = parseEspnScoreboard(knockoutSlotScoreboard());
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    const ev = at(res.data.events, 0);
+    expect(at(ev.competitions, 0).status.type.name).toBe("STATUS_FINAL_PEN");
+
+    const parsed = espnScoreboardSchema.parse(validScoreboard());
+    const ev2 = at(parsed.events, 0);
+    expect(at(ev2.competitions, 0).status.type.name).toBeUndefined();
+  });
+
+  it("ES-32: shootoutScore float → failure (int)", () => {
+    const sb = {
+      events: [
+        {
+          id: "1",
+          date: "2026-06-14T19:00Z",
+          competitions: [
+            {
+              status: { type: { state: "post", detail: "FT" } },
+              competitors: [
+                { homeAway: "home", score: "1", shootoutScore: 3.5, team: { abbreviation: "BRA" } },
+                { homeAway: "away", score: "1", team: { abbreviation: "ARG" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(espnScoreboardSchema.safeParse(sb).success).toBe(false);
+  });
+
+  it("ES-31: passthrough mantido nos schemas estendidos (campo extra no team)", () => {
+    const sb = {
+      events: [
+        {
+          id: "1",
+          date: "2026-06-14T19:00Z",
+          competitions: [
+            {
+              status: { type: { state: "post", detail: "FT" } },
+              competitors: [
+                { homeAway: "home", score: "1", team: { abbreviation: "BRA", color: "ffff00" } },
+                { homeAway: "away", score: "0", team: { abbreviation: "ARG" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(espnScoreboardSchema.safeParse(sb).success).toBe(true);
+  });
+});

@@ -1,10 +1,10 @@
 /**
  * Cálculo da classificação da fase de grupos da Copa.
  *
- * Função pura — sem I/O, sem Date.now, determinística. Espelha o precedente de
- * `src/server/copaData/mapper.ts` (módulo puro NÃO carrega `import "server-only"`;
- * só o barrel `index.ts` carrega, pois `server-only` envenena o ambiente node do
- * Vitest). Logo, este módulo é livre de `server-only`.
+ * Função pura — sem I/O, sem Date.now, determinística. Como os demais módulos
+ * puros de `copaData`, NÃO carrega `import "server-only"` (só o barrel `index.ts`
+ * carrega, pois `server-only` envenena o ambiente node do Vitest). Logo, este
+ * módulo é livre de `server-only`.
  *
  * Regras de ordenação/desempate (critérios FIFA 1–4 + fallback determinístico):
  *  1. pontos desc → saldo desc → gols-pró desc (sobre TODOS os jogos do grupo).

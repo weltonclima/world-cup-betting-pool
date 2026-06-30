@@ -104,6 +104,12 @@ export const knockoutSideSchema = z
     code: fifaCode.optional(),
     flagUrl: z.url().optional(),
     defined: z.boolean(),
+    // Slot da chave (TASK-02) — só no lado placeholder (defined:false). Identifica
+    // o jogo-fonte do confronto. `round` = slug ESPN da fase-fonte; `game` ≥ 1.
+    bracketSlot: z
+      .object({ round: nonEmptyString, game: z.int().min(1) })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -127,6 +133,18 @@ export const knockoutMatchSchema = z
     status: knockoutMatchStatusSchema,
     kickoffAt: z.string().optional(),
     venue: knockoutVenueSchema.optional(),
+    // NET-NEW TASK-02 — desempate/avanço. Todos OPCIONAIS (snapshots de cache
+    // legados sem eles continuam válidos; recompute regrava enriquecido).
+    // Pênaltis SEPARADOS do placar de tempo normal (homeScore/awayScore).
+    homeShootout: z.int().min(0).optional(),
+    awayShootout: z.int().min(0).optional(),
+    advanceSide: z.enum(["home", "away"]).nullable().optional(),
+    outcome: z.enum(["normal", "overtime", "penalties"]).optional(),
+    // NET-NEW TASK-08 — arestas reais pai→filho da chave. Os dois jogos-pai que
+    // alimentam este confronto (home, away), derivados do EspnBracketMap +
+    // bracketSlot dos lados. OPCIONAL: snapshots legados sem o mapa, R32 (sem
+    // jogo-pai no mata-mata) e degradação (mapa ausente) ficam sem o campo.
+    parentMatchIds: z.tuple([nonEmptyString, nonEmptyString]).optional(),
   })
   .strict()
   .refine(
@@ -171,6 +189,22 @@ export const knockoutMatchSchema = z
       message:
         'Lado com defined:false só é permitido quando status é "aguardando"',
       path: ["homeTeam"],
+    },
+  )
+  .refine(
+    (v) => {
+      // Espelha o invariante de pênaltis do matchSchema (defesa em profundidade):
+      // outcome "penalties" ⇔ ambos shootouts presentes; fora disso, ausentes.
+      const ambos =
+        v.homeShootout !== undefined && v.awayShootout !== undefined;
+      const nenhum =
+        v.homeShootout === undefined && v.awayShootout === undefined;
+      return v.outcome === "penalties" ? ambos : nenhum;
+    },
+    {
+      message:
+        'Pênaltis: outcome "penalties" exige homeShootout e awayShootout; demais outcomes não devem ter shootout',
+      path: ["homeShootout"],
     },
   );
 

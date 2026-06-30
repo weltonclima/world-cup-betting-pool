@@ -31,17 +31,9 @@ vi.mock("@/server/copaData/matchSource", () => ({
   getEffectiveMatches: getEffectiveMatchesMock,
 }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllTeams: fetchAllTeamsMock,
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: fetchAllTeamsMock,
+}));
 
 vi.mock("@/server/worldcup/cache", () => ({
   readSnapshot: readSnapshotMock,
@@ -59,7 +51,7 @@ vi.mock("next/server", async (importOriginal) => {
 // server-only é importado pelos módulos de servidor
 vi.mock("server-only", () => ({}));
 
-import { CopaDataFetchError, CopaDataTimeoutError } from "@/server/copaData/client";
+import { EspnFetchError, EspnTimeoutError } from "@/server/copaData/espnClient";
 import { GET } from "@/app/api/worldcup/groups/route";
 import type { GroupsResponse } from "@/types/worldcup";
 
@@ -259,7 +251,7 @@ describe("GET /api/worldcup/groups", () => {
   it("retorna snapshot stale com Cache-Control: no-store quando fetch falha e snap existe", async () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(false);
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
 
@@ -272,19 +264,19 @@ describe("GET /api/worldcup/groups", () => {
 
   // ── Fetch falha + sem snapshot ──────────────────────────────────────────────
 
-  it("retorna 502 quando fetch lança CopaDataFetchError e não há snapshot", async () => {
+  it("retorna 502 quando fetch lança EspnFetchError e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
     expect(response.status).toBe(502);
   });
 
-  it("retorna 504 quando fetch lança CopaDataTimeoutError e não há snapshot", async () => {
+  it("retorna 504 quando fetch lança EspnTimeoutError e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
     const response = await GET();
     expect(response.status).toBe(504);

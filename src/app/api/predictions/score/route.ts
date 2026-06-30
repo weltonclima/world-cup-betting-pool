@@ -13,7 +13,7 @@ import {
   predictionScoreChanged,
 } from "@/features/predictions/lib";
 import { readScoreState, writeScoreState } from "@/server/scoring/scoreState";
-import { fetchAllMatches } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { resolveTeamByCode } from "@/server/copaData/teamRegistry";
 import {
   fetchPreferencesMap,
@@ -118,7 +118,7 @@ export const dynamic = "force-dynamic";
  *
  * Fluxo:
  * 1. Verificar autorização (A ou B) — 401/403 se não autorizado.
- * 2. Buscar todas as partidas via fetchAllMatches() → filtrar status==="finished".
+ * 2. Buscar todas as partidas via getEffectiveMatches() (ESPN + overrides) → filtrar status==="finished".
  * 3. Para cada partida finished: query predictions.where(matchId) → scorePrediction → set merge.
  * 4. Responder { scoredMatches, updatedPredictions }.
  * Idempotente: re-rodar grava os mesmos { status, points } (função pura + set merge).
@@ -164,9 +164,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // ─── 3. Buscar e filtrar partidas finished ────────────────────────────────
-  let matches: Awaited<ReturnType<typeof fetchAllMatches>>;
+  let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
-    matches = await fetchAllMatches();
+    matches = await getEffectiveMatches();
   } catch (err) {
     return copaDataErrorResponse(err);
   }

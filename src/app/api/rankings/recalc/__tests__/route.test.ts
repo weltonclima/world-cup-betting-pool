@@ -34,17 +34,9 @@ vi.mock("@/server/firebaseAdmin", () => ({
 
 vi.mock("next/headers", () => ({ cookies: cookiesMock }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: vi.fn(),
+}));
 
 // Fonte efetiva (ESPN base + overrides manuais) — o que recalcRankings realmente
 // consome (src/server/rankings/recalc.ts importa getEffectiveMatches do matchSource).
@@ -61,7 +53,7 @@ vi.mock("@/server/notifications", () => ({
 }));
 
 import { POST } from "@/app/api/rankings/recalc/route";
-import { CopaDataFetchError } from "@/server/copaData/client";
+import { EspnFetchError } from "@/server/copaData/espnClient";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
 
 // ───────────────────────── Fixtures ─────────────────────────
@@ -531,9 +523,9 @@ describe("POST /api/rankings/recalc", () => {
       expect(find(writes, "rankings/geral")).toBeDefined();
     });
 
-    it("502 quando getEffectiveMatches lança CopaDataFetchError", async () => {
+    it("502 quando getEffectiveMatches lança EspnFetchError", async () => {
       makeDb();
-      getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+      getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
       expect((await POST(withSecret(SECRET))).status).toBe(502);
     });
   });

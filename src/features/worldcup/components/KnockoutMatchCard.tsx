@@ -27,7 +27,8 @@ import type {
 
 import {
   formatKickoffBr,
-  getWinningSide,
+  formatSideScore,
+  getAdvancingSide,
 } from "@/features/worldcup/lib/knockoutHelpers";
 
 // ---------------------------------------------------------------------------
@@ -152,10 +153,13 @@ const COMPACT_STATUS: Record<
 function SideRowCompact({
   side,
   score,
+  shootout,
   isWinner,
 }: {
   side: KnockoutSide;
   score?: number;
+  /** Pênaltis (TASK-04) — exibidos "(n)" ao lado do placar, nunca somados. */
+  shootout?: number;
   isWinner?: boolean;
 }) {
   return (
@@ -174,7 +178,7 @@ function SideRowCompact({
             isWinner ? "font-bold text-foreground" : "font-semibold text-muted-foreground",
           )}
         >
-          {score}
+          {formatSideScore(score, shootout)}
         </span>
       )}
     </div>
@@ -201,18 +205,26 @@ export function KnockoutMatchCard({
   // Placar visível em jogo encerrado OU ao vivo (parcial). Aguardando/definido: sem placar.
   const showScore = isEncerrado || isAoVivo;
 
-  // Vencedor (ring + troféu) só ao encerrar — não coroa líder no meio do jogo.
-  const winningSide = isEncerrado ? getWinningSide(match) : null;
+  // Lado que avançou (ring + troféu) só ao encerrar — não coroa líder no meio do
+  // jogo. Autoridade = advanceSide (cobre pênaltis com empate no tempo normal);
+  // fallback para vencedor por placar.
+  const winningSide = isEncerrado ? getAdvancingSide(match) : null;
+
+  // Pênaltis (TASK-04) — exibidos só ao encerrar (outcome "penalties"); ao vivo
+  // não tem shootout. Mantidos separados do placar de tempo normal.
+  const homeShootout = isEncerrado ? match.homeShootout : undefined;
+  const awayShootout = isEncerrado ? match.awayShootout : undefined;
 
   // Variante compacta (nó de árvore): bandeiras + placar + metadados enxutos.
   // Nomes das seleções ficam no aria-label (não há nome visível por espaço).
   if (variant === "compact") {
     const matchLabel = showScore
-      ? `${homeTeam.name} ${homeScore} x ${awayScore} ${awayTeam.name}`
+      ? `${homeTeam.name} ${formatSideScore(homeScore!, homeShootout)} x ${formatSideScore(awayScore!, awayShootout)} ${awayTeam.name}`
       : `${homeTeam.name} x ${awayTeam.name}`;
     const statusInfo = COMPACT_STATUS[status];
     return (
       <article
+        data-match-id={match.id}
         aria-label={matchLabel}
         className={cn(
           "flex flex-col gap-1 rounded-lg border border-border bg-card p-1.5 shadow-sm",
@@ -241,12 +253,14 @@ export function KnockoutMatchCard({
           <SideRowCompact
             side={homeTeam}
             score={showScore ? homeScore : undefined}
+            shootout={homeShootout}
             isWinner={winningSide === "home"}
           />
           <div className="my-0.5 border-t border-border/40" />
           <SideRowCompact
             side={awayTeam}
             score={showScore ? awayScore : undefined}
+            shootout={awayShootout}
             isWinner={winningSide === "away"}
           />
         </div>
@@ -265,7 +279,7 @@ export function KnockoutMatchCard({
   }
 
   const resultLabel = showScore
-    ? `${homeTeam.name} ${homeScore} x ${awayScore} ${awayTeam.name}`
+    ? `${homeTeam.name} ${formatSideScore(homeScore!, homeShootout)} x ${formatSideScore(awayScore!, awayShootout)} ${awayTeam.name}`
     : undefined;
 
   return (
@@ -297,9 +311,13 @@ export function KnockoutMatchCard({
         <div className="flex shrink-0 items-center justify-center px-2">
           {showScore ? (
             <span className="flex items-center gap-1.5 tabular-nums">
-              <span className="text-2xl font-bold text-foreground">{homeScore}</span>
+              <span className="text-2xl font-bold text-foreground">
+                {formatSideScore(homeScore!, homeShootout)}
+              </span>
               <span className="text-base font-bold text-muted-foreground">x</span>
-              <span className="text-2xl font-bold text-foreground">{awayScore}</span>
+              <span className="text-2xl font-bold text-foreground">
+                {formatSideScore(awayScore!, awayShootout)}
+              </span>
             </span>
           ) : (
             <span className="text-base font-bold text-muted-foreground">x</span>
@@ -325,6 +343,18 @@ export function KnockoutMatchCard({
       {isAguardando && (
         <p className="mt-2 text-center text-xs text-muted-foreground">
           Aguardando definição
+        </p>
+      )}
+
+      {/* Legenda de desfecho — prorrogação / pênaltis (TASK-04) */}
+      {isEncerrado && match.outcome === "penalties" && (
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Decidido nos pênaltis
+        </p>
+      )}
+      {isEncerrado && match.outcome === "overtime" && (
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Após prorrogação
         </p>
       )}
     </article>

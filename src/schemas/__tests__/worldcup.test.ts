@@ -318,6 +318,144 @@ describe("knockoutMatchSchema", () => {
     ).toBe(false);
   });
 
+  // ─── TASK-02: campos de desempate/linkagem no knockout ─────────────────────
+
+  it("aceita bracketSlot no lado placeholder (knockoutSideSchema)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAguardando,
+        homeTeam: {
+          name: "Vencedor R32 jogo 3",
+          defined: false,
+          bracketSlot: { round: "round-of-32", game: 3 },
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita homeShootout/awayShootout + outcome 'penalties' em encerrado", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        homeScore: 1,
+        awayScore: 1,
+        homeShootout: 4,
+        awayShootout: 3,
+        outcome: "penalties",
+        advanceSide: "home",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita outcome 'overtime' sem shootout", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "overtime",
+        advanceSide: "away",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita advanceSide null", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        advanceSide: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejeita outcome fora do enum", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "shootout",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita advanceSide fora do enum", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        advanceSide: "draw",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("WR-03: rejeita outcome 'penalties' sem shootout (refine espelhado do matchSchema)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "penalties",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("WR-03: rejeita shootout com outcome não-pênaltis", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        outcome: "normal",
+        homeShootout: 4,
+        awayShootout: 3,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("backward compat: snapshot legado sem campos TASK-02 continua válido", () => {
+    expect(knockoutMatchSchema.safeParse(matchEncerrado).success).toBe(true);
+  });
+
+  // ─── TASK-08: parentMatchIds — arestas reais pai→filho ────────────────────
+
+  it("TASK-08: aceita partida encerrada com parentMatchIds presente", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        parentMatchIds: ["m73", "m75"],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("TASK-08: aceita partida sem parentMatchIds — backward compat com snapshots legados", () => {
+    expect(knockoutMatchSchema.safeParse(matchEncerrado).success).toBe(true);
+  });
+
+  it("TASK-08: aceita partida aguardando com parentMatchIds", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchAguardando,
+        parentMatchIds: ["m73", "m75"],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("TASK-08: rejeita parentMatchIds com apenas 1 elemento (tuple exige exatamente 2)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        parentMatchIds: ["m73"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("TASK-08: rejeita parentMatchIds vazio (tuple exige exatamente 2)", () => {
+    expect(
+      knockoutMatchSchema.safeParse({
+        ...matchEncerrado,
+        parentMatchIds: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("TASK-08: inferência de tipo — parentMatchIds é [string, string] | undefined", () => {
+    expectTypeOf<KnockoutMatch["parentMatchIds"]>().toEqualTypeOf<
+      [string, string] | undefined
+    >();
+  });
+
   it("inferência de tipo: status e phase", () => {
     expectTypeOf<KnockoutMatch["status"]>().toEqualTypeOf<
       "aguardando" | "definido" | "em-andamento" | "encerrado"

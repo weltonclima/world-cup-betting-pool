@@ -104,11 +104,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { matchId, homeScore, awayScore } = parsed.data;
 
   // ─── 4. Busca da partida ──────────────────────────────────────────────────
-  // Fonte EFETIVA (PRD-13: ESPN primária + overrides manuais), a MESMA que a UI
-  // consome via /api/matches. `fetchAllMatches` cru (openfootball, fallback de
-  // emergência) divergia do que o participante vê: a tela exibia o jogo aberto
-  // (ESPN/manual ainda "scheduled", kickoff futuro) mas o lock aqui o via
-  // bloqueado (openfootball com horário/status divergente) → 423 espúrio.
+  // Fonte EFETIVA (PRD-13: ESPN única + overrides manuais), a MESMA que a UI
+  // consome via /api/matches. Avaliar o lock contra esta fonte (não uma fonte
+  // crua divergente) evita 423 espúrio: a tela exibia o jogo aberto mas o lock
+  // o via bloqueado por horário/status divergente.
   let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
     matches = await getEffectiveMatches();

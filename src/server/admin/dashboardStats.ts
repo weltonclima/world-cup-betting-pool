@@ -1,6 +1,6 @@
 import "server-only";
 
-import { fetchAllMatches } from "@/server/copaData";
+import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { syncLogSchema, type SyncLog } from "@/schemas/syncLogs";
 
@@ -10,8 +10,8 @@ import { syncLogSchema, type SyncLog } from "@/schemas/syncLogs";
  * de varrer coleções inteiras: o agregador roda no servidor do Firestore e cobra
  * 1 leitura por lote de 1000 docs, muito mais barato que ler doc-a-doc.
  *
- * Jogos vêm do openfootball ao vivo (`fetchAllMatches`) — a coleção `matches`
- * persistida só existe após o 1º sync; o card "Jogos" reflete o calendário real.
+ * Jogos vêm da fonte efetiva ESPN (`getEffectiveMatches` = base ESPN + overrides
+ * manuais) — o card "Jogos" reflete o calendário real (104 quando completo).
  */
 
 export interface DashboardStats {
@@ -61,10 +61,10 @@ async function readLastSync(): Promise<SyncLog | null> {
   }
 }
 
-/** Total de jogos do calendário (openfootball ao vivo). 0 se a fonte falhar. */
+/** Total de jogos do calendário (fonte efetiva ESPN). 0 se a fonte falhar. */
 async function countMatches(): Promise<number> {
   try {
-    const matches = await fetchAllMatches();
+    const matches = await getEffectiveMatches();
     return matches.length;
   } catch (error) {
     console.error("[admin/dashboardStats] falha ao buscar jogos:", error);

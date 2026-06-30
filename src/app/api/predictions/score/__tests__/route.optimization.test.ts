@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Testes TDD (red-first) da otimização de custo do cron de pontuação
  * (scoring-write-cost TASK-03).
  *
@@ -27,13 +27,13 @@ import { matchResultFingerprint } from "@/features/predictions/lib";
 const {
   verifySessionCookieMock,
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
   cookiesMock,
   scorePredictionMock,
 } = vi.hoisted(() => ({
   verifySessionCookieMock: vi.fn(),
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
   cookiesMock: vi.fn(),
   scorePredictionMock: vi.fn(),
 }));
@@ -45,18 +45,13 @@ vi.mock("@/server/firebaseAdmin", () => ({
 
 vi.mock("next/headers", () => ({ cookies: cookiesMock }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
+
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: vi.fn(),
+}));
 
 vi.mock("@/features/predictions/lib", async () => {
   const actual = await vi.importActual<typeof import("@/features/predictions/lib")>(
@@ -186,7 +181,7 @@ describe("scoring-write-cost — otimização de reads/writes", () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.stubEnv("SCORE_SECRET", MOCK_SCORE_SECRET);
-    fetchAllMatchesMock.mockResolvedValue([MATCH_FINISHED]);
+    getEffectiveMatchesMock.mockResolvedValue([MATCH_FINISHED]);
     // Default: palpite exato → correct/10.
     scorePredictionMock.mockReturnValue({ status: "correct", points: 10 });
   });

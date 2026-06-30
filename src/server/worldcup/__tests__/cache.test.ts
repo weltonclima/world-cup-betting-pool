@@ -34,7 +34,12 @@ vi.mock("@/server/firebaseAdmin", () => ({
 vi.mock("server-only", () => ({}));
 
 // Importar APÓS os mocks
-import { isFresh, readSnapshot, writeSnapshot } from "@/server/worldcup/cache";
+import {
+  CACHE_VERSION,
+  isFresh,
+  readSnapshot,
+  writeSnapshot,
+} from "@/server/worldcup/cache";
 import type { CacheSnapshot } from "@/server/worldcup/cache";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -138,6 +143,7 @@ describe("writeSnapshot", () => {
       payload: BASE_PAYLOAD,
       computedAt: 999_000,
       hasLiveGroupMatch: false,
+      version: CACHE_VERSION,
     });
   });
 

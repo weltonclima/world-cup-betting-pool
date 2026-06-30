@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Testes do fan-out de notificações `games` no Route Handler
  * POST /api/predictions/score (TASK-04).
  *
@@ -31,7 +31,7 @@ import type { NotificationPreferences } from "@/schemas/notificationPreferences"
 
 const {
   getFirestoreMock,
-  fetchAllMatchesMock,
+  getEffectiveMatchesMock,
   scorePredictionMock,
   fetchPreferencesMapMock,
   writeNotificationsMock,
@@ -39,7 +39,7 @@ const {
   resolveTeamByCodeMock,
 } = vi.hoisted(() => ({
   getFirestoreMock: vi.fn(),
-  fetchAllMatchesMock: vi.fn(),
+  getEffectiveMatchesMock: vi.fn(),
   scorePredictionMock: vi.fn(),
   fetchPreferencesMapMock: vi.fn(),
   writeNotificationsMock: vi.fn(),
@@ -56,18 +56,13 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn(),
 }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllMatches: fetchAllMatchesMock,
-    fetchAllTeams: vi.fn(),
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData/matchSource", () => ({
+  getEffectiveMatches: getEffectiveMatchesMock,
+}));
+
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: vi.fn(),
+}));
 
 vi.mock("@/server/copaData/teamRegistry", () => ({
   resolveTeamByCode: resolveTeamByCodeMock,
@@ -207,7 +202,7 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.stubEnv("SCORE_SECRET", MOCK_SCORE_SECRET);
-    fetchAllMatchesMock.mockResolvedValue([MATCH]);
+    getEffectiveMatchesMock.mockResolvedValue([MATCH]);
     fetchPreferencesMapMock.mockResolvedValue(new Map([["user-123", prefs()]]));
     writeNotificationsMock.mockResolvedValue(undefined);
     sendPushForNotificationsMock.mockResolvedValue({
@@ -305,7 +300,7 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
 
   it("nome de time resolvido (BRA→Brasil) e fallback ao código quando não resolve", async () => {
     scorePredictionMock.mockReturnValue({ status: "correct", points: 10 });
-    fetchAllMatchesMock.mockResolvedValue([
+    getEffectiveMatchesMock.mockResolvedValue([
       { ...MATCH, homeTeamId: "1A", awayTeamId: "ARG" }, // 1A não resolve
     ]);
     setupFirestore([prediction()]);

@@ -12,7 +12,7 @@
  *
  * Paridade de IDs é mandatória: divergência de 1 byte quebra
  * `predictions/{matchId}`, `matches/{id}` e rankings. O slug reusa
- * `slugifyTeamName` de `mapper.ts` (fórmula única) e o nome openfootball vem de
+ * `slugifyTeamName` de `matchId.ts` (fórmula única) e o nome canônico vem de
  * `OF_NAME_BY_CODE` (reverso de `TEAM_REGISTRY`).
  *
  * Invariante crítica: NUNCA retorna um ID silenciosamente incorreto. Em qualquer
@@ -24,7 +24,7 @@
  */
 
 import type { EspnEvent } from "./espnTypes";
-import { slugifyTeamName } from "./mapper";
+import { slugifyTeamName } from "./matchId";
 import { OF_NAME_BY_CODE } from "./teamRegistry";
 
 /**

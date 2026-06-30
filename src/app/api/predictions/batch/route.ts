@@ -137,10 +137,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { predictions: rawPredictions } = parsedBatch.data;
 
   // ─── 5. Buscar partidas ───────────────────────────────────────────────────
-  // Fonte EFETIVA (PRD-13: ESPN primária + overrides manuais), a MESMA que a UI
-  // consome via /api/matches. `fetchAllMatches` cru (openfootball, fallback de
-  // emergência) divergia do que o participante vê e marcava itens como `locked`
-  // (status/kickoff divergente) ainda que a tela mostrasse o jogo aberto.
+  // Fonte EFETIVA (PRD-13: ESPN única + overrides manuais), a MESMA que a UI
+  // consome via /api/matches. Avaliar o lock contra esta fonte (não uma fonte
+  // crua divergente) evita marcar itens como `locked` por status/kickoff
+  // divergente quando a tela mostra o jogo aberto.
   let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
     matches = await getEffectiveMatches();

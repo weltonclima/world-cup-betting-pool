@@ -71,6 +71,34 @@ const ENCERRADO_DRAW: KnockoutMatch = {
   status: "encerrado",
 };
 
+// Decidido nos pênaltis (TASK-04) — empate no tempo, home avança nos pênaltis
+const ENCERRADO_PENALTIS: KnockoutMatch = {
+  id: "m78",
+  phase: "oitavas",
+  homeTeam: { name: "Brasil", code: "BRA", defined: true },
+  awayTeam: { name: "Argentina", code: "ARG", defined: true },
+  homeScore: 1,
+  awayScore: 1,
+  homeShootout: 4,
+  awayShootout: 3,
+  outcome: "penalties",
+  advanceSide: "home",
+  status: "encerrado",
+};
+
+// Decidido na prorrogação (TASK-04) — sem pênaltis
+const ENCERRADO_PRORROGACAO: KnockoutMatch = {
+  id: "m79",
+  phase: "oitavas",
+  homeTeam: { name: "Brasil", code: "BRA", defined: true },
+  awayTeam: { name: "Croácia", code: "CRO", defined: true },
+  homeScore: 2,
+  awayScore: 1,
+  outcome: "overtime",
+  advanceSide: "home",
+  status: "encerrado",
+};
+
 // ---------------------------------------------------------------------------
 // Testes existentes — T1–T10 (comportamento original preservado)
 // ---------------------------------------------------------------------------
@@ -244,6 +272,49 @@ describe("KnockoutMatchCard — badge vencedor (TASK-03)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Pênaltis e desfecho (TASK-04) — variante full
+// ---------------------------------------------------------------------------
+
+describe("KnockoutMatchCard — pênaltis e desfecho (full)", () => {
+  it("P1: exibe o placar com pênaltis entre parênteses ('1 (4)' / '1 (3)')", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} />);
+    expect(screen.getByText("1 (4)")).toBeTruthy();
+    expect(screen.getByText("1 (3)")).toBeTruthy();
+  });
+
+  it("P2: aria-label inclui o placar com pênaltis", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} />);
+    expect(screen.getByLabelText("Brasil 1 (4) x 1 (3) Argentina")).toBeTruthy();
+  });
+
+  it("P3: coroa o lado que AVANÇOU nos pênaltis apesar do empate no tempo normal", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} />);
+    expect(document.querySelector('[data-testid="winner-icon"]')).toBeTruthy();
+    const winnerSide = document.querySelector("[data-winner]");
+    expect(winnerSide?.textContent).toContain("Brasil");
+    expect(winnerSide?.textContent).not.toContain("Argentina");
+  });
+
+  it("P4: exibe a legenda 'Decidido nos pênaltis'", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} />);
+    expect(screen.getByText("Decidido nos pênaltis")).toBeTruthy();
+  });
+
+  it("P5: exibe a legenda 'Após prorrogação' quando outcome=overtime (sem pênaltis)", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PRORROGACAO} />);
+    expect(screen.getByText("Após prorrogação")).toBeTruthy();
+    // Sem pênaltis → placar simples, sem parênteses.
+    expect(screen.queryByText(/\(\d\)/)).toBeNull();
+  });
+
+  it("P6: jogo normal não exibe legenda de desfecho nem pênaltis", () => {
+    render(<KnockoutMatchCard match={ENCERRADO} />);
+    expect(screen.queryByText("Decidido nos pênaltis")).toBeNull();
+    expect(screen.queryByText("Após prorrogação")).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Variante compact (nó de árvore do chaveamento — PRD-16 TASK-04 v2)
 // ---------------------------------------------------------------------------
 
@@ -329,5 +400,22 @@ describe("KnockoutMatchCard — variant=compact", () => {
   it("C15: aria-label inclui placar parcial quando em-andamento", () => {
     render(<KnockoutMatchCard match={AO_VIVO} variant="compact" />);
     expect(screen.getByLabelText("Brasil 1 x 0 Croácia")).toBeTruthy();
+  });
+
+  it("C16: exibe pênaltis '(n)' no placar (compact)", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} variant="compact" />);
+    expect(screen.getByText("1 (4)")).toBeTruthy();
+    expect(screen.getByText("1 (3)")).toBeTruthy();
+  });
+
+  it("C17: aria-label inclui pênaltis (compact)", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} variant="compact" />);
+    expect(screen.getByLabelText("Brasil 1 (4) x 1 (3) Argentina")).toBeTruthy();
+  });
+
+  it("C18: coroa o lado que avançou nos pênaltis (data-winner, compact)", () => {
+    render(<KnockoutMatchCard match={ENCERRADO_PENALTIS} variant="compact" />);
+    const winner = document.querySelector("[data-winner]");
+    expect(winner).toBeTruthy();
   });
 });

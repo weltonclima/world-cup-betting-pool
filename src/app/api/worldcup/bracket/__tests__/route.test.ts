@@ -18,37 +18,35 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   getEffectiveMatchesMock,
   fetchAllTeamsMock,
+  fetchEspnBracketMapMock,
   readSnapshotMock,
   writeSnapshotMock,
   isFreshMock,
+  isCurrentVersionMock,
 } = vi.hoisted(() => ({
   getEffectiveMatchesMock: vi.fn(),
   fetchAllTeamsMock: vi.fn(),
+  fetchEspnBracketMapMock: vi.fn(),
   readSnapshotMock: vi.fn(),
   writeSnapshotMock: vi.fn(),
   isFreshMock: vi.fn(),
+  isCurrentVersionMock: vi.fn(),
 }));
 
 vi.mock("@/server/copaData/matchSource", () => ({
   getEffectiveMatches: getEffectiveMatchesMock,
 }));
 
-vi.mock("@/server/copaData", async () => {
-  const client = await vi.importActual<typeof import("@/server/copaData/client")>(
-    "@/server/copaData/client",
-  );
-  return {
-    fetchAllTeams: fetchAllTeamsMock,
-    CopaDataTimeoutError: client.CopaDataTimeoutError,
-    CopaDataFetchError: client.CopaDataFetchError,
-    CopaDataParseError: client.CopaDataParseError,
-  };
-});
+vi.mock("@/server/copaData", () => ({
+  fetchAllTeams: fetchAllTeamsMock,
+  fetchEspnBracketMap: fetchEspnBracketMapMock,
+}));
 
 vi.mock("@/server/worldcup/cache", () => ({
   readSnapshot: readSnapshotMock,
   writeSnapshot: writeSnapshotMock,
   isFresh: isFreshMock,
+  isCurrentVersion: isCurrentVersionMock,
 }));
 
 // Fix 3: mock after() para executar o callback sincronamente no ambiente de testes.
@@ -61,7 +59,7 @@ vi.mock("next/server", async (importOriginal) => {
 // server-only é importado pelos módulos de servidor
 vi.mock("server-only", () => ({}));
 
-import { CopaDataFetchError, CopaDataTimeoutError } from "@/server/copaData/client";
+import { EspnFetchError, EspnTimeoutError } from "@/server/copaData/espnClient";
 import { GET } from "@/app/api/worldcup/bracket/route";
 import type { BracketResponse } from "@/types/worldcup";
 
@@ -116,11 +114,17 @@ describe("GET /api/worldcup/bracket", () => {
   beforeEach(() => {
     getEffectiveMatchesMock.mockReset();
     fetchAllTeamsMock.mockReset();
+    fetchEspnBracketMapMock.mockReset();
     readSnapshotMock.mockReset();
     writeSnapshotMock.mockReset();
     isFreshMock.mockReset();
+    isCurrentVersionMock.mockReset();
+    // Default: snapshot é da versão atual (testes de cache fresco servem o snapshot).
+    isCurrentVersionMock.mockReturnValue(true);
     // Default: writeSnapshot resolve sem erro
     writeSnapshotMock.mockResolvedValue(undefined);
+    // Default: bracket map vazio (degradação — TASK-08 nunca lança)
+    fetchEspnBracketMapMock.mockResolvedValue(new Map());
   });
 
   afterEach(() => {
@@ -141,6 +145,22 @@ describe("GET /api/worldcup/bracket", () => {
 
     const body = (await response.json()) as BracketResponse;
     expect(body.roundOf16).toEqual(MOCK_BRACKET_PAYLOAD.roundOf16);
+  });
+
+  it("TASK-09: snapshot fresco de versão antiga é recomputado (cache busting)", async () => {
+    // Snapshot fresco no TTL mas de versão de derivação anterior (sem
+    // parentMatchIds) → isCurrentVersion=false → recomputa da fonte.
+    readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
+    isFreshMock.mockReturnValue(true);
+    isCurrentVersionMock.mockReturnValue(false);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
+    fetchAllTeamsMock.mockResolvedValue([]);
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    // Recomputou: bateu na fonte ESPN em vez de servir o snapshot velho.
+    expect(getEffectiveMatchesMock).toHaveBeenCalled();
   });
 
   it("body do snapshot NÃO contém hasLiveGroupMatch (contrato TASK-01)", async () => {
@@ -374,7 +394,7 @@ describe("GET /api/worldcup/bracket", () => {
   it("retorna snapshot stale com Cache-Control: no-store quando fetch falha e snap existe", async () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(false);
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
 
@@ -387,19 +407,19 @@ describe("GET /api/worldcup/bracket", () => {
 
   // ── Fetch falha + sem snapshot ──────────────────────────────────────────────
 
-  it("retorna 502 quando fetch lança CopaDataFetchError e não há snapshot", async () => {
+  it("retorna 502 quando fetch lança EspnFetchError e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataFetchError(503));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
     const response = await GET();
     expect(response.status).toBe(502);
   });
 
-  it("retorna 504 quando fetch lança CopaDataTimeoutError e não há snapshot", async () => {
+  it("retorna 504 quando fetch lança EspnTimeoutError e não há snapshot", async () => {
     readSnapshotMock.mockResolvedValue(null);
     isFreshMock.mockReturnValue(false);
-    getEffectiveMatchesMock.mockRejectedValue(new CopaDataTimeoutError(10000));
+    getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
     const response = await GET();
     expect(response.status).toBe(504);
@@ -412,6 +432,48 @@ describe("GET /api/worldcup/bracket", () => {
 
     const response = await GET();
     expect(response.status).toBe(500);
+  });
+
+  // ── TASK-08: integração com fetchEspnBracketMap ─────────────────────────────
+
+  it("TASK-08: chama fetchEspnBracketMap durante recomputo", async () => {
+    readSnapshotMock.mockResolvedValue(null);
+    isFreshMock.mockReturnValue(false);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
+    fetchAllTeamsMock.mockResolvedValue([]);
+
+    await GET();
+
+    expect(fetchEspnBracketMapMock).toHaveBeenCalledOnce();
+  });
+
+  it("TASK-08: parentMatchIds flui ao payload quando o mapa resolve os pais", async () => {
+    // Oitava cujos dois lados são placeholders com bracketSlot no R32.
+    const r16WithSlots = {
+      ...MOCK_KNOCKOUT_MATCH,
+      id: "m89",
+      homeTeamId: "W73",
+      awayTeamId: "W75",
+      stage: "oitavas" as const,
+      homeBracketSlot: { round: "round-of-32", game: 1 },
+      awayBracketSlot: { round: "round-of-32", game: 3 },
+    };
+    readSnapshotMock.mockResolvedValue(null);
+    isFreshMock.mockReturnValue(false);
+    getEffectiveMatchesMock.mockResolvedValue([r16WithSlots]);
+    fetchAllTeamsMock.mockResolvedValue([]);
+    fetchEspnBracketMapMock.mockResolvedValue(
+      new Map([
+        ["m73", { round: "round-of-32", slotInRound: 1 }],
+        ["m75", { round: "round-of-32", slotInRound: 3 }],
+      ]),
+    );
+
+    const response = await GET();
+    const body = (await response.json()) as BracketResponse;
+
+    expect(response.status).toBe(200);
+    expect(body.roundOf16[0]?.parentMatchIds).toEqual(["m73", "m75"]);
   });
 
   // ── writeSnapshot lança → 200 (best-effort) ─────────────────────────────────
