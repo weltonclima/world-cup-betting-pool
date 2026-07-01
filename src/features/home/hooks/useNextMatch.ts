@@ -25,5 +25,7 @@ export function useNextMatch(): UseQueryResult<MatchWithId | null> {
     queryKey: homeKeys.nextMatch(),
     queryFn: getNextScheduledMatch,
     staleTime: STALE_TIME.jogoDia,
+    // Voltar à home (remount) revalida sempre a próxima partida, ignorando staleTime.
+    refetchOnMount: "always",
   });
 }

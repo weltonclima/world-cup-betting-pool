@@ -17,5 +17,7 @@ export function useRanking(
   return useQuery({
     queryKey: rankingKeys.scope(scope),
     queryFn: () => getRankingByScope(scope),
+    // Voltar à tela de ranking (remount) revalida sempre, ignorando staleTime.
+    refetchOnMount: "always",
   });
 }
