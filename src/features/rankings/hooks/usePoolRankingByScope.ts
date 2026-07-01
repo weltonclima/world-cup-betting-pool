@@ -33,5 +33,7 @@ export function usePoolRankingByScope(
     queryKey: rankingKeys.poolScope(groupId ?? "none", scope),
     queryFn: () => getPoolRankingByScope(scope),
     enabled: options?.enabled ?? true,
+    // Voltar à tela de ranking (remount) revalida sempre, ignorando staleTime.
+    refetchOnMount: "always",
   });
 }

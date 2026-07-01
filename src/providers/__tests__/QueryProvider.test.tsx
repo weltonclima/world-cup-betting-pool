@@ -18,6 +18,13 @@ describe("QueryProvider", () => {
     expect(options.queries?.gcTime).toBe(GC_TIME);
   });
 
+  it("revalida sempre ao retornar o foco à janela (refetchOnWindowFocus)", () => {
+    const client = makeQueryClient();
+    const options = client.getDefaultOptions();
+
+    expect(options.queries?.refetchOnWindowFocus).toBe("always");
+  });
+
   it("fornece um QueryClient com as opções padrão do projeto", () => {
     let captured: QueryClient | undefined;
 
@@ -36,6 +43,7 @@ describe("QueryProvider", () => {
     const options = captured?.getDefaultOptions();
     expect(options?.queries?.staleTime).toBe(STALE_TIME);
     expect(options?.queries?.gcTime).toBe(GC_TIME);
+    expect(options?.queries?.refetchOnWindowFocus).toBe("always");
   });
 
   it("mantém a mesma instância de QueryClient entre re-renders", () => {

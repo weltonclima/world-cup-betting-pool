@@ -30,5 +30,7 @@ export function useMatches(): UseQueryResult<MatchWithId[]> {
     queryKey: matchesKeys.list(),
     queryFn: listMatches,
     staleTime: STALE_TIME.jogoDia,
+    // Voltar à tela de jogos (remount) revalida sempre, ignorando staleTime.
+    refetchOnMount: "always",
   });
 }
