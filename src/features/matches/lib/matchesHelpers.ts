@@ -249,24 +249,34 @@ export function searchMatchesByCountry(
  * 1. globalLock === true → "bloqueado"
  * 2. now >= kickoffAt → "bloqueado"
  * 3. match.status !== "scheduled" → "bloqueado"
- * 4. predictions contém p.matchId === match.id → "enviado"
+ * 4. usuário tem palpite para match.id → "enviado"
  * 5. caso contrário → "pendente"
  *
+ * Perf (TASK-04 perf-hardening): `predictions` aceita um `ReadonlySet<matchId>`
+ * além de `Prediction[]`. Chamado N vezes por render em `useMatchesList`, o ramo
+ * array (`.some`) tornava a derivação O(n²); passando um `Set` pré-construído, o
+ * lookup vira O(1) → O(n) total. `useMatchDetail` (1 partida) e os testes seguem
+ * passando array — retrocompatível.
+ *
  * @param match       - Partida alvo.
- * @param predictions - Lista de palpites do usuário (todos os matchIds).
+ * @param predictions - Palpites do usuário: array OU Set de matchIds já palpitados.
  * @param now         - Data de referência (injetada — nunca new Date() interno).
  * @param globalLock  - Trava global do sistema (default false).
  */
 export function deriveMatchPredictionStatus(
   match: MatchWithId,
-  predictions: Prediction[],
+  predictions: Prediction[] | ReadonlySet<string>,
   now: Date,
   globalLock = false,
 ): MatchPredictionStatus {
   if (globalLock) return "bloqueado";
   if (now.getTime() >= new Date(match.kickoffAt).getTime()) return "bloqueado";
   if (match.status !== "scheduled") return "bloqueado";
-  if (predictions.some((p) => p.matchId === match.id)) return "enviado";
+  const hasPrediction =
+    predictions instanceof Set
+      ? predictions.has(match.id)
+      : (predictions as Prediction[]).some((p) => p.matchId === match.id);
+  if (hasPrediction) return "enviado";
   return "pendente";
 }
 

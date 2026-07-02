@@ -159,8 +159,20 @@ export interface HomeDashboardData {
   /** Fase ativa da Copa para o banner (PRD-16 / TASK-04); null sem jogos. */
   currentStage: Stage | null;
   notices: SystemNotice[];
-  /** true se qualquer query obrigatória ainda estiver carregando. */
+  /** true se qualquer query obrigatória ainda estiver carregando (agregado). */
   isLoading: boolean;
+  /**
+   * Loading granular do Hero (TASK-10 perf-hardening): ranking + statistics +
+   * pool_stats. Permite render progressivo — o Hero pode esqueletonizar enquanto
+   * os cards de matches já renderizam.
+   */
+  heroLoading: boolean;
+  /**
+   * Loading granular dos cards de matches (TASK-10 perf-hardening): lista de jogos
+   * (matches/teams/predictions) + settings. Governa NextMatch/OpenMatches/
+   * LastResults/RaioX/Banner/Header.
+   */
+  matchesLoading: boolean;
   /** true se qualquer query obrigatória falhou. */
   isError: boolean;
   /** Chama refetch em todas as queries. */
@@ -301,6 +313,48 @@ export function derivePredictionBreakdown(
 }
 
 // ---------------------------------------------------------------------------
+// 5b. deriveNextMatch / deriveRecentResults (TASK-01 perf-hardening)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deriva o PRÓXIMO jogo a acontecer a partir do flatList de useMatchesList,
+ * sem disparar `GET /api/matches` extra (antes: `useNextMatch` → `getNextScheduledMatch`).
+ *
+ * Espelha `getNextScheduledMatch`: `status === "scheduled"` E kickoff no futuro,
+ * ordenado por kickoff ascendente — retorna o mais próximo. `now` injetado
+ * (função pura, sem `new Date()` interno).
+ *
+ * @param matches - flatList de MatchListItem (mesma fonte de openMatches/currentStage).
+ * @param now     - Instante de referência.
+ * @returns O MatchListItem do próximo jogo, ou null se não houver agendado futuro.
+ */
+export function deriveNextMatch(matches: MatchListItem[], now: Date): MatchListItem | null {
+  const nowMs = now.getTime();
+  const upcoming = matches
+    .filter((m) => m.status === "scheduled" && new Date(m.kickoffAt).getTime() > nowMs)
+    .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
+  return upcoming[0] ?? null;
+}
+
+/**
+ * Deriva os últimos jogos finalizados a partir do flatList de useMatchesList,
+ * sem rede extra (antes: `useRecentResults` → `getRecentFinishedMatches`).
+ *
+ * Espelha `getRecentFinishedMatches`: `status === "finished"`, ordenados por
+ * kickoff DESCendente (mais recentes primeiro), limitados a 5. Comparação
+ * lexicográfica de ISO 8601 == cronológica (mesma base de `getRecentFinishedMatches`).
+ *
+ * @param matches - flatList de MatchListItem.
+ * @returns Até 5 MatchListItem finalizados, do mais recente ao mais antigo.
+ */
+export function deriveRecentResults(matches: MatchListItem[]): MatchListItem[] {
+  return matches
+    .filter((m) => m.status === "finished")
+    .sort((a, b) => b.kickoffAt.localeCompare(a.kickoffAt))
+    .slice(0, 5);
+}
+
+// ---------------------------------------------------------------------------
 // 6. deriveNotices
 // ---------------------------------------------------------------------------
 
@@ -319,7 +373,9 @@ export function derivePredictionBreakdown(
  */
 export function deriveNotices(
   settings: SystemSettings | null | undefined,
-  nextMatch: MatchWithId | null | undefined,
+  // Shape mínimo: só `kickoffAt` é lido. Aceita MatchWithId e MatchListItem
+  // (TASK-01 perf-hardening: o próximo jogo agora vem do flatList).
+  nextMatch: { kickoffAt: string } | null | undefined,
   now: Date,
 ): SystemNotice[] {
   const notices: SystemNotice[] = [];

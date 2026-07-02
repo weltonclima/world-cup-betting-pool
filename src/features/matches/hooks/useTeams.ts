@@ -21,10 +21,9 @@ import { matchesKeys } from "./matchesKeys";
  * só mudam antes da Copa / sob demanda, então não faz sentido revalidar a cada
  * 30min do default global.
  *
- * NOTA de coexistência: a Home tem seu próprio `useTeams` (`@/features/home/hooks`)
- * com query key `homeKeys.teams()` e o mesmo `staleTime`. Os caches são separados
- * por query key (`["home","teams"]` vs `["matches","teams"]`) de propósito — cada
- * feature controla a sua invalidação. A futura tela de Jogos deve usar ESTE hook.
+ * Fonte CANÔNICA de teams (TASK-02 perf-hardening): `@/features/home/hooks/useTeams`
+ * re-exporta ESTE hook, então Home, tela de Jogos e `GroupManualPredictions`
+ * compartilham a mesma query key (`["matches","teams"]`) → 1 único fetch.
  */
 export function useTeams(): UseQueryResult<TeamWithId[]> {
   return useQuery({

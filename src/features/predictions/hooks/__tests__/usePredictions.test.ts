@@ -113,21 +113,38 @@ describe("usePredictions — enabled (uid)", () => {
   });
 });
 
-describe("usePredictions — queryKey", () => {
-  it("usa predictionsKeys.all() como queryKey → ['predictions']", async () => {
+describe("usePredictions — queryKey (B2: isolada por uid)", () => {
+  it("usa predictionsKeys.byUid(uid) como queryKey → ['predictions', uid]", async () => {
     const { queryClient, wrapper } = createWrapper();
     mockListPredictionsByUid.mockResolvedValueOnce([makePrediction("m1")]);
 
     renderHook(() => usePredictions("user-01"), { wrapper });
 
     await waitFor(() =>
-      queryClient.getQueryState(predictionsKeys.all()) !== undefined,
+      queryClient.getQueryState(predictionsKeys.byUid("user-01")) !== undefined,
     );
 
-    // Confirma que a chave correta está no cache
-    expect(predictionsKeys.all()).toEqual(["predictions"]);
-    const state = queryClient.getQueryState(predictionsKeys.all());
+    // Confirma que a chave inclui o uid (isolamento de cache por conta)
+    expect(predictionsKeys.byUid("user-01")).toEqual(["predictions", "user-01"]);
+    const state = queryClient.getQueryState(predictionsKeys.byUid("user-01"));
     expect(state).toBeDefined();
+    // A chave antiga sem uid NÃO deve existir (evita vazamento cross-conta)
+    expect(queryClient.getQueryState(["predictions"])).toBeUndefined();
+  });
+
+  it("uids distintos → estados de cache distintos (sem vazamento)", async () => {
+    const { queryClient, wrapper } = createWrapper();
+    mockListPredictionsByUid.mockResolvedValue([makePrediction("m1")]);
+
+    renderHook(() => usePredictions("user-A"), { wrapper });
+    renderHook(() => usePredictions("user-B"), { wrapper });
+
+    await waitFor(() =>
+      queryClient.getQueryState(predictionsKeys.byUid("user-B")) !== undefined,
+    );
+
+    expect(queryClient.getQueryState(predictionsKeys.byUid("user-A"))).toBeDefined();
+    expect(queryClient.getQueryState(predictionsKeys.byUid("user-B"))).toBeDefined();
   });
 });
 

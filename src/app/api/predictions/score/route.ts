@@ -6,7 +6,7 @@ import type { Firestore } from "firebase-admin/firestore";
 
 import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
-import { predictionSchema } from "@/schemas";
+import { isSuperAdminRole, predictionSchema, roleSchema } from "@/schemas";
 import {
   scorePrediction,
   matchResultFingerprint,
@@ -155,8 +155,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
     }
 
+    // S3 perf-hardening: exige status approved E super_admin (canônico ou legado
+    // `admin`, via helper dual-compat). Antes checava `role !== "admin"` cru — um
+    // admin `blocked` disparava, e um `super_admin` canônico era rejeitado.
     const userData = userSnap.data();
-    if (userData?.role !== "admin") {
+    const role = roleSchema.safeParse(userData?.["role"]);
+    const isSuper = role.success && isSuperAdminRole(role.data);
+    if (userData?.["status"] !== "approved" || !isSuper) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
 

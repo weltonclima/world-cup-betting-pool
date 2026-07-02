@@ -510,6 +510,43 @@ describe("deriveMatchPredictionStatus", () => {
     // globalLock omitido — deve usar default false
     expect(deriveMatchPredictionStatus(match, [], now)).toBe("pendente");
   });
+
+  // --- TASK-04 perf-hardening: aceita Set<matchId> (lookup O(1)) ---
+  describe("com Set<matchId> (caminho O(1))", () => {
+    it("Set contém match.id + scheduled + now < kickoffAt → 'enviado'", () => {
+      const match = makeMatch("scheduled");
+      const now = new Date(kickoffMs - 3_600_000);
+      const set = new Set(["match-01"]);
+      expect(deriveMatchPredictionStatus(match, set, now)).toBe("enviado");
+    });
+
+    it("Set sem match.id → 'pendente'", () => {
+      const match = makeMatch("scheduled");
+      const now = new Date(kickoffMs - 3_600_000);
+      const set = new Set(["match-99"]);
+      expect(deriveMatchPredictionStatus(match, set, now)).toBe("pendente");
+    });
+
+    it("Set vazio → 'pendente'", () => {
+      const match = makeMatch("scheduled");
+      const now = new Date(kickoffMs - 3_600_000);
+      expect(deriveMatchPredictionStatus(match, new Set(), now)).toBe("pendente");
+    });
+
+    it("globalLock prevalece mesmo com Set contendo o id → 'bloqueado'", () => {
+      const match = makeMatch("scheduled");
+      const now = new Date(kickoffMs - 60_000);
+      expect(deriveMatchPredictionStatus(match, new Set(["match-01"]), now, true)).toBe(
+        "bloqueado",
+      );
+    });
+
+    it("status finished prevalece sobre Set contendo o id → 'bloqueado'", () => {
+      const match = makeMatch("finished");
+      const now = new Date(kickoffMs - 60_000);
+      expect(deriveMatchPredictionStatus(match, new Set(["match-01"]), now)).toBe("bloqueado");
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

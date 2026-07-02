@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { useAuth } from "@/hooks/useAuth";
 import { getPoolRankingByScope } from "@/services";
@@ -33,5 +33,11 @@ export function usePoolRankingByScope(
     queryKey: rankingKeys.poolScope(groupId ?? "none", scope),
     queryFn: () => getPoolRankingByScope(scope),
     enabled: options?.enabled ?? true,
+    // Voltar à tela de ranking (remount) revalida sempre, ignorando staleTime.
+    refetchOnMount: "always",
+    // Stale-while-revalidate (TASK-11 perf-hardening): ao trocar de aba de fase
+    // (Grupos↔Eliminatórias), a nova key não tem cache → esqueletonizaria. Manter
+    // os dados da fase anterior durante a revalidação evita o flash entre abas.
+    placeholderData: keepPreviousData,
   });
 }

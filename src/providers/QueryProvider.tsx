@@ -17,6 +17,9 @@ export function makeQueryClient(): QueryClient {
       queries: {
         staleTime: STALE_TIME,
         gcTime: GC_TIME,
+        // Ao retornar o foco à aba/janela, revalida sempre (ignora staleTime):
+        // usuário que troca de aba e volta vê dados atualizados sem refresh manual.
+        refetchOnWindowFocus: "always",
       },
     },
   });

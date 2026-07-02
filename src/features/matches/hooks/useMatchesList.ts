@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
 import type { MatchStatus, MatchWithId, Stage } from "@/types";
@@ -106,58 +106,69 @@ export function useMatchesList(): MatchesListData {
     void predictionsQuery.refetch();
   }, [matchesQuery.refetch, teamsQuery.refetch, predictionsQuery.refetch]);
 
-  // 5. Guard: uid null → estado neutro
-  if (uid === null) {
-    return { groups: [], flatList: [], isLoading, isError, refetch };
-  }
+  // 5. View-model memoizado (TASK-04 perf-hardening).
+  // Recomputa SÓ quando os dados mudam (identidade de referência do React Query
+  // é estável entre renders sem refetch). Evita refazer joins + groupMatchesByDay
+  // (sort + date-fns format por item) a cada tecla/render do MatchList/Home.
+  // Deps nas `.data` cruas (não em `?? []`, que criaria novo array por render).
+  const { groups, flatList } = useMemo(() => {
+    // Guard: uid null → estado neutro.
+    if (uid === null) {
+      return { groups: [] as MatchListItemDaySection[], flatList: [] as MatchListItem[] };
+    }
 
-  // 6. Dados brutos (podem ser undefined enquanto carregam)
-  const matches     = matchesQuery.data ?? [];
-  const teams       = teamsQuery.data ?? [];
-  const predictions = predictionsQuery.data ?? [];
+    // Dados brutos (podem ser undefined enquanto carregam).
+    const matches     = matchesQuery.data ?? [];
+    const teams       = teamsQuery.data ?? [];
+    const predictions = predictionsQuery.data ?? [];
 
-  // 7. Cache de teams + palpites (lookup O(1) por matchId)
-  const teamMap = buildTeamMap(teams);
-  const predMap = new Map(predictions.map((p) => [p.matchId, p]));
+    // Caches O(1): teams por id, palpite por matchId, e Set de matchIds palpitados
+    // (este último para deriveMatchPredictionStatus O(1) — evita o antigo O(n²)).
+    const teamMap = buildTeamMap(teams);
+    const predMap = new Map(predictions.map((p) => [p.matchId, p]));
+    const predictedIds = new Set(predictions.map((p) => p.matchId));
 
-  // 8. now — capturado uma vez no render
-  const now = new Date();
+    // now capturado uma vez por recompute do view-model (não por render).
+    const now = new Date();
 
-  // 9. flatList — join + derivação por partida
-  const flatList: MatchListItem[] = matches.map((match) => {
-    const pred = predMap.get(match.id);
-    return {
-      id: match.id,
-      kickoffAt: match.kickoffAt,
-      stage: match.stage,
-      round: match.round,
-      groupId: match.groupId,
-      venue: match.venue,
-      status: match.status,
-      homeScore: match.homeScore,
-      awayScore: match.awayScore,
-      homeTeamId: match.homeTeamId,
-      awayTeamId: match.awayTeamId,
-      homeTeam: resolveTeam(match.homeTeamId, teamMap),
-      awayTeam: resolveTeam(match.awayTeamId, teamMap),
-      predictionStatus: deriveMatchPredictionStatus(match, predictions, now),
-      userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
-    };
-  });
+    // flatList — join + derivação por partida.
+    const flat: MatchListItem[] = matches.map((match) => {
+      const pred = predMap.get(match.id);
+      return {
+        id: match.id,
+        kickoffAt: match.kickoffAt,
+        stage: match.stage,
+        round: match.round,
+        groupId: match.groupId,
+        venue: match.venue,
+        status: match.status,
+        homeScore: match.homeScore,
+        awayScore: match.awayScore,
+        homeTeamId: match.homeTeamId,
+        awayTeamId: match.awayTeamId,
+        homeTeam: resolveTeam(match.homeTeamId, teamMap),
+        awayTeam: resolveTeam(match.awayTeamId, teamMap),
+        predictionStatus: deriveMatchPredictionStatus(match, predictedIds, now),
+        userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
+      };
+    });
 
-  // 10. groups — agrupar os MatchListItem por dia
-  // groupMatchesByDay opera sobre MatchWithId[]; reutilizamos as matches brutas para agrupar
-  // e depois mapeamos cada seção para MatchListItem (via id lookup no flatList).
-  const flatListById = new Map(flatList.map((item) => [item.id, item]));
-  const rawSections = groupMatchesByDay(matches, now);
-  const groups: MatchListItemDaySection[] = rawSections.map((section) => ({
-    label: section.label,
-    date: section.date,
-    matches: section.matches.flatMap((m) => {
-      const item = flatListById.get(m.id);
-      return item ? [item] : [];
-    }),
-  }));
+    // groups — agrupar por dia. groupMatchesByDay opera sobre MatchWithId[];
+    // reutilizamos as matches brutas para agrupar e mapeamos cada seção para
+    // MatchListItem (via id lookup no flatList).
+    const flatById = new Map(flat.map((item) => [item.id, item]));
+    const rawSections = groupMatchesByDay(matches, now);
+    const grouped: MatchListItemDaySection[] = rawSections.map((section) => ({
+      label: section.label,
+      date: section.date,
+      matches: section.matches.flatMap((m) => {
+        const item = flatById.get(m.id);
+        return item ? [item] : [];
+      }),
+    }));
+
+    return { groups: grouped, flatList: flat };
+  }, [uid, matchesQuery.data, teamsQuery.data, predictionsQuery.data]);
 
   return { groups, flatList, isLoading, isError, refetch };
 }

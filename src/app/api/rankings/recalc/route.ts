@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
+import { isSuperAdminRole, roleSchema } from "@/schemas";
 import { recalcRankings } from "@/server/rankings/recalc";
 import { notifyRankingUps } from "@/server/notifications";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!userSnap.exists) {
       return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
     }
-    if (userSnap.data()?.role !== "admin") {
+    // S3 perf-hardening: status approved + super_admin (canônico ou legado `admin`).
+    const userData = userSnap.data();
+    const role = roleSchema.safeParse(userData?.["role"]);
+    const isSuper = role.success && isSuperAdminRole(role.data);
+    if (userData?.["status"] !== "approved" || !isSuper) {
       return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
     }
     authorized = true;

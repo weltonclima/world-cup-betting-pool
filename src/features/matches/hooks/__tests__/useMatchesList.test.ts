@@ -369,3 +369,22 @@ describe("useMatchesList — userPrediction (TASK-01 matches-tabs-prediction)", 
     expect(byId.get("m2")?.userPrediction).toEqual({ homeScore: 0, awayScore: 3 });
   });
 });
+
+describe("useMatchesList — identidade estável do view-model (TASK-04 perf-hardening)", () => {
+  it("flatList e groups mantêm identidade referencial em re-render sem mudança de dados", () => {
+    setupMocks({
+      matchesData: [makeScheduledMatch("m1"), makeScheduledMatch("m2")],
+      predictionsData: [makePrediction("m1")],
+    });
+    const { result, rerender } = renderHook(() => useMatchesList());
+
+    const flatBefore = result.current.flatList;
+    const groupsBefore = result.current.groups;
+
+    // Re-render sem alterar os mocks (mesmas referências de data do React Query).
+    rerender();
+
+    expect(result.current.flatList).toBe(flatBefore);
+    expect(result.current.groups).toBe(groupsBefore);
+  });
+});

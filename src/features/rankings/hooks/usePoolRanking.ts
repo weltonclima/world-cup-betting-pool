@@ -20,5 +20,7 @@ export function usePoolRanking(
     queryKey: rankingKeys.pool(groupId ?? "none"),
     queryFn: getPoolRanking,
     enabled: Boolean(groupId),
+    // Voltar à tela de ranking (remount) revalida sempre, ignorando staleTime.
+    refetchOnMount: "always",
   });
 }
