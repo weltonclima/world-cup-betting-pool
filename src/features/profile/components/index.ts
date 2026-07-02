@@ -8,3 +8,5 @@ export { SettingsMenu } from "./SettingsMenu";
 export { EditProfileForm } from "./EditProfileForm";
 export { AvatarCropModal } from "./AvatarCropModal";
 export { LogoutConfirm } from "./LogoutConfirm";
+export { ThemeSelector } from "./ThemeSelector";
+export { ThemeSync } from "./ThemeSync";

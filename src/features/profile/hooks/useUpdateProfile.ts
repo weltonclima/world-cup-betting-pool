@@ -9,10 +9,12 @@ import {
 import { updateProfile } from "@/services/users";
 import { rankingKeys } from "@/features/rankings/hooks/rankingKeys";
 import { useAuth } from "@/hooks/useAuth";
+import type { ThemePreference } from "@/types";
 
 export interface UpdateProfileVars {
   nickname?: string;
   avatarUrl?: string;
+  themePreference?: ThemePreference;
 }
 
 /**

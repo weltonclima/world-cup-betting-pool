@@ -6,7 +6,7 @@
 - **Next.js 15** (App Router) + **React 19**, **TypeScript strict** (no `any`).
 - **SSR runtime** — NOT static export. Route Handlers (`src/app/api/*`) and `middleware.ts` need a server. (`firebase.json` `hosting.public: "out"` is stale legacy; ignore it.)
 - **Deploy:** Firebase App Hosting (Cloud Run). `apphosting.yaml`.
-- UI: Tailwind v4, shadcn + `@base-ui/react`, lucide, recharts, motion, sonner. Forms: react-hook-form + Zod resolver. Data: `@tanstack/react-query` + `react-table`.
+- UI: Tailwind v4, shadcn + `@base-ui/react`, lucide, recharts, motion, sonner. Forms: react-hook-form + Zod resolver. Data: `@tanstack/react-query` + `react-table`. Theme: `next-themes` v0.4.6 (installed; **ThemeProvider not yet wired** — dark CSS vars exist in `globals.css` + `.dark` class but `ThemeProvider` missing from `src/providers/index.tsx`). `SettingsMenu.tsx` has placeholder "Tema do Aplicativo" item (disabled, subtitle="Claro") ready to be activated.
 
 ## Layering (top → bottom)
 1. **Routes** `src/app/(app)/*`, `src/app/(auth)/*` — pages, route groups. `(app)` = authed area, `(auth)` = login/signup/reset. App in pt-BR.

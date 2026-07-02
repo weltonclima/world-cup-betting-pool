@@ -299,7 +299,7 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
         </p>
       ) : null}
       {saved && !dirty ? (
-        <p role="status" className="text-sm text-emerald-600">
+        <p role="status" className="text-sm text-success">
           Alterações salvas.
         </p>
       ) : null}

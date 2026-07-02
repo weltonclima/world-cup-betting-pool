@@ -85,7 +85,7 @@ function PendingCard({ pool }: { pool: AdminPoolRow }): JSX.Element {
           disabled={busy}
           aria-busy={busy}
           onClick={() => update.mutate({ id: pool.id, status: "active" })}
-          className="size-11 border-emerald-600/40 text-emerald-600 hover:bg-emerald-600/10"
+          className="size-11 border-success/40 text-success hover:bg-success/10"
         >
           {busy ? (
             <LoaderCircle size={18} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />

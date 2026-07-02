@@ -281,6 +281,9 @@ export function GeneralRanking() {
 // Medalha por slot do pódio (0=ouro,1=prata,2=bronze). Ouro/prata/bronze não
 // existem no tema → cores diretas (convenção universal de pódio). O número textual
 // ("1º") garante a11y independente de cor (color-not-only).
+// dark-theme TASK-04: mantido de propósito. Cada slot é um par bg+texto
+// AUTOCONTIDO (fundo claro + texto escuro) → contraste alto e idêntico em light
+// e dark; o badge traz o próprio fundo, não depende da superfície do tema.
 const MEDAL_CLASS = [
   "bg-amber-400 text-amber-950", // 1º
   "bg-zinc-300 text-zinc-800", // 2º

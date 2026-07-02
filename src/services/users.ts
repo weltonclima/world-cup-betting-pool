@@ -9,7 +9,7 @@ import {
 
 import { firestore } from "@/firebase";
 import { userSchema } from "@/schemas";
-import type { User, UserStatus } from "@/types";
+import type { ThemePreference, User, UserStatus } from "@/types";
 
 /**
  * Camada de serviço de usuários (PRD-01.2, TASK-02).
@@ -69,21 +69,32 @@ export async function updateUserStatus(
 }
 
 /**
- * Atualiza campos editáveis do PRÓPRIO perfil (PRD-06, decisão D-A2): apelido e
- * avatar (data URL base64). Grava SOMENTE `nickname`/`avatarUrl` informados +
- * `updatedAt` — nunca `role`/`status`/`email`/`uid` (alinhado à Security Rule
- * que libera o dono a atualizar o doc desde que role/status não mudem).
+ * Atualiza campos editáveis do PRÓPRIO perfil (PRD-06, decisão D-A2): apelido,
+ * avatar (data URL base64) e preferência de tema (dark theme, TASK-01). Grava
+ * SOMENTE os campos informados + `updatedAt` — nunca `role`/`status`/`email`/
+ * `uid` (alinhado à Security Rule que libera o dono a atualizar o doc desde que
+ * role/status não mudem).
  *
  * `avatarUrl` é uma data URL JPEG comprimida no client (`imageToDataUrl`) — sem
  * Firebase Storage (compat. Spark). O caller deve garantir o teto de tamanho
  * (limite de 1MB do doc Firestore).
+ *
+ * `themePreference` ("light"|"dark"|"system") persiste a escolha de tema para
+ * valer cross-device.
  */
 export async function updateProfile(
   uid: string,
-  fields: { nickname?: string; avatarUrl?: string },
+  fields: {
+    nickname?: string;
+    avatarUrl?: string;
+    themePreference?: ThemePreference;
+  },
 ): Promise<void> {
   const patch: Record<string, string> = { updatedAt: new Date().toISOString() };
   if (fields.nickname !== undefined) patch.nickname = fields.nickname;
   if (fields.avatarUrl !== undefined) patch.avatarUrl = fields.avatarUrl;
+  if (fields.themePreference !== undefined) {
+    patch.themePreference = fields.themePreference;
+  }
   await updateDoc(doc(firestore, "users", uid), patch);
 }

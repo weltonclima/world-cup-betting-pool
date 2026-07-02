@@ -40,6 +40,11 @@ export function isParticipantRole(role: RoleValue): boolean {
 
 export const userStatusSchema = z.enum(["pending", "approved", "blocked"]);
 
+// Preferência de tema da UI (dark theme). Persistida no perfil (`users/{uid}`)
+// para valer cross-device. "system" = segue o SO (prefers-color-scheme). Slug
+// inglês estável (rótulos pt-BR ficam na UI). Ausência no doc ≈ "light" (default).
+export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
+
 export const stageSchema = z.enum([
   "grupos",
   "dezesseis-avos", // 16 avos de final — formato Copa 2026 (48 seleções); API-Football: "Round of 32"

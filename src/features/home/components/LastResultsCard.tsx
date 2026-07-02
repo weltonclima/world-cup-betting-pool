@@ -50,6 +50,10 @@ function ResultBadge({
     );
   }
 
+  // dark-theme TASK-04: 10 pts = win, 0 = loss (tokens). O estado +5 ("quase
+  // vitória") precisa de um matiz DISTINTO de win/loss — sem token semântico p/
+  // lime; paleta crua com variante dark (tint /20 + lime-700/lime-400) já legível
+  // nos dois temas. Exceção documentada, alinhada a PREDICTION_DISPLAY_STATUS_COLOR.
   const color =
     points === 10
       ? "bg-win-bg text-win"

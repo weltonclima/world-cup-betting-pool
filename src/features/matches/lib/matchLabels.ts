@@ -21,13 +21,14 @@ export const PREDICTION_STATUS_LABEL: Record<MatchPredictionStatus, string> = {
 
 /**
  * Classes Tailwind para badge de status de palpite.
- * Semântica: enviado = verde, pendente = âmbar, bloqueado = cinza.
- * Inclui variantes dark (contraste WCAG AA no tema escuro — contrato screen §3.2-3.4).
+ * Semântica: enviado = sucesso, pendente = alerta, bloqueado = neutro.
+ * Tokens semânticos (dark-theme TASK-04): pares `bg-<estado>-bg`/`text-<estado>`
+ * garantem contraste WCAG AA em light e dark sem paleta crua.
  */
 export const PREDICTION_STATUS_COLOR: Record<MatchPredictionStatus, string> = {
-  enviado: "bg-green-500/20 text-green-700 dark:text-green-400",
-  pendente: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
-  bloqueado: "bg-gray-500/20 text-gray-600 dark:text-gray-400",
+  enviado: "bg-success-bg text-success",
+  pendente: "bg-warning-bg text-warning",
+  bloqueado: "bg-muted text-muted-foreground",
 };
 
 // Todos os valores válidos de MatchStatus (espelha matchStatusSchema do shared.ts).
@@ -49,13 +50,14 @@ export const GAME_STATUS_LABEL: Record<MatchStatus, string> = Object.fromEntries
 
 /**
  * Classes Tailwind para badge de status do jogo.
- * Semântica: scheduled = azul, live = verde, finished/postponed/canceled = cinza.
- * Inclui variantes dark (contraste WCAG AA no tema escuro — contrato screen §3.2-3.4).
+ * Semântica: scheduled = info, live = sucesso, finished/postponed/canceled = neutro.
+ * Tokens semânticos (dark-theme TASK-04): pares `bg-<estado>-bg`/`text-<estado>`
+ * garantem contraste WCAG AA em light e dark sem paleta crua.
  */
 export const GAME_STATUS_COLOR: Record<MatchStatus, string> = {
-  scheduled: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
-  live: "bg-green-500/20 text-green-700 dark:text-green-400",
-  finished: "bg-gray-500/20 text-gray-600 dark:text-gray-400",
-  postponed: "bg-gray-500/20 text-gray-600 dark:text-gray-400",
-  canceled: "bg-gray-500/20 text-gray-600 dark:text-gray-400",
+  scheduled: "bg-info-bg text-info",
+  live: "bg-success-bg text-success",
+  finished: "bg-muted text-muted-foreground",
+  postponed: "bg-muted text-muted-foreground",
+  canceled: "bg-muted text-muted-foreground",
 };

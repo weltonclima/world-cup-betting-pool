@@ -22,12 +22,22 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1f1f1f",
+  // dark-theme TASK-04: barra do navegador (PWA) acompanha o esquema do SO —
+  // claro (#fff, = --background light) ou escuro (#1f1f1f, ≈ --background dark),
+  // em vez de forçar sempre o tom escuro.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1f1f1f" },
+  ],
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className={cn("font-sans", geist.variable)}>
+    <html
+      lang="pt-BR"
+      className={cn("font-sans", geist.variable)}
+      suppressHydrationWarning
+    >
       <body>
         <RegisterSW />
         <Providers>{children}</Providers>

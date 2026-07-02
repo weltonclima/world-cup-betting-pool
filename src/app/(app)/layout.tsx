@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { BiometricActivationPrompt } from "@/features/passkeys";
+import { ThemeSync } from "@/features/profile/components";
 import { InstallPrompt } from "@/features/push/components/InstallPrompt";
 import { PushOptInPrompt } from "@/features/push/components/PushOptInPrompt";
 
@@ -19,6 +20,8 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <AuthGuard>
+      {/* Hidrata o tema salvo no perfil (cross-device) em toda a área autenticada. */}
+      <ThemeSync />
       <BiometricActivationPrompt />
       <AppShell>
         {/* Banner de instalação do PWA (web-push-pwa TASK-06) — dispensável,
