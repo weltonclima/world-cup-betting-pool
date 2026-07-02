@@ -110,7 +110,7 @@ function PendingRow({ groupUser }: { groupUser: GroupUser }): JSX.Element {
           aria-label={`Aprovar ${user.name}`}
           disabled={pending}
           onClick={() => act("approve")}
-          className="size-11 border-emerald-600/40 text-emerald-600 hover:bg-emerald-600/10 hover:text-emerald-600"
+          className="size-11 border-success/40 text-success hover:bg-success/10 hover:text-success"
         >
           {pending ? (
             <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />

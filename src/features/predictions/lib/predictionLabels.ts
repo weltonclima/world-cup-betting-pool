@@ -10,16 +10,22 @@ export const PREDICTION_DISPLAY_STATUS_LABEL: Record<PredictionDisplayStatus, st
   bloqueado: "Bloqueado",
 };
 
-/** Classes Tailwind para badge de status de palpite na Lista de Palpites. */
+/**
+ * Classes Tailwind para badge de status de palpite na Lista de Palpites.
+ * dark-theme TASK-04: estados mapeados a tokens semânticos (win/loss/info/
+ * warning/muted) — contraste WCAG AA garantido em light e dark.
+ */
 export const PREDICTION_DISPLAY_STATUS_COLOR: Record<PredictionDisplayStatus, string> = {
   acertou: "bg-win-bg text-win",
-  // 3º estado (+5): cor intermediária distinta de acertou (verde/win),
-  // errou (vermelho/loss) e pendente (âmbar). Lime lê como "quase vitória".
+  // 3º estado (+5): "quase vitória". Precisa de um 5º matiz DISTINTO de win
+  // (verde), loss (vermelho), info/empate (azul) e warning/pendente (âmbar) —
+  // não há token semântico para lime. Mantém paleta crua com variante dark
+  // (tint /20 + text lime-700/lime-400) já legível nos dois temas. Exceção
+  // documentada da auditoria de contraste.
   acertou_vencedor: "bg-lime-500/20 text-lime-700 dark:text-lime-400",
-  // Empate parcial (+5): azul, distinto de acertou (verde), acertou_vencedor
-  // (lime), errou (vermelho) e pendente (âmbar). Azul lê como "empate".
-  acertou_empate: "bg-blue-500/20 text-blue-700 dark:text-blue-400",
+  // Empate parcial (+5): azul → token info (distinto de win/loss/warning/lime).
+  acertou_empate: "bg-info-bg text-info",
   errou: "bg-loss-bg text-loss",
-  pendente: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
-  bloqueado: "bg-gray-500/20 text-gray-600 dark:text-gray-400",
+  pendente: "bg-warning-bg text-warning",
+  bloqueado: "bg-muted text-muted-foreground",
 };

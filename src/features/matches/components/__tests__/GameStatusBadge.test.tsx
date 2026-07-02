@@ -30,22 +30,24 @@ describe("GameStatusBadge", () => {
     expect(screen.getByText("Cancelado")).toBeTruthy();
   });
 
-  it("T6: aplica classe azul para scheduled", () => {
+  // dark-theme TASK-04: cores mapeadas a tokens semânticos (info/success/muted)
+  // para contraste AA em light e dark — asserts seguem os tokens, não a paleta.
+  it("T6: aplica classe de token info para scheduled", () => {
     const { container } = render(<GameStatusBadge status="scheduled" />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toMatch(/blue/);
+    expect(badge.className).toMatch(/info/);
   });
 
-  it("T7: aplica classe verde para live", () => {
+  it("T7: aplica classe de token success para live", () => {
     const { container } = render(<GameStatusBadge status="live" />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toMatch(/green/);
+    expect(badge.className).toMatch(/success/);
   });
 
-  it("T8: aplica classe cinza para finished", () => {
+  it("T8: aplica classe de token muted para finished", () => {
     const { container } = render(<GameStatusBadge status="finished" />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toMatch(/gray/);
+    expect(badge.className).toMatch(/muted/);
   });
 
   it("T9: aceita className adicional", () => {

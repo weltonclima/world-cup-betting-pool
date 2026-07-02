@@ -45,11 +45,11 @@ export function PredictionSuccess({
     >
       {/* Ícone + título + mensagem */}
       <div className="flex flex-col items-center gap-3 py-8 text-center">
-        <div className="rounded-full bg-green-500/10 p-4">
+        <div className="rounded-full bg-success-bg p-4">
           <CheckCircle2
             size={48}
             aria-hidden="true"
-            className="text-green-600 dark:text-green-400"
+            className="text-success"
           />
         </div>
         <h1 className="text-xl font-bold text-foreground">Palpite registrado!</h1>

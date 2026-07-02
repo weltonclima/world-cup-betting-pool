@@ -95,6 +95,25 @@ describe("users", () => {
     expect(userSchema.safeParse({ ...valid, groupId: "" }).success).toBe(false);
   });
 
+  it("themePreference é opcional; ausente ainda parseia (default ≈ light)", () => {
+    // ausente → ok (dark theme, TASK-01: campo aditivo opcional)
+    expect(userSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("themePreference aceita os 3 valores válidos", () => {
+    for (const pref of ["light", "dark", "system"] as const) {
+      expect(
+        userSchema.safeParse({ ...valid, themePreference: pref }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("themePreference rejeita valor fora do enum", () => {
+    expect(
+      userSchema.safeParse({ ...valid, themePreference: "solarized" }).success,
+    ).toBe(false);
+  });
+
   it("inferência de tipo", () => {
     expectTypeOf<User["role"]>().toEqualTypeOf<
       "participant" | "group_admin" | "super_admin" | "user" | "admin"
@@ -105,5 +124,8 @@ describe("users", () => {
     expectTypeOf<User["email"]>().toEqualTypeOf<string>();
     expectTypeOf<User["groupId"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<User["createdAt"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<User["themePreference"]>().toEqualTypeOf<
+      "light" | "dark" | "system" | undefined
+    >();
   });
 });

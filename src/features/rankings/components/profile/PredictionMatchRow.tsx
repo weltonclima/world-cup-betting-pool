@@ -88,7 +88,7 @@ export function PredictionMatchRow({
             {actualScore.homeScore}–{actualScore.awayScore}
           </span>
         ) : matchStatus === "live" && actualScore ? (
-          <span className="text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400">
+          <span className="text-sm font-bold tabular-nums text-warning">
             {actualScore.homeScore}–{actualScore.awayScore}
           </span>
         ) : (
@@ -120,7 +120,7 @@ export function PredictionMatchRow({
               {prediction.homeScore}:{prediction.awayScore}
             </span>
             <span
-              className="rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+              className="rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning"
               aria-label="Em jogo"
             >
               Em jogo
@@ -131,7 +131,7 @@ export function PredictionMatchRow({
             <span className="text-xs tabular-nums text-muted-foreground">
               {prediction.homeScore}:{prediction.awayScore}
             </span>
-            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <span className="rounded bg-warning-bg px-1.5 py-0.5 text-xs font-medium text-warning">
               Pendente
             </span>
           </>

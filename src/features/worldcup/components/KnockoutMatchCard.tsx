@@ -125,7 +125,7 @@ function SideRow({
           size={12}
           aria-hidden={true}
           data-testid="winner-icon"
-          className="shrink-0 text-amber-500"
+          className="shrink-0 text-warning"
         />
       )}
     </div>
@@ -142,7 +142,7 @@ const COMPACT_STATUS: Record<
 > = {
   aguardando: { label: "Aguardando", className: "bg-muted text-muted-foreground" },
   definido: { label: "Agendado", className: "bg-primary/10 text-primary" },
-  "em-andamento": { label: "Ao vivo", className: "bg-red-500/15 text-red-600" },
+  "em-andamento": { label: "Ao vivo", className: "bg-loss-bg text-loss" },
   encerrado: { label: "Encerrado", className: "bg-foreground/10 text-foreground" },
 };
 
@@ -330,10 +330,10 @@ export function KnockoutMatchCard({
 
       {/* Indicador "ao vivo" — jogo em andamento com placar parcial */}
       {isAoVivo && (
-        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs font-medium text-red-600">
+        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-xs font-medium text-loss">
           <span
             aria-hidden="true"
-            className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-600"
+            className="inline-block h-2 w-2 animate-pulse rounded-full bg-loss"
           />
           Ao vivo
         </p>

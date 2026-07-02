@@ -83,7 +83,7 @@ export function InviteValue({
               className="size-11 shrink-0"
             >
               {copied ? (
-                <Check size={18} className="text-emerald-600" aria-hidden="true" />
+                <Check size={18} className="text-success" aria-hidden="true" />
               ) : (
                 <Copy size={18} aria-hidden="true" />
               )}

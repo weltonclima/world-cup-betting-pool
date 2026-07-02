@@ -6,6 +6,7 @@ import type {
   rankingScopeSchema,
   roleSchema,
   stageSchema,
+  themePreferenceSchema,
   userStatusSchema,
 } from "@/schemas/shared";
 
@@ -16,3 +17,4 @@ export type Stage = z.infer<typeof stageSchema>;
 export type RankingScope = z.infer<typeof rankingScopeSchema>;
 export type MatchStatus = z.infer<typeof matchStatusSchema>;
 export type PredictionStatus = z.infer<typeof predictionStatusSchema>;
+export type ThemePreference = z.infer<typeof themePreferenceSchema>;

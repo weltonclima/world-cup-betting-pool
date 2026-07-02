@@ -34,6 +34,9 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
+        // dark-theme TASK-04: scrim preto/50 é intencional e theme-independent —
+        // backdrops escurecem o conteúdo para focar o diálogo em light e dark
+        // (padrão shadcn). Não trocar por token de superfície.
         "fixed inset-0 z-[100] bg-black/50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}

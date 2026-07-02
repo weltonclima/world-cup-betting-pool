@@ -20,22 +20,24 @@ describe("MatchStatusBadge", () => {
     expect(screen.getByText("Palpite Bloqueado")).toBeTruthy();
   });
 
-  it("T4: aplica classe de cor verde para status enviado", () => {
+  // dark-theme TASK-04: cores mapeadas a tokens semânticos (success/warning/muted)
+  // para contraste AA em light e dark — asserts seguem os tokens, não a paleta.
+  it("T4: aplica classe de token success para status enviado", () => {
     const { container } = render(<MatchStatusBadge status="enviado" />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toMatch(/green/);
+    expect(badge.className).toMatch(/success/);
   });
 
-  it("T5: aplica classe de cor âmbar para status pendente", () => {
+  it("T5: aplica classe de token warning para status pendente", () => {
     const { container } = render(<MatchStatusBadge status="pendente" />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toMatch(/amber/);
+    expect(badge.className).toMatch(/warning/);
   });
 
-  it("T6: aplica classe de cor cinza para status bloqueado", () => {
+  it("T6: aplica classe de token muted para status bloqueado", () => {
     const { container } = render(<MatchStatusBadge status="bloqueado" />);
     const badge = container.firstChild as HTMLElement;
-    expect(badge.className).toMatch(/gray/);
+    expect(badge.className).toMatch(/muted/);
   });
 
   it("T7: aceita className adicional", () => {

@@ -1,16 +1,25 @@
 "use client";
 
-import type { JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
+import { useTheme } from "next-themes";
 import {
   Bell,
   CircleHelp,
   Info,
+  Monitor,
+  Moon,
   ShieldCheck,
   Sun,
   UserPen,
 } from "lucide-react";
 
+import type { ThemePreference } from "@/types";
+
+import { themeLabel } from "../lib/themeSync";
 import { ProfileMenuItem } from "./ProfileMenuItem";
+
+/** Ícone do item Tema conforme a escolha atual. */
+const THEME_ICON = { light: Sun, dark: Moon, system: Monitor } as const;
 
 /** Seção rotulada de configurações. */
 function SettingsSection({
@@ -32,6 +41,17 @@ function SettingsSection({
 
 /** Tela 05 — Configurações (PRD06-05). */
 export function SettingsMenu(): JSX.Element {
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Escolha atual só após montar (theme indeterminado no SSR/pré-hidratação).
+  const current = (mounted ? (theme ?? "light") : "light") as ThemePreference;
+  const ThemeIcon = THEME_ICON[current] ?? Sun;
+
   return (
     <div className="flex flex-col gap-5">
       <SettingsSection title="Geral">
@@ -62,12 +82,12 @@ export function SettingsMenu(): JSX.Element {
       </SettingsSection>
 
       <SettingsSection title="Tema">
-        {/* A4: tema claro/escuro é futuro — item visível, somente leitura. */}
+        {/* dark theme, TASK-03: navega para o seletor; subtitle = escolha atual. */}
         <ProfileMenuItem
-          icon={Sun}
+          icon={ThemeIcon}
           title="Tema do Aplicativo"
-          subtitle="Claro"
-          disabled
+          subtitle={themeLabel(current)}
+          href="/profile/theme"
         />
       </SettingsSection>
 

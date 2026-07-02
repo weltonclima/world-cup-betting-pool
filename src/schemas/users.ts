@@ -4,6 +4,7 @@ import {
   isoDateTime,
   nonEmptyString,
   roleSchema,
+  themePreferenceSchema,
   userStatusSchema,
 } from "@/schemas/shared";
 
@@ -28,5 +29,9 @@ export const userSchema = z
     // `removedFromGroupAt` marca o soft-delete (D4) sem apagar o doc.
     blockReason: z.string().max(280).optional(), // motivo do bloqueio (PRD10-04)
     removedFromGroupAt: isoDateTime.optional(), // soft-delete do grupo (D4)
+    // Preferência de tema da UI (dark theme, TASK-01): "light" | "dark" | "system".
+    // Opcional/aditivo — docs antigos sem o campo seguem válidos (≈ "light").
+    // Self-update via Client SDK (Rule permite campo não-role/status).
+    themePreference: themePreferenceSchema.optional(),
   })
   .strict();
