@@ -186,7 +186,8 @@ const find = (writes: Captured[], path: string) =>
 function setupAdminSession({
   hasCookie = true,
   cookieValid = true,
-  role = "admin" as "admin" | "user" | null,
+  role = "admin" as "admin" | "user" | "super_admin" | null,
+  status = "approved" as string,
 } = {}) {
   cookiesMock.mockResolvedValue({
     get: vi
@@ -198,7 +199,7 @@ function setupAdminSession({
   if (cookieValid) verifySessionCookieMock.mockResolvedValue({ uid: ADMIN_UID });
   else verifySessionCookieMock.mockRejectedValue(new Error("invalid"));
   return makeDb({
-    adminUser: role === null ? null : { role, status: "approved" },
+    adminUser: role === null ? null : { role, status },
   });
 }
 
@@ -251,6 +252,22 @@ describe("POST /api/rankings/recalc", () => {
     it("200 com sessão admin (sem secret)", async () => {
       setupAdminSession({ role: "admin" });
       expect((await POST(postReq())).status).toBe(200);
+    });
+
+    // ── S3 perf-hardening ──────────────────────────────────────────────────
+    it("200 com super_admin canônico + approved", async () => {
+      setupAdminSession({ role: "super_admin" });
+      expect((await POST(postReq())).status).toBe(200);
+    });
+
+    it("403 admin porém status blocked (re-check de status)", async () => {
+      setupAdminSession({ role: "admin", status: "blocked" });
+      expect((await POST(postReq())).status).toBe(403);
+    });
+
+    it("403 role inválida/desconhecida (fail-closed)", async () => {
+      setupAdminSession({ role: "hacker" as unknown as "admin" });
+      expect((await POST(postReq())).status).toBe(403);
     });
 
     it("não chama cookies() quando secret válido", async () => {

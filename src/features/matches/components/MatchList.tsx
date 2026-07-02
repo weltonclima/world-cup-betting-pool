@@ -22,7 +22,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { MatchWithId } from "@/types";
 import type { MatchPredictionStatus } from "@/features/matches/lib/matchesHelpers";
 import type { Stage } from "@/types";
 
@@ -75,32 +74,6 @@ function regroupFilteredItems(
       matches: group.matches.filter((m) => filteredIds.has(m.id)),
     }))
     .filter((group) => group.matches.length > 0);
-}
-
-/**
- * Adapta MatchListItem para o shape MatchWithId esperado pelo MatchCard.
- *
- * MatchCard usa internamente: id, kickoffAt, stage, round, groupId, venue,
- * status, homeScore, awayScore (para GroupLabel e CenterColumn).
- * homeTeamId/awayTeamId não são consumidos na renderização do card —
- * o card recebe as seleções já resolvidas via homeTeam/awayTeam props — mas
- * preservamos os ids reais do MatchListItem (não há motivo para descartá-los).
- */
-function toMatchWithId(item: MatchListItem): MatchWithId {
-  return {
-    id: item.id,
-    kickoffAt: item.kickoffAt,
-    stage: item.stage,
-    round: item.round,
-    groupId: item.groupId,
-    venue: item.venue,
-    status: item.status,
-    homeScore: item.homeScore,
-    awayScore: item.awayScore,
-    // Ids reais preservados (MatchListItem os expõe desde TASK-05); card os ignora na renderização:
-    homeTeamId: item.homeTeamId,
-    awayTeamId: item.awayTeamId,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -167,51 +140,65 @@ export function MatchList() {
   }
 
   // ---------------------------------------------------------------------------
-  // Pipeline de filtro client-side
+  // Pipeline de filtro client-side (memoizado — TASK-05 perf-hardening)
   // ---------------------------------------------------------------------------
+  // Recalcula SÓ quando dados/busca/filtros/aba mudam. Antes rodava a cada render
+  // (cada tecla em searchQuery), reparseando datas (date-fns format) por item.
+  const { orderedGroups, filteredIsEmpty } = useMemo(() => {
+    // 1. Busca por nome de seleção
+    const afterSearch = searchItemsByName(flatList, searchQuery);
 
-  // 1. Busca por nome de seleção
-  const afterSearch = searchItemsByName(flatList, searchQuery);
+    // 2. Filtro de fase (Stage)
+    const afterStage =
+      selectedStage === undefined
+        ? afterSearch
+        : afterSearch.filter((item) => item.stage === selectedStage);
 
-  // 2. Filtro de fase (Stage)
-  const afterStage =
-    selectedStage === undefined
-      ? afterSearch
-      : afterSearch.filter((item) => item.stage === selectedStage);
+    // 3. Filtro por seleção (teamId)
+    const afterTeamId =
+      selectedTeamId === undefined
+        ? afterStage
+        : afterStage.filter(
+            (item) =>
+              item.homeTeamId === selectedTeamId || item.awayTeamId === selectedTeamId,
+          );
 
-  // 3. Filtro por seleção (teamId) — TASK-05
-  const afterTeamId =
-    selectedTeamId === undefined
-      ? afterStage
-      : afterStage.filter(
-          (item) =>
-            item.homeTeamId === selectedTeamId || item.awayTeamId === selectedTeamId,
-        );
+    // 4. Filtro de status de palpite
+    const afterPrediction =
+      selectedPredictionStatus === undefined
+        ? afterTeamId
+        : afterTeamId.filter((item) => item.predictionStatus === selectedPredictionStatus);
 
-  // 4. Filtro de status de palpite
-  const afterPrediction =
-    selectedPredictionStatus === undefined
-      ? afterTeamId
-      : afterTeamId.filter((item) => item.predictionStatus === selectedPredictionStatus);
+    // 5. Filtro de bucket temporal — última etapa, usa aba ativa (TASK-03)
+    const filteredList = afterPrediction.filter(
+      (item) => classifyDateKey(toLocalDateKey(item.kickoffAt), todayKey) === activeTab,
+    );
 
-  // 5. Filtro de bucket temporal — última etapa, usa aba ativa (TASK-03)
-  const filteredList = afterPrediction.filter(
-    (item) => classifyDateKey(toLocalDateKey(item.kickoffAt), todayKey) === activeTab,
-  );
+    // 6. Re-agrupa preservando labels pt-BR dos grupos originais
+    const filteredIds = new Set(filteredList.map((item) => item.id));
+    const filteredGroups = regroupFilteredItems(filteredIds, groups);
 
-  // 6. Re-agrupa preservando labels pt-BR dos grupos originais
-  const filteredIds = new Set(filteredList.map((item) => item.id));
-  const filteredGroups = regroupFilteredItems(filteredIds, groups);
+    // 7. Ordem de exibição: "anteriores" mostra os mais recentes primeiro (DESC) —
+    // inverte seções e jogos dentro de cada seção. Hoje/Próximos seguem ASC.
+    const ordered =
+      activeTab === "anteriores"
+        ? filteredGroups
+            .slice()
+            .reverse()
+            .map((group) => ({ ...group, matches: group.matches.slice().reverse() }))
+        : filteredGroups;
 
-  // 7. Ordem de exibição: "anteriores" mostra os mais recentes primeiro (DESC) —
-  // inverte seções e jogos dentro de cada seção. Hoje/Próximos seguem ASC.
-  const orderedGroups =
-    activeTab === "anteriores"
-      ? filteredGroups
-          .slice()
-          .reverse()
-          .map((group) => ({ ...group, matches: group.matches.slice().reverse() }))
-      : filteredGroups;
+    return { orderedGroups: ordered, filteredIsEmpty: filteredGroups.length === 0 };
+  }, [
+    flatList,
+    groups,
+    searchQuery,
+    selectedStage,
+    selectedTeamId,
+    selectedPredictionStatus,
+    activeTab,
+    todayKey,
+  ]);
 
   // Flag auxiliar para empty-state com ou sem filtros ativos
   const hasActiveFilters =
@@ -268,7 +255,7 @@ export function MatchList() {
         {isError && !isLoading && <MatchesErrorState onRetry={refetch} />}
 
         {/* Estado: lista vazia */}
-        {!isLoading && !isError && filteredGroups.length === 0 && (
+        {!isLoading && !isError && filteredIsEmpty && (
           <MatchesEmptyState
             message={emptyMessageByTab[activeTab]}
             subtitle={hasActiveFilters ? "Tente limpar os filtros" : undefined}
@@ -328,9 +315,11 @@ function DaySection({ group }: DaySectionProps) {
       </h2>
       <div className="flex flex-col gap-4">
         {group.matches.map((item) => (
+          // match={item}: MatchListItem é superset estrutural de MatchWithId e vem
+          // do view-model memoizado (ref estável) → React.memo(MatchCard) efetivo.
           <MatchCard
             key={item.id}
-            match={toMatchWithId(item)}
+            match={item}
             homeTeam={item.homeTeam}
             awayTeam={item.awayTeam}
             predictionStatus={item.predictionStatus}

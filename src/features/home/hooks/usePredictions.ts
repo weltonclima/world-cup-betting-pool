@@ -1,21 +1,16 @@
 "use client";
 
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-
-import { listPredictionsByUid } from "@/services";
-import type { Prediction } from "@/types";
-
-import { homeKeys } from "./homeKeys";
-
 /**
- * Hook TanStack Query para os palpites do usuário autenticado (TASK-05).
- * Desabilitado quando uid for null (edge case de segurança — sem uid, sem consulta).
- * Sem redefinição de staleTime/gcTime — herda do QueryClient global (30min/24h).
+ * `usePredictions` da Home — re-export do hook canônico da feature matches
+ * (TASK-02 perf-hardening).
+ *
+ * ANTES: query key `homeKeys.predictions(uid)` (`["home","predictions",uid]`),
+ * distinta do `usePredictions` de matches (`["matches","predictions",uid]`) que
+ * `useMatchesList` usa. Resultado: `listPredictionsByUid` era chamado 2× na Home.
+ *
+ * AGORA: delega para o hook de matches (key `matchesKeys.predictions(uid)`) → um
+ * único fetch compartilhado por todos os observers. A invalidação pós-upsert de
+ * palpite (`useUpsertPrediction`) já invalida `matchesKeys.predictions(uid)`, que
+ * agora cobre também os cards da Home.
  */
-export function usePredictions(uid: string | null): UseQueryResult<Prediction[]> {
-  return useQuery({
-    queryKey: homeKeys.predictions(uid ?? ""),
-    queryFn: () => listPredictionsByUid(uid!),
-    enabled: uid !== null,
-  });
-}
+export { usePredictions } from "@/features/matches/hooks/usePredictions";

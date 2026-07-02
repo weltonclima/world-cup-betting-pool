@@ -104,15 +104,19 @@ const baseDashboardSuccess: HomeDashboardData = {
   currentStage: null,
   notices: [],
   isLoading: false,
+  heroLoading: false,
+  matchesLoading: false,
   isError: false,
   refetch: vi.fn(),
 };
 
-/** Estado de loading: isLoading=true, tudo else padrão. */
+/** Estado de loading total: todas as flags true. */
 const dashboardLoading: HomeDashboardData = {
   ...baseDashboardSuccess,
   predictionBreakdown: { correct: 0, partial: 0, wrong: 0, total: 0, isEmpty: true },
   isLoading: true,
+  heroLoading: true,
+  matchesLoading: true,
   isError: false,
 };
 
@@ -168,6 +172,44 @@ describe("HomeDashboard — estado loading", () => {
 
   it("T4b: exibe HomeHeaderSkeleton (data-testid) durante loading e ausência do greeting real", () => {
     render(<HomeDashboard />);
+    expect(screen.getByTestId("home-header-skeleton")).toBeTruthy();
+    expect(screen.queryByText(/Olá, Ana Lima/)).toBeNull();
+  });
+});
+
+describe("HomeDashboard — render progressivo (TASK-10)", () => {
+  it("hero carregando + matches prontos → HeroCardSkeleton + cards de matches renderizados", () => {
+    mockUseDashboard.mockReturnValue({
+      ...baseDashboardSuccess,
+      isLoading: true, // agregado ainda true (hero pendente)
+      heroLoading: true,
+      matchesLoading: false,
+    });
+    render(<HomeDashboard />);
+
+    // Header real visível (matches prontos)
+    expect(screen.getByText("Olá, Ana Lima 👋")).toBeTruthy();
+    // Cards de matches renderizados (não skeleton)
+    expect(screen.getByRole("article", { name: "Últimos Resultados" })).toBeTruthy();
+    expect(screen.getByRole("article", { name: "Raio-X dos Palpites" })).toBeTruthy();
+    // Hero AINDA em skeleton (posição #3 não aparece)
+    expect(screen.queryByText("#3")).toBeNull();
+    // Há pelo menos um skeleton (o do hero)
+    expect(screen.getAllByRole("status").length).toBeGreaterThan(0);
+  });
+
+  it("matches carregando + hero pronto → HeroCard renderizado + cards de matches em skeleton", () => {
+    mockUseDashboard.mockReturnValue({
+      ...baseDashboardSuccess,
+      isLoading: true,
+      heroLoading: false,
+      matchesLoading: true,
+    });
+    render(<HomeDashboard />);
+
+    // Hero real visível (#3)
+    expect(screen.getByText("#3")).toBeTruthy();
+    // Header em skeleton (matches pendentes)
     expect(screen.getByTestId("home-header-skeleton")).toBeTruthy();
     expect(screen.queryByText(/Olá, Ana Lima/)).toBeNull();
   });

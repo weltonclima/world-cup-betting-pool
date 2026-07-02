@@ -64,19 +64,43 @@ function match(id: string, status: string) {
 }
 
 /**
- * Firestore mock: predictions.where("uid","==",uid).get() → snapshot dos docs.
- * Captura o uid passado ao `where` para assertion do alvo correto.
+ * Firestore mock unificado (TASK-08 perf-hardening): serve TANTO
+ * `predictions.where("uid","==",uid).get()` QUANTO `users/{uid}.doc().get()`
+ * (a checagem de pool-scope lê os user docs do leitor e do alvo).
+ *
+ * `users` sobrescreve uids específicos; qualquer uid não listado cai no fallback
+ * `{ groupId: "G1", role: "participant" }` — assim os testes anti-cola existentes
+ * (leitor "viewer" + alvos no mesmo pool) continuam 200 sem configuração extra.
+ * `userDocExists` controla se o doc existe (default true no fallback).
  */
-function mockPredictions(docs: Array<Record<string, unknown>>) {
+function mockFirestore({
+  predictions = [] as Array<Record<string, unknown>>,
+  users = {} as Record<string, Record<string, unknown> | null>,
+} = {}) {
   const whereSpy = vi.fn();
   const getDocs = vi.fn().mockResolvedValue({
-    docs: docs.map((d) => ({ id: `${d.uid}_${d.matchId}`, data: () => d })),
+    docs: predictions.map((d) => ({ id: `${d.uid}_${d.matchId}`, data: () => d })),
   });
   whereSpy.mockReturnValue({ get: getDocs });
+
+  const docFn = vi.fn((uid: string) => ({
+    get: vi.fn().mockResolvedValue({
+      exists: users[uid] !== null,
+      data: () => (uid in users ? users[uid] : { groupId: "G1", role: "participant" }),
+    }),
+  }));
+
   getFirestoreMock.mockReturnValue({
-    collection: vi.fn(() => ({ where: whereSpy })),
+    collection: vi.fn((name: string) =>
+      name === "users" ? { doc: docFn } : { where: whereSpy },
+    ),
   });
-  return { whereSpy, getDocs };
+  return { whereSpy, getDocs, docFn };
+}
+
+/** Atalho de compatibilidade: mocka só predictions (users no fallback same-pool). */
+function mockPredictions(docs: Array<Record<string, unknown>>) {
+  return mockFirestore({ predictions: docs });
 }
 
 function req(): Request {
@@ -177,6 +201,109 @@ describe("GET /api/predictions/[uid] — anti-cola (filtro finished)", () => {
     const body = await res.json();
     expect(body).toHaveLength(1);
     expect(body[0].matchId).toBe("m1");
+  });
+});
+
+describe("GET /api/predictions/[uid] — isolamento de pool (S1)", () => {
+  it("leitor e alvo no MESMO pool → 200 com palpites finished", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "viewer" } });
+    mockFirestore({
+      predictions: [prediction({ uid: "target", matchId: "m1" })],
+      users: {
+        viewer: { groupId: "G1", role: "participant" },
+        target: { groupId: "G1", role: "participant" },
+      },
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(1);
+  });
+
+  it("leitor e alvo em pools DIFERENTES → 403, sem vazar palpites", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "viewer" } });
+    mockFirestore({
+      predictions: [prediction({ uid: "target", matchId: "m1" })],
+      users: {
+        viewer: { groupId: "G1", role: "participant" },
+        target: { groupId: "G2", role: "participant" },
+      },
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    expect(res.status).toBe(403);
+  });
+
+  it("leitor super_admin de outro pool → 200 (bypass global)", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "viewer" } });
+    mockFirestore({
+      predictions: [prediction({ uid: "target", matchId: "m1" })],
+      users: {
+        viewer: { groupId: "G9", role: "super_admin" },
+        target: { groupId: "G2", role: "participant" },
+      },
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(1);
+  });
+
+  it("auto-consulta (target === reader) → 200 sem exigir pool", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "target" } });
+    mockFirestore({
+      predictions: [prediction({ uid: "target", matchId: "m1" })],
+      users: { target: { role: "participant" } }, // sem groupId — self não exige
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(1);
+  });
+
+  it("leitor sem groupId → 403 (fail-closed)", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "viewer" } });
+    mockFirestore({
+      predictions: [prediction({ uid: "target", matchId: "m1" })],
+      users: {
+        viewer: { role: "participant" }, // sem groupId
+        target: { groupId: "G1", role: "participant" },
+      },
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    expect(res.status).toBe(403);
+  });
+
+  it("role crua inesperada no leitor → fail-closed (403, não é super_admin)", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "viewer" } });
+    mockFirestore({
+      predictions: [prediction({ uid: "target", matchId: "m1" })],
+      users: {
+        viewer: { groupId: "G1", role: "hacker" }, // role inválida
+        target: { groupId: "G2", role: "participant" },
+      },
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    // role inválida → não vira super_admin; pools diferentes → 403
+    expect(res.status).toBe(403);
+  });
+
+  it("falha ao ler user doc → 500 pt-BR (fail-closed)", async () => {
+    requireApprovedMock.mockResolvedValue({ user: { uid: "viewer" } });
+    const docFn = vi.fn(() => ({
+      get: vi.fn().mockRejectedValue(new Error("firestore down")),
+    }));
+    getFirestoreMock.mockReturnValue({
+      collection: vi.fn((name: string) =>
+        name === "users" ? { doc: docFn } : { where: vi.fn() },
+      ),
+    });
+    getEffectiveMatchesMock.mockResolvedValue([match("m1", "finished")]);
+    const res = await GET(req(), ctx("target"));
+    expect(res.status).toBe(500);
+    expect(typeof (await res.json()).error).toBe("string");
   });
 });
 

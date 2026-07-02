@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { getOtherUserPredictions, listPredictionsByUid } from "@/services";
 import { useMatches, useTeams } from "@/features/matches/hooks";
@@ -70,6 +70,9 @@ export function useProfilePredictions(
     queryFn: () =>
       isSelf ? listPredictionsByUid(uid!) : getOtherUserPredictions(uid!),
     enabled: Boolean(uid),
+    // Stale-while-revalidate (TASK-11): mantém os palpites do perfil anterior ao
+    // navegar para outro participante, sem flash de skeleton entre perfis.
+    placeholderData: keepPreviousData,
   });
 
   // 2. Dados globais (sempre ativos, independentes de uid)

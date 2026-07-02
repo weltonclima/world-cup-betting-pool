@@ -70,10 +70,13 @@ function invite(over: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 const updateMock = vi.fn();
+const setMock = vi.fn();
 
 function mockDb(opts: {
   invite: Record<string, unknown> | null;
   userGroupId?: string;
+  /** Se true, o subdoc `redemptions/{uid}` já existe (uid já resgatou). */
+  alreadyRedeemed?: boolean;
 }): void {
   const inviteSnap =
     opts.invite === null
@@ -83,15 +86,27 @@ function mockDb(opts: {
     opts.userGroupId === undefined
       ? { exists: false, data: () => undefined }
       : { exists: true, data: () => ({ groupId: opts.userGroupId }) };
+  const redemptionSnap = { exists: opts.alreadyRedeemed === true };
   const tx = {
-    get: vi.fn(async (ref: { kind: string }) =>
-      ref.kind === "invite" ? inviteSnap : userSnap,
-    ),
+    get: vi.fn(async (ref: { kind: string }) => {
+      if (ref.kind === "invite") return inviteSnap;
+      if (ref.kind === "user") return userSnap;
+      return redemptionSnap; // kind === "redemption"
+    }),
     update: updateMock,
+    set: setMock,
+  };
+  // inviteRef expõe `.collection("redemptions").doc(uid)` → ref kind "redemption".
+  const inviteDocRef = {
+    kind: "invite",
+    collection: (_sub: string) => ({
+      doc: (uid: string) => ({ kind: "redemption", id: uid }),
+    }),
   };
   getFirestoreMock.mockReturnValue({
     collection: (name: string) => ({
-      doc: (id: string) => ({ kind: name === "invites" ? "invite" : "user", id }),
+      doc: (id: string) =>
+        name === "invites" ? inviteDocRef : { kind: "user", id },
     }),
     runTransaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
   });
@@ -157,12 +172,34 @@ describe("POST /api/invite/[code]/redeem", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it("200 sucesso incrementa usedCount", async () => {
+  it("200 sucesso incrementa usedCount (resgate novo)", async () => {
     mockDb({ invite: invite({ usedCount: 2 }), userGroupId: "pool-1" });
     const res = await POST(makeReq({ body: okBody }), ctx(VALID_CODE));
     expect(res.status).toBe(200);
     expect(updateMock).toHaveBeenCalledOnce();
     const data = updateMock.mock.calls[0]![1] as { usedCount: number };
     expect(data.usedCount).toBe(3);
+    // Marca o resgate por uid (idempotência futura)
+    expect(setMock).toHaveBeenCalledOnce();
+  });
+
+  // ── S2 perf-hardening: idempotência por uid ──────────────────────────────
+  it("200 idempotente: uid já resgatado NÃO incrementa usedCount", async () => {
+    mockDb({ invite: invite({ usedCount: 2 }), userGroupId: "pool-1", alreadyRedeemed: true });
+    const res = await POST(makeReq({ body: okBody }), ctx(VALID_CODE));
+    expect(res.status).toBe(200);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it("200 no-op: convite cheio mas uid já resgatado → não bloqueia nem incrementa", async () => {
+    mockDb({
+      invite: invite({ maxUses: 5, usedCount: 5 }),
+      userGroupId: "pool-1",
+      alreadyRedeemed: true,
+    });
+    const res = await POST(makeReq({ body: okBody }), ctx(VALID_CODE));
+    expect(res.status).toBe(200);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

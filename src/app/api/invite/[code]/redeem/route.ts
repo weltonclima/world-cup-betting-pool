@@ -73,10 +73,15 @@ export async function POST(
   const db = getAdminFirestore();
   const inviteRef = db.collection("invites").doc(parsedCode.data);
   const userRef = db.collection("users").doc(uid);
+  // Subdoc de resgate por uid (S2 perf-hardening): torna o incremento IDEMPOTENTE.
+  // Sem isso, o mesmo usuário podia chamar em loop e inflar `usedCount` até
+  // `maxUses`, desativando o convite ativo (DoS de integridade sobre o convite).
+  const redemptionRef = inviteRef.collection("redemptions").doc(uid);
   const now = Date.now();
 
   try {
     await db.runTransaction(async (tx) => {
+      // Todas as leituras ANTES de qualquer escrita (regra do Firestore).
       const inviteSnap = await tx.get(inviteRef);
       if (!inviteSnap.exists) {
         throw new RedeemError(404, "Convite não encontrado.");
@@ -88,9 +93,6 @@ export async function POST(
       }
       if (Date.parse(invite.expiresAt) <= now) {
         throw new RedeemError(409, "Este convite expirou.");
-      }
-      if (invite.usedCount >= invite.maxUses) {
-        throw new RedeemError(409, "Este convite atingiu o limite de usos.");
       }
 
       // Vincula o incremento a um ingresso real: o usuário precisa já pertencer
@@ -104,6 +106,18 @@ export async function POST(
         throw new RedeemError(403, "Convite não corresponde ao seu grupo.");
       }
 
+      // Idempotência: se este uid já resgatou, é no-op — NÃO incrementa de novo.
+      const redemptionSnap = await tx.get(redemptionRef);
+      if (redemptionSnap.exists) {
+        return; // já contabilizado; resposta ok sem inflar usedCount
+      }
+
+      // Só resgates NOVOS checam o limite (um uid já resgatado passa mesmo cheio).
+      if (invite.usedCount >= invite.maxUses) {
+        throw new RedeemError(409, "Este convite atingiu o limite de usos.");
+      }
+
+      tx.set(redemptionRef, { redeemedAt: now });
       tx.update(inviteRef, { usedCount: invite.usedCount + 1 });
     });
 

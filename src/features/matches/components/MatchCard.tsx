@@ -12,6 +12,7 @@
  * Fonte de verdade: PRD03-04, PRD03-05, PRD03-06
  */
 
+import { memo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronRight } from "lucide-react";
@@ -102,6 +103,17 @@ function TeamColumn({ team }: { team: ResolvedTeam; align?: "left" | "right" }) 
 // Subcomponente: GroupLabel (rótulo de grupo/rodada)
 // ---------------------------------------------------------------------------
 
+/** Rótulos de fase em pt-BR — constante de módulo (não reconstruir por render). */
+const STAGE_LABEL: Record<string, string> = {
+  grupos: "Fase de Grupos",
+  "dezesseis-avos": "Dezesseis Avos de Final",
+  oitavas: "Oitavas de Final",
+  quartas: "Quartas de Final",
+  semifinal: "Semifinal",
+  terceiro: "Disputa do 3º Lugar",
+  final: "Final",
+};
+
 function GroupLabel({ match }: { match: MatchWithId }) {
   const parts: string[] = [];
 
@@ -109,15 +121,6 @@ function GroupLabel({ match }: { match: MatchWithId }) {
     parts.push(match.groupId);
   } else {
     // Fases de mata-mata: usar a fase em pt-BR
-    const STAGE_LABEL: Record<string, string> = {
-      grupos: "Fase de Grupos",
-      "dezesseis-avos": "Dezesseis Avos de Final",
-      oitavas: "Oitavas de Final",
-      quartas: "Quartas de Final",
-      semifinal: "Semifinal",
-      terceiro: "Disputa do 3º Lugar",
-      final: "Final",
-    };
     parts.push(STAGE_LABEL[match.stage] ?? match.stage);
   }
 
@@ -262,8 +265,13 @@ function CardFooter({
  *
  * O card inteiro é um link navegável (Next.js Link) para a tela de detalhe,
  * exceto na variante "Jogo Encerrado" onde a navegação vai para estatísticas.
+ *
+ * Memoizado com `React.memo` (TASK-06 perf-hardening): props referencialmente
+ * estáveis (match = MatchListItem do view-model memoizado; teams/userPrediction =
+ * campos do item; detailHref = string valor-igual). Digitar na busca de Jogos
+ * re-renderiza só os cards cujo subconjunto filtrado mudou, não a lista inteira.
  */
-export function MatchCard({
+function MatchCardBase({
   match,
   homeTeam,
   awayTeam,
@@ -312,3 +320,5 @@ export function MatchCard({
     </Link>
   );
 }
+
+export const MatchCard = memo(MatchCardBase);

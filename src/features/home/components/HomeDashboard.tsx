@@ -109,6 +109,8 @@ export function HomeDashboard() {
     currentStage,
     notices,
     isLoading,
+    heroLoading,
+    matchesLoading,
     isError,
     refetch,
   } = useHomeDashboard();
@@ -120,11 +122,13 @@ export function HomeDashboard() {
     return <ErrorState onRetry={refetch} />;
   }
 
-  // ── Grade de conteúdo (loading com skeletons OU dados reais) ─────────────
+  // ── Grade de conteúdo — render PROGRESSIVO (TASK-10 perf-hardening) ───────
+  // Cada card é gateado pela sua própria dependência: o Hero (ranking, lento)
+  // esqueletoniza sozinho enquanto os cards de matches já renderizam.
   return (
     <div className="flex flex-col gap-4">
-      {/* Bloco de boas-vindas — skeleton durante loading */}
-      {isLoading ? (
+      {/* Bloco de boas-vindas — skeleton enquanto o shell de matches carrega */}
+      {matchesLoading ? (
         <HomeHeaderSkeleton />
       ) : (
         <HomeHeader
@@ -135,34 +139,34 @@ export function HomeDashboard() {
       )}
 
       {/* Banner discreto da fase ativa da Copa (TASK-04 / PRD-16) — oculto se null */}
-      {!isLoading && <CurrentStageBanner stage={currentStage} />}
+      {!matchesLoading && <CurrentStageBanner stage={currentStage} />}
 
-      {/* Hero — posição + tendência + aproveitamento + sparkline + régua (TASK-01 home-revamp) */}
-      {isLoading ? (
+      {/* Hero — gateado pelo ranking/estatísticas (independe dos matches) */}
+      {heroLoading ? (
         <HeroCardSkeleton />
       ) : (
         <HeroCard summary={heroSummary} summaryByScope={heroSummaryByScope} />
       )}
 
       {/* Próximo Jogo — card full-width */}
-      {isLoading ? (
+      {matchesLoading ? (
         <NextMatchCardSkeleton />
       ) : (
         <NextMatchCard nextMatch={nextMatch} ctaHref={nextMatch?.predictionsHref} />
       )}
 
       {/* Jogos abertos pra palpitar — card full-width (lista + faixa de avisos) */}
-      {isLoading ? (
+      {matchesLoading ? (
         <OpenMatchesCardSkeleton />
       ) : (
         <OpenMatchesCard openMatches={openMatches} notices={notices} />
       )}
 
       {/* Últimos Resultados — card full-width (lista até 5 itens) */}
-      {isLoading ? <LastResultsCardSkeleton /> : <LastResultsCard results={recentResults} />}
+      {matchesLoading ? <LastResultsCardSkeleton /> : <LastResultsCard results={recentResults} />}
 
       {/* Raio-X dos Palpites — card full-width (donut exato/vencedor/erro) */}
-      {isLoading ? <RaioXCardSkeleton /> : <RaioXCard breakdown={predictionBreakdown} />}
+      {matchesLoading ? <RaioXCardSkeleton /> : <RaioXCard breakdown={predictionBreakdown} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { requireApprovedUser } from "@/server/auth/requireApprovedUser";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
-import { predictionSchema } from "@/schemas";
+import { isSuperAdminRole, predictionSchema, roleSchema } from "@/schemas";
 import { copaDataErrorResponse } from "../../_lib/copaDataError";
 
 // firebase-admin + cookies() exigem Node runtime; lê Firestore → sem cache.
@@ -42,12 +42,49 @@ export async function GET(
   const session = await requireApprovedUser();
   if ("errorResponse" in session) return session.errorResponse;
 
+  const readerUid = session.user.uid;
   const { uid: targetUid } = await ctx.params;
+
+  const db = getAdminFirestore();
+
+  // ─── 1b. Isolamento de pool (S1) ──────────────────────────────────────────
+  // O leitor só pode ver palpites de membros do PRÓPRIO pool (mesmo `groupId`).
+  // super_admin é global (bypass). Auto-consulta (target === leitor) é sempre
+  // permitida. `groupId` SEMPRE do doc do usuário (Admin SDK), nunca do request.
+  // Sem esta barreira, um participante do pool A lê os palpites finished de um
+  // membro do pool B (as Rules não conseguem aplicar — palpites cross-usuário
+  // passam por Admin SDK). Fail-closed: leitura falha → 500; sem groupId → 403.
+  if (targetUid !== readerUid) {
+    try {
+      const readerSnap = await db.collection("users").doc(readerUid).get();
+      const readerData = readerSnap.data();
+      const readerRole = roleSchema.safeParse(readerData?.["role"]);
+      const readerIsSuper = readerRole.success && isSuperAdminRole(readerRole.data);
+
+      if (!readerIsSuper) {
+        const readerGroupId = readerData?.["groupId"];
+        const targetSnap = await db.collection("users").doc(targetUid).get();
+        const targetGroupId = targetSnap.data()?.["groupId"];
+        if (
+          typeof readerGroupId !== "string" ||
+          readerGroupId.length === 0 ||
+          readerGroupId !== targetGroupId
+        ) {
+          return NextResponse.json({ error: "Acesso negado." }, { status: 403 });
+        }
+      }
+    } catch (err) {
+      console.error("[predictions/[uid]] falha na checagem de pool:", err);
+      return NextResponse.json(
+        { error: "Erro ao carregar os palpites." },
+        { status: 500 },
+      );
+    }
+  }
 
   // ─── 2. Palpites do alvo via Admin SDK (bypassa Rules por design) ─────────
   // Fail-closed: falha de leitura → 500 pt-BR controlado (nunca página de erro
   // default do Next, que poderia vazar internals numa rota sensível).
-  const db = getAdminFirestore();
   let snap: Awaited<ReturnType<ReturnType<typeof db.collection>["get"]>>;
   try {
     snap = await db

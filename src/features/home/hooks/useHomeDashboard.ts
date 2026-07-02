@@ -8,27 +8,26 @@ import { scorePrediction } from "@/features/predictions/lib";
 
 import {
   buildPredictionsHref,
-  buildTeamMap,
   deriveCurrentStage,
   deriveHeroSummary,
+  deriveNextMatch,
   deriveNotices,
   deriveOpenMatches,
   derivePredictionBreakdown,
   derivePredictionStatus,
-  resolveTeam,
+  deriveRecentResults,
 } from "../lib/homeDashboardHelpers";
 import type {
   HomeDashboardData,
   NextMatchSummary,
   RecentResult,
 } from "../lib/homeDashboardHelpers";
+import type { MatchWithId } from "@/types";
 import { useMatchesList } from "@/features/matches/hooks/useMatchesList";
 import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
 import { usePoolRankingByScope } from "@/features/rankings/hooks/usePoolRankingByScope";
 import { usePoolStats } from "@/features/rankings/hooks/usePoolStats";
-import { useNextMatch } from "./useNextMatch";
 import { usePredictions } from "./usePredictions";
-import { useRecentResults } from "./useRecentResults";
 import { useStatistics } from "./useStatistics";
 import { useSystemSettings } from "./useSystemSettings";
 import { useTeams } from "./useTeams";
@@ -82,8 +81,6 @@ export function useHomeDashboard(): HomeDashboardData {
   });
   const statisticsQuery = useStatistics(uid);
   const poolStatsQuery = usePoolStats();
-  const nextMatchQuery = useNextMatch();
-  const recentQuery = useRecentResults();
   const teamsQuery = useTeams();
   const predictionsQuery = usePredictions(uid);
   const settingsQuery = useSystemSettings();
@@ -100,8 +97,6 @@ export function useHomeDashboard(): HomeDashboardData {
     rankingEliminatoriasQuery,
     statisticsQuery,
     poolStatsQuery,
-    nextMatchQuery,
-    recentQuery,
     teamsQuery,
     predictionsQuery,
     settingsQuery,
@@ -109,6 +104,17 @@ export function useHomeDashboard(): HomeDashboardData {
   ];
   const isLoading = queries.some((q) => q.isLoading);
   const isError = queries.some((q) => q.isError);
+
+  // Loading granular (TASK-10 perf-hardening) — render progressivo por card.
+  // Hero: ranking + statistics + pool_stats (+ escopos split quando habilitados).
+  const heroLoading =
+    rankingQuery.isLoading ||
+    statisticsQuery.isLoading ||
+    poolStatsQuery.isLoading ||
+    (splitEnabled &&
+      (rankingGruposQuery.isLoading || rankingEliminatoriasQuery.isLoading));
+  // Cards de matches: lista (matches/teams/predictions agregados) + settings.
+  const matchesLoading = matchesListData.isLoading || settingsQuery.isLoading;
 
   // B-02: refetch estável — lista explícita de .refetch individuais no dep array.
   // TanStack Query v5 garante estabilidade de identidade de .refetch entre renders.
@@ -118,8 +124,6 @@ export function useHomeDashboard(): HomeDashboardData {
     void rankingEliminatoriasQuery.refetch();
     void statisticsQuery.refetch();
     void poolStatsQuery.refetch();
-    void nextMatchQuery.refetch();
-    void recentQuery.refetch();
     void teamsQuery.refetch();
     void predictionsQuery.refetch();
     void settingsQuery.refetch();
@@ -130,8 +134,6 @@ export function useHomeDashboard(): HomeDashboardData {
     rankingEliminatoriasQuery.refetch,
     statisticsQuery.refetch,
     poolStatsQuery.refetch,
-    nextMatchQuery.refetch,
-    recentQuery.refetch,
     teamsQuery.refetch,
     predictionsQuery.refetch,
     settingsQuery.refetch,
@@ -149,6 +151,8 @@ export function useHomeDashboard(): HomeDashboardData {
       currentStage: null,
       notices: [],
       isLoading,
+      heroLoading,
+      matchesLoading,
       isError,
       refetch,
     };
@@ -158,14 +162,18 @@ export function useHomeDashboard(): HomeDashboardData {
   const ranking = rankingQuery.data;
   const statistics = statisticsQuery.data;
   const poolStats = poolStatsQuery.data ?? null;
-  const nextMatch = nextMatchQuery.data ?? null;
-  const recent = recentQuery.data ?? [];
-  const teams = teamsQuery.data ?? [];
   const predictions = predictionsQuery.data ?? [];
   const settings = settingsQuery.data ?? null;
 
-  // 6. Cache de teams (Map para O(1) lookup — sem N+1)
-  const teamMap = buildTeamMap(teams);
+  // 6. `now` único para todas as derivações temporais (próximo jogo, avisos, abertos).
+  const now = new Date();
+
+  // 6b. Próximo jogo + últimos resultados derivados do flatList já carregado
+  // (TASK-01 perf-hardening): elimina os fetches redundantes de /api/matches que
+  // `useNextMatch`/`useRecentResults` disparavam (query keys distintas → sem dedup).
+  const flatList = matchesListData.flatList;
+  const nextMatchItem = deriveNextMatch(flatList, now);
+  const recentItems = deriveRecentResults(flatList);
 
   // 7. Hero consolidado (TASK-01 home-revamp): ranking + statistics + pool_stats.
   const heroSummary = deriveHeroSummary(ranking, statistics, poolStats, uid);
@@ -190,33 +198,32 @@ export function useHomeDashboard(): HomeDashboardData {
   // a lista de partidas já carregada (finished × predictions).
   const predictionBreakdown = derivePredictionBreakdown(matchesListData.flatList, predictions);
 
-  // 9. Próximo jogo com join de teams + status do palpite
+  // 9. Próximo jogo: teams já resolvidos no MatchListItem; status do palpite
+  // continua via derivePredictionStatus (considera settings.predictionsLocked,
+  // que o predictionStatus do item NÃO considera — semântica preservada).
   let nextMatchSummary: NextMatchSummary | null = null;
-  if (nextMatch) {
+  if (nextMatchItem) {
     const predStatus = derivePredictionStatus(
-      nextMatch.id,
+      nextMatchItem.id,
       predictions,
       settings?.predictionsLocked ?? false,
     );
-    const userPred = predictions.find((p) => p.matchId === nextMatch.id) ?? null;
     nextMatchSummary = {
-      matchId: nextMatch.id,
-      kickoffAt: nextMatch.kickoffAt,
-      homeTeam: resolveTeam(nextMatch.homeTeamId, teamMap),
-      awayTeam: resolveTeam(nextMatch.awayTeamId, teamMap),
+      matchId: nextMatchItem.id,
+      kickoffAt: nextMatchItem.kickoffAt,
+      homeTeam: nextMatchItem.homeTeam,
+      awayTeam: nextMatchItem.awayTeam,
       predictionStatus: predStatus,
-      userPrediction: userPred
-        ? { homeScore: userPred.homeScore, awayScore: userPred.awayScore }
-        : null,
-      predictionsHref: buildPredictionsHref(nextMatch.id, predStatus),
+      userPrediction: nextMatchItem.userPrediction,
+      predictionsHref: buildPredictionsHref(nextMatchItem.id, predStatus),
     };
   }
 
-  // 10. Últimos resultados com join de teams + pontos ponderados
+  // 10. Últimos resultados: teams já resolvidos no MatchListItem + pontos ponderados.
   // W-02: placar non-null garantido pelo schema para jogos finished.
   // Pontos vêm de scorePrediction (mesma regra do ranking: 10/5/0); sem
   // palpite → 0 pts e userPrediction null (a UI distingue "sem palpite").
-  const recentResults: RecentResult[] = recent.flatMap((match) => {
+  const recentResults: RecentResult[] = recentItems.flatMap((match) => {
     // Omite jogo sem placar (não deveria ocorrer para finished, mas protege o tipo)
     if (match.homeScore === null || match.awayScore === null) return [];
     const pred = predictions.find((p) => p.matchId === match.id) ?? null;
@@ -224,21 +231,20 @@ export function useHomeDashboard(): HomeDashboardData {
       {
         matchId: match.id,
         kickoffAt: match.kickoffAt,
-        homeTeam: resolveTeam(match.homeTeamId, teamMap),
-        awayTeam: resolveTeam(match.awayTeamId, teamMap),
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
         matchHomeScore: match.homeScore,
         matchAwayScore: match.awayScore,
         userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
-        points: pred ? scorePrediction(pred, match).points : 0,
+        // scorePrediction espera MatchWithId; MatchListItem carrega os campos usados
+        // (status/homeScore/awayScore). Cast estreito local.
+        points: pred ? scorePrediction(pred, match as unknown as MatchWithId).points : 0,
       },
     ];
   });
 
-  // 11. `now` único para derivações temporais (avisos + jogos abertos).
-  const now = new Date();
-
-  // 12. Avisos do sistema
-  const notices = deriveNotices(settings, nextMatch, now);
+  // 12. Avisos do sistema (usa o próximo jogo derivado do flatList).
+  const notices = deriveNotices(settings, nextMatchItem, now);
 
   // 13. Jogos abertos para palpitar (TASK-02 home-revamp).
   const openMatches = deriveOpenMatches(matchesListData.flatList, now, 3);
@@ -256,6 +262,8 @@ export function useHomeDashboard(): HomeDashboardData {
     currentStage,
     notices,
     isLoading,
+    heroLoading,
+    matchesLoading,
     isError,
     refetch,
   };
