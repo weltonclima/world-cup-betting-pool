@@ -62,8 +62,8 @@ Cadeia final de desempate:
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/medium
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, tdd, implement, test, review
 - Notes: Confirmar no spec a semântica de "vitórias" (Opção A: `correct+winner`).
   Efeito só se materializa no próximo recálculo do ranking; sem migração. Cobrir
   em testes: (a) empate de pontos resolvido por vitórias; (b) empate de pontos e

@@ -6,10 +6,17 @@
  * adiciona um passo novo: `accuracy DESC` (acertos exatos / mesmo denominador no escopo)
  * já desempata por exatos. Cadeia efetiva de desempate:
  *   1. points DESC (ponderado)
- *   2. accuracy DESC (acertos exatos no escopo)
- *   3. wrong ASC
- *   4. firstPredictionAt ASC (mais antigo primeiro; ausente vai por último)
- *   5. uid ASC (fallback estável → ordem total determinística)
+ *   2. vitórias acertadas DESC (correct + winner) — acertos em jogos com vencedor
+ *   3. empates acertados DESC (draw) — acertos de empate
+ *   4. accuracy DESC (acertos exatos no escopo)
+ *   5. wrong ASC
+ *   6. firstPredictionAt ASC (mais antigo primeiro; ausente vai por último)
+ *   7. uid ASC (fallback estável → ordem total determinística)
+ *
+ * Os campos `correct`/`winner`/`draw` PARTICIPAM do desempate (passos 2–3): quando os
+ * pontos empatam, quem acertou mais vitórias (placar exato OU só o vencedor) fica à frente;
+ * persistindo o empate, quem acertou mais empates. São opcionais em RankableParticipant →
+ * ausência conta como 0 (`?? 0`) para manter o comparador total e determinístico.
  */
 
 /** Shape de domínio para ordenação. NÃO persistido (firstPredictionAt não está em RankingEntry). */
@@ -36,6 +43,17 @@ export function compareRanking(
   b: RankableParticipant,
 ): number {
   if (b.points !== a.points) return b.points - a.points; // points DESC
+
+  // Vitórias acertadas DESC: acertos em jogos com vencedor (placar exato + só vencedor).
+  const winsA = (a.correct ?? 0) + (a.winner ?? 0);
+  const winsB = (b.correct ?? 0) + (b.winner ?? 0);
+  if (winsB !== winsA) return winsB - winsA;
+
+  // Empates acertados DESC.
+  const drawA = a.draw ?? 0;
+  const drawB = b.draw ?? 0;
+  if (drawB !== drawA) return drawB - drawA;
+
   if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy; // accuracy DESC
   if (a.wrong !== b.wrong) return a.wrong - b.wrong; // wrong ASC
 
