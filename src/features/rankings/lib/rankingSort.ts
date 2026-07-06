@@ -6,17 +6,19 @@
  * adiciona um passo novo: `accuracy DESC` (acertos exatos / mesmo denominador no escopo)
  * já desempata por exatos. Cadeia efetiva de desempate:
  *   1. points DESC (ponderado)
- *   2. vitórias acertadas DESC (correct + winner) — acertos em jogos com vencedor
- *   3. empates acertados DESC (draw) — acertos de empate
- *   4. accuracy DESC (acertos exatos no escopo)
- *   5. wrong ASC
- *   6. firstPredictionAt ASC (mais antigo primeiro; ausente vai por último)
- *   7. uid ASC (fallback estável → ordem total determinística)
+ *   2. acerto DESC (correct = placar exato; "A" na UI — MAIOR PESO no desempate)
+ *   3. vitória DESC (winner = acertou só o vencedor; "V" na UI)
+ *   4. empate DESC (draw = acertou o empate; "E" na UI)
+ *   5. accuracy DESC (acertos exatos no escopo)
+ *   6. wrong ASC
+ *   7. firstPredictionAt ASC (mais antigo primeiro; ausente vai por último)
+ *   8. uid ASC (fallback estável → ordem total determinística)
  *
- * Os campos `correct`/`winner`/`draw` PARTICIPAM do desempate (passos 2–3): quando os
- * pontos empatam, quem acertou mais vitórias (placar exato OU só o vencedor) fica à frente;
- * persistindo o empate, quem acertou mais empates. São opcionais em RankableParticipant →
- * ausência conta como 0 (`?? 0`) para manter o comparador total e determinístico.
+ * Os campos `correct`/`winner`/`draw` PARTICIPAM do desempate (passos 2–4) e correspondem
+ * exatamente às colunas A/V/E exibidas na tela de ranking. Quando os pontos empatam,
+ * "acerto tem mais peso": desempata primeiro por placares exatos (correct), depois por
+ * vitórias acertadas (winner), depois por empates acertados (draw). São opcionais em
+ * RankableParticipant → ausência conta como 0 (`?? 0`) p/ manter o comparador determinístico.
  */
 
 /** Shape de domínio para ordenação. NÃO persistido (firstPredictionAt não está em RankingEntry). */
@@ -44,12 +46,17 @@ export function compareRanking(
 ): number {
   if (b.points !== a.points) return b.points - a.points; // points DESC
 
-  // Vitórias acertadas DESC: acertos em jogos com vencedor (placar exato + só vencedor).
-  const winsA = (a.correct ?? 0) + (a.winner ?? 0);
-  const winsB = (b.correct ?? 0) + (b.winner ?? 0);
-  if (winsB !== winsA) return winsB - winsA;
+  // Acerto (A) DESC — placares exatos. Maior peso no desempate.
+  const correctA = a.correct ?? 0;
+  const correctB = b.correct ?? 0;
+  if (correctB !== correctA) return correctB - correctA;
 
-  // Empates acertados DESC.
+  // Vitória (V) DESC — acertou só o vencedor.
+  const winnerA = a.winner ?? 0;
+  const winnerB = b.winner ?? 0;
+  if (winnerB !== winnerA) return winnerB - winnerA;
+
+  // Empate (E) DESC — acertou o empate.
   const drawA = a.draw ?? 0;
   const drawB = b.draw ?? 0;
   if (drawB !== drawA) return drawB - drawA;
