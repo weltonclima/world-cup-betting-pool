@@ -26,32 +26,41 @@ describe("rankingSort", () => {
     expect(ranked[0]?.uid).toBe("b");
   });
 
-  it("desempata por vitórias acertadas (correct + winner) DESC quando points iguais", () => {
+  it("desempata por acerto (correct) DESC quando points iguais — acerto tem mais peso", () => {
     const ranked = rankParticipants([
-      p("a", 10, { correct: 1, winner: 1 }), // 2 vitórias
-      p("b", 10, { correct: 2, winner: 2 }), // 4 vitórias
+      p("a", 10, { correct: 2 }), // A2
+      p("b", 10, { correct: 4 }), // A4
     ]);
     expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
   });
 
-  it("vitórias = soma de correct + winner (não um campo só)", () => {
-    // a tem mais correct, mas soma menor; b tem soma maior → b primeiro.
+  it("acerto tem mais peso que vitória (cenário da tela: A4 V7 vence A2 V11)", () => {
+    // Reproduz o empate real de 75 pts: quem tem mais acertos exatos (A) fica à frente,
+    // mesmo com menos vitórias (V).
     const ranked = rankParticipants([
-      p("a", 10, { correct: 3, winner: 0 }), // 3 vitórias
-      p("b", 10, { correct: 2, winner: 3 }), // 5 vitórias
+      p("welton", 75, { correct: 4, winner: 7, draw: 0 }), // A4 V7 E0
+      p("kaique", 75, { correct: 2, winner: 11, draw: 0 }), // A2 V11 E0
+    ]);
+    expect(ranked.map((r) => r.uid)).toEqual(["welton", "kaique"]);
+  });
+
+  it("desempata por vitória (winner) DESC quando points e acerto iguais", () => {
+    const ranked = rankParticipants([
+      p("a", 10, { correct: 2, winner: 3 }), // A2 V3
+      p("b", 10, { correct: 2, winner: 6 }), // A2 V6
     ]);
     expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
   });
 
-  it("desempata por empates acertados (draw) DESC quando points e vitórias iguais", () => {
+  it("desempata por empate (draw) DESC quando points, acerto e vitória iguais", () => {
     const ranked = rankParticipants([
-      p("a", 10, { correct: 2, winner: 1, draw: 1 }), // 3 vitórias, 1 empate
-      p("b", 10, { correct: 1, winner: 2, draw: 4 }), // 3 vitórias, 4 empates
+      p("a", 10, { correct: 2, winner: 3, draw: 1 }), // A2 V3 E1
+      p("b", 10, { correct: 2, winner: 3, draw: 4 }), // A2 V3 E4
     ]);
     expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
   });
 
-  it("cai para accuracy quando points, vitórias e empates iguais (cadeia preservada)", () => {
+  it("cai para accuracy quando points, acerto, vitória e empate iguais (cadeia preservada)", () => {
     const ranked = rankParticipants([
       p("a", 10, { correct: 1, winner: 1, draw: 1, accuracy: 50 }),
       p("b", 10, { correct: 1, winner: 1, draw: 1, accuracy: 80 }),
@@ -59,7 +68,7 @@ describe("rankingSort", () => {
     expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
   });
 
-  it("vitórias/empates ausentes contam como 0 (determinístico, sem NaN)", () => {
+  it("A/V/E ausentes contam como 0 (determinístico, sem NaN)", () => {
     // Sem correct/winner/draw, desempata direto por accuracy.
     const ranked = rankParticipants([
       p("a", 10, { accuracy: 50 }),
@@ -68,36 +77,27 @@ describe("rankingSort", () => {
     expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
   });
 
-  it("vitórias têm prioridade sobre accuracy no desempate", () => {
-    // a tem accuracy maior, mas menos vitórias → b (mais vitórias) vem primeiro.
+  it("acerto tem prioridade sobre accuracy no desempate", () => {
+    // a tem accuracy maior, mas menos acertos exatos → b (mais A) vem primeiro.
     const ranked = rankParticipants([
-      p("a", 10, { correct: 0, winner: 1, accuracy: 90 }), // 1 vitória
-      p("b", 10, { correct: 2, winner: 1, accuracy: 10 }), // 3 vitórias
+      p("a", 10, { correct: 1, accuracy: 90 }), // A1
+      p("b", 10, { correct: 3, accuracy: 10 }), // A3
     ]);
     expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
   });
 
-  it("empates têm prioridade sobre accuracy (points e vitórias iguais)", () => {
-    // a tem accuracy maior, mas menos empates → b (mais empates) primeiro.
-    const ranked = rankParticipants([
-      p("a", 10, { correct: 1, winner: 1, draw: 1, accuracy: 90 }),
-      p("b", 10, { correct: 1, winner: 1, draw: 3, accuracy: 10 }),
-    ]);
-    expect(ranked.map((r) => r.uid)).toEqual(["b", "a"]);
-  });
-
-  it("cadeia completa: points > vitórias > empates > accuracy em ranking misto", () => {
+  it("cadeia completa: points > acerto > vitória > empate > accuracy em ranking misto", () => {
     const ranked = rankParticipants([
       // pontos diferentes primeiro
       p("low", 8, { correct: 5, winner: 5, draw: 5, accuracy: 99 }),
-      // empatados em pontos: desempate por vitórias, depois empates, depois accuracy
-      p("c", 10, { correct: 1, winner: 1, draw: 0, accuracy: 40 }), // 2 vit
-      p("a", 10, { correct: 2, winner: 1, draw: 2, accuracy: 10 }), // 3 vit, 2 emp
-      p("b", 10, { correct: 1, winner: 2, draw: 5, accuracy: 20 }), // 3 vit, 5 emp
-      p("d", 10, { correct: 1, winner: 1, draw: 3, accuracy: 70 }), // 2 vit, 3 emp
+      // empatados em pontos: A > V > E > accuracy
+      p("c", 10, { correct: 1, winner: 9, draw: 9, accuracy: 40 }), // A1
+      p("a", 10, { correct: 3, winner: 1, draw: 2, accuracy: 10 }), // A3 V1 E2
+      p("b", 10, { correct: 3, winner: 5, draw: 0, accuracy: 20 }), // A3 V5
+      p("d", 10, { correct: 3, winner: 1, draw: 9, accuracy: 70 }), // A3 V1 E9
     ]);
-    // 10pts: b(3v,5e) > a(3v,2e) > d(2v,3e) > c(2v,0e); depois low(8pts).
-    expect(ranked.map((r) => r.uid)).toEqual(["b", "a", "d", "c", "low"]);
+    // 10pts: b(A3 V5) > d(A3 V1 E9) > a(A3 V1 E2) > c(A1); depois low(8pts).
+    expect(ranked.map((r) => r.uid)).toEqual(["b", "d", "a", "c", "low"]);
   });
 
   it("desempata por accuracy DESC quando points iguais", () => {

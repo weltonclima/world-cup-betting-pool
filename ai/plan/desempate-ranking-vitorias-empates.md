@@ -15,15 +15,19 @@ existentes, sem tocar em `recalc.ts`.
 Posição na cadeia (recomendada, alinhada ao pedido "se os pontos empatarem, ver
 vitórias"): logo após `points`.
 
+Semântica CORRIGIDA (conforme tela A/V/E): três critérios separados, "acerto tem
+mais peso". A=`correct` (placar exato), V=`winner` (só vencedor), E=`draw` (empate).
+
 Cadeia final de desempate:
 ```
 1. points DESC
-2. (correct + winner) DESC   ← NOVO (vitórias acertadas)
-3. draw DESC                 ← NOVO (empates acertados)
-4. accuracy DESC
-5. wrong ASC
-6. firstPredictionAt ASC
-7. uid ASC
+2. correct DESC   ← NOVO — acerto (A), MAIOR PESO
+3. winner DESC    ← NOVO — vitória (V)
+4. draw DESC      ← NOVO — empate (E)
+5. accuracy DESC
+6. wrong ASC
+7. firstPredictionAt ASC
+8. uid ASC
 ```
 
 ## 2. Fases de execução recomendadas

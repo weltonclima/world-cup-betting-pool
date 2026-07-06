@@ -4,7 +4,7 @@ import {
   Trophy,
   type LucideIcon,
 } from "lucide-react";
-import { differenceInCalendarDays, format, formatDistanceToNow } from "date-fns";
+import { differenceInCalendarDays, format, formatDistance } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import type { NotificationType } from "@/schemas/notifications";
@@ -47,7 +47,7 @@ export function relativeTime(createdAt: string, now: Date = new Date()): string 
   const days = differenceInCalendarDays(now, date);
   if (days <= 0) return format(date, "HH:mm");
   if (days === 1) return "Ontem";
-  return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
+  return formatDistance(date, now, { addSuffix: true, locale: ptBR });
 }
 
 /** Data/hora por extenso para o detalhe (PRD08-02). */
