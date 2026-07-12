@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
+import {
+  POOL_THEME_COOKIE,
+  serializePoolThemeCookie,
+} from "@/features/groupAdmin/lib/poolTheme";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
   hexColorSchema,
@@ -151,7 +155,29 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     if (flagChanged) {
       await recalcRankingsBestEffort(db);
     }
-    return NextResponse.json({ pool: poolSchema.parse(updatedSnap.data()) });
+    const updatedPool = poolSchema.parse(updatedSnap.data());
+    const response = NextResponse.json({ pool: updatedPool });
+
+    // Refresca o cookie de cor do pool (TASK-03) quando o admin muda uma cor, para
+    // o SSR sem flash refletir imediatamente (sem re-login). Best-effort.
+    if (primaryColorLight !== undefined || primaryColorDark !== undefined) {
+      const value = serializePoolThemeCookie(
+        updatedPool.primaryColorLight,
+        updatedPool.primaryColorDark,
+      );
+      if (value !== null) {
+        response.cookies.set({
+          name: POOL_THEME_COOKIE,
+          value,
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: 5 * 24 * 60 * 60,
+        });
+      }
+    }
+    return response;
   } catch (err) {
     console.error("[group/settings PATCH] erro inesperado:", err);
     return NextResponse.json(

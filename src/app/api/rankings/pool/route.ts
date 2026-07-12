@@ -6,7 +6,7 @@ import { requireApprovedUser } from "@/server/auth/requireApprovedUser";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { ensureRankingsFresh } from "@/server/rankings/recalc";
 import { hydrateRankingEntries } from "@/server/rankings/hydrateEntries";
-import { rankingSchema } from "@/schemas";
+import { HEX_COLOR_REGEX, rankingSchema } from "@/schemas";
 
 // firebase-admin + cookies() exigem Node runtime; lê/grava Firestore → sem cache.
 export const runtime = "nodejs";
@@ -53,8 +53,15 @@ export async function GET(): Promise<NextResponse> {
   // payload; telas tratam ausência como false). Expomos APENAS este campo a
   // membros — nenhum outro dado do pool vaza no payload de ranking.
   const poolSnap = await db.collection("pools").doc(groupId).get();
-  const rawFlag: unknown = poolSnap.data()?.["splitPhaseRanking"];
+  const poolData = poolSnap.data();
+  const rawFlag: unknown = poolData?.["splitPhaseRanking"];
   const splitPhaseRanking = typeof rawFlag === "boolean" ? rawFlag : undefined;
+  // Cores de marca do pool (TASK-03). Guarda hex defensiva: uma cor malformada no
+  // banco NÃO deve quebrar o parse do payload inteiro no client → omite se inválida.
+  const asHex = (v: unknown): string | undefined =>
+    typeof v === "string" && HEX_COLOR_REGEX.test(v) ? v : undefined;
+  const primaryColorLight = asHex(poolData?.["primaryColorLight"]);
+  const primaryColorDark = asHex(poolData?.["primaryColorDark"]);
   // Flag de exibição p/ pontuar eliminatórias pelo 90min (TASK-04). Mesmo padrão:
   // lida só da sessão; ausente/não-booleano = OFF (omitida do payload).
   const rawOvertimeFlag: unknown = poolSnap.data()?.["ignoreOvertimeGoals"];
@@ -65,7 +72,14 @@ export async function GET(): Promise<NextResponse> {
   // trocar avatar/apelido reflita no ranking sem depender de um recalc disparar.
   const entries = await hydrateRankingEntries(db, parsed.data.entries);
   return NextResponse.json(
-    { ...parsed.data, entries, splitPhaseRanking, ignoreOvertimeGoals },
+    {
+      ...parsed.data,
+      entries,
+      splitPhaseRanking,
+      ignoreOvertimeGoals,
+      primaryColorLight,
+      primaryColorDark,
+    },
     { status: 200 },
   );
 }

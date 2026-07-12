@@ -1,37 +1,45 @@
-"use client";
-
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 
-import { AppShell } from "@/components/layout/AppShell";
-import { AuthGuard } from "@/components/layout/AuthGuard";
-import { BiometricActivationPrompt } from "@/features/passkeys";
-import { ThemeSync } from "@/features/profile/components";
-import { InstallPrompt } from "@/features/push/components/InstallPrompt";
-import { PushOptInPrompt } from "@/features/push/components/PushOptInPrompt";
+import {
+  POOL_THEME_COOKIE,
+  parsePoolThemeCookie,
+  poolThemeStyleVars,
+  resolveEffectivePrimary,
+} from "@/features/groupAdmin/lib/poolTheme";
+
+import { AppLayoutShell } from "./AppLayoutShell";
 
 interface AppLayoutProps {
   children: ReactNode;
 }
 
 /**
- * Layout das rotas internas protegidas.
- * Envolve o conteúdo com AuthGuard (verifica autenticação) e AppShell (estrutura visual).
+ * Layout das rotas internas protegidas (Server Component).
+ *
+ * Tema por pool (TASK-03): lê o cookie não-httpOnly `pool-primary` e injeta as
+ * CSS vars `--pool-primary*` num wrapper `display:contents` ANTES da hidratação
+ * → sem flash. Ausente/inválido → objeto vazio (as classes `.*-theme` caem no
+ * verde padrão). O CSS escolhe light vs dark por `.dark`, então não precisamos
+ * saber o tema aqui. A leitura do cookie fica no escopo de `(app)` (não no root
+ * layout) para que as rotas de auth — que nem consomem `--pool-primary` — sigam
+ * estáticas (TASK-03 M1).
  */
-export default function AppLayout({ children }: AppLayoutProps) {
+export default async function AppLayout({ children }: AppLayoutProps) {
+  const cookieStore = await cookies();
+  const parsed = parsePoolThemeCookie(cookieStore.get(POOL_THEME_COOKIE)?.value);
+  const poolVars = poolThemeStyleVars(
+    parsed
+      ? resolveEffectivePrimary({
+          primaryColorLight: parsed.light,
+          primaryColorDark: parsed.dark,
+        })
+      : null,
+  );
+
   return (
-    <AuthGuard>
-      {/* Hidrata o tema salvo no perfil (cross-device) em toda a área autenticada. */}
-      <ThemeSync />
-      <BiometricActivationPrompt />
-      <AppShell>
-        {/* Banner de instalação do PWA (web-push-pwa TASK-06) — dispensável,
-            auto-gated (some em standalone/sem suporte/dispensado). */}
-        <InstallPrompt className="mb-4" />
-        {/* Soft-ask pró-ativo de push (push-optin) — aparece pra quem não ligou
-            o push; "Agora não" adia 24h, some ao ligar/negar. */}
-        <PushOptInPrompt className="mb-4" />
-        {children}
-      </AppShell>
-    </AuthGuard>
+    <div className="contents" style={poolVars as React.CSSProperties}>
+      <AppLayoutShell>{children}</AppLayoutShell>
+    </div>
   );
 }

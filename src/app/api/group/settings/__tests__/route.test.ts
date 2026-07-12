@@ -367,4 +367,20 @@ describe("PATCH /api/group/settings", () => {
     const res = await PATCH(makeReq({ body: { primaryColorDark: 123 } }));
     expect(res.status).toBe(422);
   });
+
+  it("seta o cookie pool-primary ao mudar uma cor (SSR sem flash, TASK-03)", async () => {
+    mockDb({ data: pool({ primaryColorLight: "#1a2b3c" }) });
+    const res = await PATCH(makeReq({ body: { primaryColorLight: "#1a2b3c" } }));
+    expect(res.status).toBe(200);
+    const cookie = res.cookies.get("pool-primary");
+    expect(cookie?.value).toContain("#1a2b3c");
+    expect(cookie?.httpOnly).toBe(false);
+  });
+
+  it("NÃO seta o cookie pool-primary quando o PATCH não toca cor", async () => {
+    mockDb({ data: pool({ name: "Novo" }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo" } }));
+    expect(res.status).toBe(200);
+    expect(res.cookies.get("pool-primary")).toBeUndefined();
+  });
 });

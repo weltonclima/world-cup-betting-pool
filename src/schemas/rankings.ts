@@ -6,6 +6,7 @@ import {
   percentageSchema,
   rankingScopeSchema,
 } from "@/schemas/shared";
+import { hexColorSchema } from "@/schemas/pools";
 
 // Entrada de ranking (objeto aninhado).
 // Pontuação ponderada: `points` === total de PONTOS ponderados (5/10) no escopo,
@@ -54,6 +55,11 @@ export const poolRankingResponseSchema = rankingSchema.extend({
   // telas pontuam palpites de eliminatórias pelo placar de 90min (coerência com o
   // ranking do pool). Ausente = OFF. Fonte única no client via usePoolRanking.
   ignoreOvertimeGoals: z.boolean().optional(),
+  // Cores de marca do pool (personalizacao-grupo TASK-03) — usadas pelo
+  // PoolThemeVars no client p/ sincronizar as CSS vars do tema por pool.
+  // Ausentes = grupo sem cor (fallback verde). Fonte única via usePoolRanking.
+  primaryColorLight: hexColorSchema.optional(),
+  primaryColorDark: hexColorSchema.optional(),
 });
 
 // Ranking por grupo individual (A–L). Doc `rankings/group-{groupId}`.

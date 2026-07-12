@@ -141,8 +141,8 @@ TASK-01 e TASK-02 são **independentes** entre si. TASK-03 depende da TASK-02
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: in-progress
-- Phases done: (none)
+- Status: done
+- Phases done: spec, tdd, implement, test, review, ui-review
 - Notes: is_frontend: true (mecanismo de tema — SSR cookie + CSS var + provider
   client). SP subiu 5→8 pela **decisão sem-flash (cookie/SSR)** + foreground por
   contraste. Maior risco: não regredir o tema claro/escuro global; consistência
