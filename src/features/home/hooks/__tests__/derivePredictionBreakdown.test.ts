@@ -167,3 +167,29 @@ describe("derivePredictionBreakdown — mix", () => {
     expect(result.isEmpty).toBe(false);
   });
 });
+
+describe("derivePredictionBreakdown — ignoreOvertimeGoals (TASK-04)", () => {
+  // KO com prorrogação: final 2×1, 90min 1×1. Palpite 1×1.
+  const koMatch = makeFinished({
+    id: "ko1",
+    stage: "oitavas",
+    groupId: null,
+    homeScore: 2,
+    awayScore: 1,
+    homeScoreRegulation: 1,
+    awayScoreRegulation: 1,
+  });
+  const pred1x1 = [makePrediction({ matchId: "ko1", homeScore: 1, awayScore: 1 })];
+
+  it("flag off (sem options) → conta pelo placar final (1×1 vs 2×1 → wrong)", () => {
+    const result = derivePredictionBreakdown([koMatch], pred1x1);
+    expect(result).toMatchObject({ correct: 0, partial: 0, wrong: 1 });
+  });
+
+  it("flag on → conta pelo 90min (1×1 vs 1×1 → correct)", () => {
+    const result = derivePredictionBreakdown([koMatch], pred1x1, {
+      ignoreOvertimeGoals: true,
+    });
+    expect(result).toMatchObject({ correct: 1, partial: 0, wrong: 0 });
+  });
+});

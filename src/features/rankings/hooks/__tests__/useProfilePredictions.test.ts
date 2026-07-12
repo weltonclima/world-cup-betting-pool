@@ -37,10 +37,15 @@ vi.mock("@/features/matches/hooks", () => ({
   useTeams: vi.fn(),
 }));
 
+vi.mock("@/hooks/useAuth", () => ({ useAuth: vi.fn() }));
+vi.mock("../usePoolRanking", () => ({ usePoolRanking: vi.fn() }));
+
 // ── imports pós-mock ─────────────────────────────────────────────────────────
 
 import { listPredictionsByUid, getOtherUserPredictions } from "@/services";
 import { useMatches, useTeams } from "@/features/matches/hooks";
+import { useAuth } from "@/hooks/useAuth";
+import { usePoolRanking } from "../usePoolRanking";
 import { useProfilePredictions } from "../useProfilePredictions";
 
 // ── helpers tipados ──────────────────────────────────────────────────────────
@@ -49,6 +54,8 @@ const mockListPredictionsByUid    = vi.mocked(listPredictionsByUid);
 const mockGetOtherUserPredictions = vi.mocked(getOtherUserPredictions);
 const mockUseMatches              = vi.mocked(useMatches);
 const mockUseTeams                = vi.mocked(useTeams);
+const mockUseAuth                 = vi.mocked(useAuth);
+const mockUsePoolRanking          = vi.mocked(usePoolRanking);
 
 function fakeQuery<T>(overrides: {
   data?: T;
@@ -141,6 +148,11 @@ function setupGlobalMocks({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Defaults: sem pool/flag → exibição pelo placar final (comportamento atual).
+  mockUseAuth.mockReturnValue({ profile: null } as unknown as ReturnType<typeof useAuth>);
+  mockUsePoolRanking.mockReturnValue(
+    fakeQuery({ data: null }) as unknown as ReturnType<typeof usePoolRanking>,
+  );
 });
 
 // ── T-01/T-02 — bifurcação de fonte por contexto ────────────────────────────

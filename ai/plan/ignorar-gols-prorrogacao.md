@@ -224,8 +224,8 @@ a mais crítica é a TASK-03 (mexe no núcleo da pontuação). Ambas com TDD.
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, implement, test, review
 - Notes: is_frontend: true (telas). Decisão do usuário no checkpoint do plano: (A)
   ranking-only (não faz TASK-04, documenta que badges por-jogo podem divergir em
   jogos de prorrogação) OU (B) consistência total (faz TASK-04). Recomendação: (A)

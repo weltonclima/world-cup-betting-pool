@@ -12,6 +12,7 @@
 import { useCallback } from "react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import { buildTeamMap, resolveTeam, type ResolvedTeam } from "@/features/matches/lib";
 import {
@@ -68,13 +69,20 @@ export interface PredictionsListData {
  */
 export function usePredictionsList(): PredictionsListData {
   // 1. uid do usuário autenticado
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 
   // 2. Queries por recurso
   const predictionsQuery = usePredictions(uid);
   const matchesQuery = useMatches();
   const teamsQuery = useTeams();
+  // Flag do pool: ignorar gols de prorrogação nas eliminatórias (TASK-04). Vem no
+  // payload do ranking do pool; alimenta o status de exibição p/ ficar coerente
+  // com o ranking. Ausente/sem pool = OFF (placar final).
+  const poolRankingQuery = usePoolRanking(profile?.groupId);
+  const scoreOptions = {
+    ignoreOvertimeGoals: poolRankingQuery.data?.ignoreOvertimeGoals === true,
+  };
 
   // 3. Estado agregado
   const isLoading = [predictionsQuery, matchesQuery, teamsQuery].some((q) => q.isLoading);
@@ -115,7 +123,7 @@ export function usePredictionsList(): PredictionsListData {
         homeTeam: resolveTeam(match.homeTeamId, teamMap),
         awayTeam: resolveTeam(match.awayTeamId, teamMap),
         prediction: { homeScore: prediction.homeScore, awayScore: prediction.awayScore },
-        displayStatus: derivePredictionDisplayStatus(prediction, match, now),
+        displayStatus: derivePredictionDisplayStatus(prediction, match, now, scoreOptions),
         isManual: Boolean(prediction.editedBy),
       };
     })

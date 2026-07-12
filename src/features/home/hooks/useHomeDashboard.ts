@@ -75,6 +75,12 @@ export function useHomeDashboard(): HomeDashboardData {
   // `enabled` controla o fetch.
   const splitOn = rankingQuery.data?.splitPhaseRanking === true;
   const splitEnabled = splitOn && Boolean(profile?.groupId);
+  // Ignorar gols de prorrogação (TASK-04): flag do pool embutida no payload do
+  // ranking. Alimenta o scoring client-side (raio-X + últimos resultados) para
+  // ficar coerente com o ranking do pool. Ausente = OFF (placar final).
+  const scoreOptions = {
+    ignoreOvertimeGoals: rankingQuery.data?.ignoreOvertimeGoals === true,
+  };
   const rankingGruposQuery = usePoolRankingByScope("grupos", { enabled: splitEnabled });
   const rankingEliminatoriasQuery = usePoolRankingByScope("eliminatorias", {
     enabled: splitEnabled,
@@ -196,7 +202,11 @@ export function useHomeDashboard(): HomeDashboardData {
 
   // 8. Raio-X dos palpites (TASK-03 home-revamp): scoring client-side sobre
   // a lista de partidas já carregada (finished × predictions).
-  const predictionBreakdown = derivePredictionBreakdown(matchesListData.flatList, predictions);
+  const predictionBreakdown = derivePredictionBreakdown(
+    matchesListData.flatList,
+    predictions,
+    scoreOptions,
+  );
 
   // 9. Próximo jogo: teams já resolvidos no MatchListItem; status do palpite
   // continua via derivePredictionStatus (considera settings.predictionsLocked,
@@ -238,7 +248,9 @@ export function useHomeDashboard(): HomeDashboardData {
         userPrediction: pred ? { homeScore: pred.homeScore, awayScore: pred.awayScore } : null,
         // scorePrediction espera MatchWithId; MatchListItem carrega os campos usados
         // (status/homeScore/awayScore). Cast estreito local.
-        points: pred ? scorePrediction(pred, match as unknown as MatchWithId).points : 0,
+        points: pred
+          ? scorePrediction(pred, match as unknown as MatchWithId, scoreOptions).points
+          : 0,
       },
     ];
   });

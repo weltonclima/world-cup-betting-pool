@@ -4,7 +4,7 @@
  * Toda a lógica de derivação/join fica aqui; o compositor useHomeDashboard orquestra.
  */
 
-import { scorePrediction } from "@/features/predictions/lib";
+import { scorePrediction, type ScoreOptions } from "@/features/predictions/lib";
 import type { MatchListItem } from "@/features/matches/hooks/useMatchesList";
 import type {
   MatchWithId,
@@ -290,6 +290,7 @@ export function buildPredictionsHref(matchId: string, status: HomePredictionStat
 export function derivePredictionBreakdown(
   matches: MatchListItem[],
   predictions: Prediction[],
+  options?: ScoreOptions,
 ): PredictionBreakdown {
   let correct = 0;
   let partial = 0;
@@ -300,8 +301,9 @@ export function derivePredictionBreakdown(
     const pred = predictions.find((p) => p.matchId === match.id);
     if (!pred) continue; // R2 — sem palpite → ignora
 
-    // R4: MatchListItem tem status/homeScore/awayScore que scorePrediction usa.
-    const { status } = scorePrediction(pred, match as unknown as MatchWithId);
+    // R4: MatchListItem tem status/homeScore/awayScore + regulamentar (TASK-04)
+    // que scorePrediction/effectiveMatchScore usam.
+    const { status } = scorePrediction(pred, match as unknown as MatchWithId, options);
     if (status === "correct") correct++;
     else if (status === "partial") partial++;
     else if (status === "wrong") wrong++;

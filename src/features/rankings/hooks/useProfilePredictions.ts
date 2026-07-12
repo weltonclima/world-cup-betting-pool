@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { getOtherUserPredictions, listPredictionsByUid } from "@/services";
+import { useAuth } from "@/hooks/useAuth";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import { buildTeamMap, resolveTeam } from "@/features/matches/lib";
 import { derivePredictionDisplayStatus } from "@/features/predictions/lib";
@@ -11,6 +12,7 @@ import type { MatchWithId, Prediction, TeamWithId } from "@/types";
 
 import type { ProfilePredictionItem, ResolvedTeam } from "../lib";
 import { rankingKeys } from "./rankingKeys";
+import { usePoolRanking } from "./usePoolRanking";
 
 /**
  * View-model de saída do compositor de palpites do perfil (PRD-14 / TASK-03).
@@ -78,6 +80,14 @@ export function useProfilePredictions(
   // 2. Dados globais (sempre ativos, independentes de uid)
   const matchesQuery = useMatches();
   const teamsQuery = useTeams();
+  // Flag do pool do usuário logado (TASK-04): ignorar gols de prorrogação nas
+  // eliminatórias. Multi-tenant → o perfil visto pertence ao mesmo pool, então a
+  // flag do próprio pool governa o status de exibição. Ausente = OFF (placar final).
+  const { profile } = useAuth();
+  const poolRankingQuery = usePoolRanking(profile?.groupId);
+  const scoreOptions = {
+    ignoreOvertimeGoals: poolRankingQuery.data?.ignoreOvertimeGoals === true,
+  };
 
   // 3. Estado agregado
   const queries = [predictionsQuery, matchesQuery, teamsQuery];
@@ -125,7 +135,7 @@ export function useProfilePredictions(
         },
         actualScore,
         matchStatus: match.status,
-        displayStatus: derivePredictionDisplayStatus(prediction, match, now),
+        displayStatus: derivePredictionDisplayStatus(prediction, match, now, scoreOptions),
       },
     ];
   });

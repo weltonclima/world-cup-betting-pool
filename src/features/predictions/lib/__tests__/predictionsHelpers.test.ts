@@ -610,4 +610,30 @@ describe("derivePredictionDisplayStatus", () => {
     const now = new Date(kickoffMs + 7_200_000);
     expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
   });
+
+  // --- TASK-04: options ignoreOvertimeGoals reflete o placar de 90min ---
+  it("flag off (sem options) em KO com prorrogação: palpite 1×1, final 2×1 → 'errou'", () => {
+    const match = makeKnockoutOtMatch({ kickoffAt }); // final 2×1, 90min 1×1
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
+  });
+
+  it("flag on em KO com prorrogação: palpite 1×1 vira 'acertou' pelo 90min", () => {
+    const match = makeKnockoutOtMatch({ kickoffAt });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(
+      derivePredictionDisplayStatus(prediction, match, now, { ignoreOvertimeGoals: true }),
+    ).toBe("acertou");
+  });
+
+  it("flag on: palpite que acertava o final (2×1) vira 'errou' pelo 90min (1×1)", () => {
+    const match = makeKnockoutOtMatch({ kickoffAt });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(
+      derivePredictionDisplayStatus(prediction, match, now, { ignoreOvertimeGoals: true }),
+    ).toBe("errou");
+  });
 });

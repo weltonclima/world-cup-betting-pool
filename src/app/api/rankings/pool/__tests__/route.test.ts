@@ -206,7 +206,7 @@ describe("GET /api/rankings/pool", () => {
     expect(poolsGet).toHaveBeenCalledTimes(1);
   });
 
-  it("NÃO vaza outros campos do pool no payload (só splitPhaseRanking)", async () => {
+  it("NÃO vaza outros campos do pool no payload (só flags de exibição)", async () => {
     approved();
     mockDb({
       groupId: "pool-1",
@@ -225,5 +225,45 @@ describe("GET /api/rankings/pool", () => {
     expect(body).not.toHaveProperty("photoBase64");
     expect(body).not.toHaveProperty("maxParticipants");
     expect(body).not.toHaveProperty("predictionsLocked");
+  });
+
+  // ── ignoreOvertimeGoals no payload (ignorar-gols-prorrogacao TASK-04) ───────
+  it("anexa ignoreOvertimeGoals: true quando o pool tem a flag ON", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: { ignoreOvertimeGoals: true } });
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ignoreOvertimeGoals).toBe(true);
+    expect(body.entries).toHaveLength(1);
+  });
+
+  it("anexa ignoreOvertimeGoals: false quando a flag é false explícito", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: { ignoreOvertimeGoals: false } });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.ignoreOvertimeGoals).toBe(false);
+  });
+
+  it("flag ausente no pool doc → payload sem ignoreOvertimeGoals (OFF)", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: {} });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.ignoreOvertimeGoals).toBeUndefined();
+    expect(body.entries).toHaveLength(1);
+  });
+
+  it("expõe as duas flags juntas quando ambas ON", async () => {
+    approved();
+    mockDb({
+      groupId: "pool-1",
+      poolDoc: { splitPhaseRanking: true, ignoreOvertimeGoals: true },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.splitPhaseRanking).toBe(true);
+    expect(body.ignoreOvertimeGoals).toBe(true);
   });
 });

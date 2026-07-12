@@ -233,9 +233,10 @@ export function derivePredictionDisplayStatus(
   prediction: Prediction,
   match: MatchWithId,
   now: Date,
+  options?: ScoreOptions,
 ): PredictionDisplayStatus {
   if (match.status === "finished") {
-    const { status } = scorePrediction(prediction, match);
+    const { status } = scorePrediction(prediction, match, options);
     if (status === "correct") return "acertou";
     if (status === "partial") {
       return prediction.homeScore === prediction.awayScore
