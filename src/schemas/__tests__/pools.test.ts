@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  MAX_POOL_LOGO_BASE64_LENGTH,
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolEditSchema,
   poolInputSchema,
@@ -64,6 +65,25 @@ describe("pools › poolSchema", () => {
       poolSchema.safeParse({
         ...valid,
         photoBase64: "a".repeat(MAX_POOL_PHOTO_BASE64_LENGTH + 1),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("logoBase64: ausente → parse ok (opcional, aditivo)", () => {
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("logoBase64: aceita dentro do limite, rejeita acima", () => {
+    expect(
+      poolSchema.safeParse({
+        ...valid,
+        logoBase64: "a".repeat(MAX_POOL_LOGO_BASE64_LENGTH),
+      }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({
+        ...valid,
+        logoBase64: "a".repeat(MAX_POOL_LOGO_BASE64_LENGTH + 1),
       }).success,
     ).toBe(false);
   });

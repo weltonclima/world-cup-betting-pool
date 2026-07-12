@@ -7,6 +7,7 @@ import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
+  MAX_POOL_LOGO_BASE64_LENGTH,
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolSchema,
 } from "@/schemas";
@@ -24,6 +25,15 @@ const settingsSchema = z
     name: z.string().min(1).optional(),
     description: z.string().max(160).optional(),
     photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH).optional(),
+    // Defense-in-depth (review M1): além do teto, exige data URL de imagem RASTER
+    // (o compressor sempre gera JPEG; png/webp aceitos por robustez). Fecha a
+    // porta a `data:image/svg+xml,...`/`data:text/html,...` persistidos por um
+    // client malicioso e servidos a membros no futuro (XSS armazenado).
+    logoBase64: z
+      .string()
+      .max(MAX_POOL_LOGO_BASE64_LENGTH)
+      .regex(/^data:image\/(png|jpe?g|webp);base64,/, "Logo inválido.")
+      .optional(),
     maxParticipants: z.int().min(1).nullable().optional(),
     allowInvites: z.boolean().optional(),
     predictionsLocked: z.boolean().optional(),
@@ -82,6 +92,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     name,
     description,
     photoBase64,
+    logoBase64,
     maxParticipants,
     allowInvites,
     predictionsLocked,
@@ -91,6 +102,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (name !== undefined) patch["name"] = name;
   if (description !== undefined) patch["description"] = description;
   if (photoBase64 !== undefined) patch["photoBase64"] = photoBase64;
+  if (logoBase64 !== undefined) patch["logoBase64"] = logoBase64;
   // null → limpa o limite (FieldValue.delete direto, sem sentinela ""); número →
   // define. Decidido na MONTAGEM do patch (review BR-01): sem o intermediário ""
   // não há janela em que um valor inválido possa ser persistido por reordenação.

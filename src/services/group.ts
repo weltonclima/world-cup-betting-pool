@@ -193,6 +193,7 @@ export interface UpdateGroupSettingsInput {
   name?: string;
   description?: string;
   photoBase64?: string;
+  logoBase64?: string;
   maxParticipants?: number | null;
   allowInvites?: boolean;
   predictionsLocked?: boolean;

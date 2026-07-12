@@ -17,6 +17,10 @@ export const poolSlugSchema = z.string().regex(/^[a-z0-9-]+$/);
 // ~512 KB binário, bem abaixo do teto de 1 MB do doc Firestore (que ainda carrega os demais campos).
 export const MAX_POOL_PHOTO_BASE64_LENGTH = 700_000;
 
+// Limite do LOGO inline (personalizacao-grupo TASK-01). MENOR que a foto para que
+// foto + logo caibam sob o teto de 1 MB do doc Firestore. ~225 KB binário.
+export const MAX_POOL_LOGO_BASE64_LENGTH = 300_000;
+
 export const poolSchema = z
   .object({
     id: nonEmptyString, // = id do doc
@@ -24,6 +28,9 @@ export const poolSchema = z
     slug: poolSlugSchema,
     description: z.string().max(160).optional(),
     photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH).optional(),
+    // NET-NEW logo do grupo (personalizacao-grupo TASK-01) — aditivo optional,
+    // distinto de photoBase64. Teto menor (cabe com a foto sob 1MB do doc).
+    logoBase64: z.string().max(MAX_POOL_LOGO_BASE64_LENGTH).optional(),
     status: poolStatusSchema,
     adminId: nonEmptyString, // referência users.uid (criador/admin do pool)
     createdAt: isoDateTime,
@@ -77,6 +84,7 @@ export const poolEditSchema = z
     name: nonEmptyString,
     description: z.string().max(160),
     photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH),
+    logoBase64: z.string().max(MAX_POOL_LOGO_BASE64_LENGTH),
     maxParticipants: z.int().min(1).nullable(),
     allowInvites: z.boolean(),
     predictionsLocked: z.boolean(), // toggle lock de palpites (TASK-01); `.partial()` abaixo o torna opcional no patch

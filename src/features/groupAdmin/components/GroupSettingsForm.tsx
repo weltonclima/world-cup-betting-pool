@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type JSX } from "react";
-import { Camera, LoaderCircle } from "lucide-react";
+import { Camera, ImageIcon, LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AvatarImageError,
   fileToCompressedDataUrl,
+  validateLogoInput,
 } from "@/features/profile/lib/imageToDataUrl";
+import { ImageCropModal } from "@/components/media/ImageCropModal";
 import { MAX_POOL_PHOTO_BASE64_LENGTH } from "@/schemas/pools";
 import { useGroupSettings, useUpdateGroupSettings } from "@/features/groupAdmin/hooks";
 import type { Pool } from "@/types/pools";
@@ -52,6 +54,10 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
   const [name, setName] = useState(pool.name);
   const [description, setDescription] = useState(pool.description ?? "");
   const [photo, setPhoto] = useState<string | undefined>(pool.photoBase64);
+  const [logo, setLogo] = useState<string | undefined>(pool.logoBase64);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [maxParticipants, setMaxParticipants] = useState(
     pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
   );
@@ -70,6 +76,7 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     setName(pool.name);
     setDescription(pool.description ?? "");
     setPhoto(pool.photoBase64);
+    setLogo(pool.logoBase64);
     setMaxParticipants(
       pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
     );
@@ -98,6 +105,31 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     }
   }
 
+  /** Seleciona o arquivo do logo, valida tipo/tamanho e abre o editor de corte. */
+  function onPickLogo(file: File | undefined): void {
+    if (!file) return;
+    setLogoError(null);
+    try {
+      validateLogoInput(file);
+      setLogoFile(file); // abre o ImageCropModal (open = logoFile !== null)
+    } catch (error) {
+      setLogoError(
+        error instanceof AvatarImageError
+          ? error.message
+          : "Não foi possível processar a imagem.",
+      );
+    } finally {
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  /** Recebe a data URL recortada do modal e a aplica ao estado. */
+  function onLogoCropConfirm(dataUrl: string): void {
+    setLogo(dataUrl);
+    setLogoFile(null);
+    setSaved(false);
+  }
+
   const trimmedName = name.trim();
   const nameInvalid = trimmedName.length === 0;
   const maxNum = maxParticipants.trim() === "" ? null : Number(maxParticipants);
@@ -116,6 +148,9 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     }
     if (photo !== pool.photoBase64 && photo !== undefined) {
       patch.photoBase64 = photo;
+    }
+    if (logo !== pool.logoBase64 && logo !== undefined) {
+      patch.logoBase64 = logo;
     }
     const currentMax = pool.maxParticipants ?? null;
     if (maxNum !== currentMax) patch.maxParticipants = maxNum;
@@ -141,6 +176,7 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     trimmedName !== pool.name ||
     description.trim() !== (pool.description ?? "") ||
     (photo !== pool.photoBase64 && photo !== undefined) ||
+    (logo !== pool.logoBase64 && logo !== undefined) ||
     maxNum !== (pool.maxParticipants ?? null) ||
     allowInvites !== (pool.allowInvites !== false) ||
     splitPhaseRanking !== (pool.splitPhaseRanking === true) ||
@@ -193,6 +229,57 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
           </p>
         ) : null}
       </div>
+
+      {/* Logo (personalizacao-grupo TASK-01): preview retangular + editor de corte. */}
+      <div className="flex flex-col gap-1.5">
+        <Label>Logo do Grupo</Label>
+        <div className="flex items-center gap-4">
+          <div className="flex h-20 w-28 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
+            {logo ? (
+              // eslint-disable-next-line @next/next/no-img-element -- data URL inline; next/image não se aplica
+              <img
+                src={logo}
+                alt="Logo do grupo"
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <ImageIcon size={24} className="text-muted-foreground" aria-hidden="true" />
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={update.isPending}
+              className="min-h-[44px]"
+            >
+              <ImageIcon size={16} aria-hidden="true" />
+              Alterar logo
+            </Button>
+            <p className="text-xs text-muted-foreground">PNG, JPG ou WebP até 10MB</p>
+          </div>
+        </div>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          onChange={(e) => onPickLogo(e.target.files?.[0])}
+        />
+        {logoError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {logoError}
+          </p>
+        ) : null}
+      </div>
+
+      <ImageCropModal
+        open={logoFile !== null}
+        file={logoFile}
+        onConfirm={onLogoCropConfirm}
+        onCancel={() => setLogoFile(null)}
+      />
 
       {/* Nome */}
       <div className="flex flex-col gap-1.5">

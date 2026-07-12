@@ -62,8 +62,8 @@ TASK-01 e TASK-02 são **independentes** entre si. TASK-03 depende da TASK-02
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, ui-spec, tdd, implement, test, review, ui-review
 - Notes: is_frontend: true (nova seção no form + modal de crop). SP subiu 3→5 e
   risco low→medium pela **decisão de crop com proporção livre** (parametrizar o
   modal quadrado). Restringir mimes a raster; recalibrar teto de bytes do logo

@@ -57,7 +57,31 @@ vi.mock("@/components/ui/switch", () => ({
 // fileToCompressedDataUrl usa Canvas API ausente no jsdom.
 vi.mock("@/features/profile/lib/imageToDataUrl", () => ({
   fileToCompressedDataUrl: vi.fn(),
+  validateLogoInput: vi.fn(),
   AvatarImageError: class AvatarImageError extends Error {},
+}));
+
+// ImageCropModal usa Canvas/Pointer — mock leve que expõe confirm/cancel.
+vi.mock("@/components/media/ImageCropModal", () => ({
+  ImageCropModal: ({
+    open,
+    onConfirm,
+    onCancel,
+  }: {
+    open: boolean;
+    onConfirm: (d: string) => void;
+    onCancel: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Ajustar logo">
+        <button type="button" onClick={() => onConfirm("data:image/jpeg;base64,LOGO")}>
+          mock-confirm-crop
+        </button>
+        <button type="button" onClick={onCancel}>
+          mock-cancel-crop
+        </button>
+      </div>
+    ) : null,
 }));
 
 import { GroupSettingsForm } from "@/features/groupAdmin/components/GroupSettingsForm";
@@ -103,6 +127,10 @@ function getOvertimeSwitch(): HTMLElement {
 
 function clickSave(): void {
   fireEvent.click(screen.getByRole("button", { name: /salvar alterações/i }));
+}
+
+function getLogoButton(): HTMLElement {
+  return screen.getByRole("button", { name: /alterar logo/i });
 }
 
 beforeEach(() => {
@@ -267,5 +295,39 @@ describe("Switch 'Ignorar gols da prorrogação' — loading", () => {
   it("switch fica desabilitado durante update.isPending", () => {
     setup(makePool(), true);
     expect((getOvertimeSwitch() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("Seção 'Logo do Grupo' (TASK-01 personalizacao-grupo)", () => {
+  it("mostra o botão 'Alterar logo'", () => {
+    setup(makePool());
+    expect(getLogoButton()).toBeTruthy();
+  });
+
+  it("renderiza o preview quando o pool tem logoBase64", () => {
+    setup(makePool({ logoBase64: "data:image/jpeg;base64,/9j/EXISTENTE" }));
+    const img = screen.getByAltText("Logo do grupo") as HTMLImageElement;
+    expect(img.getAttribute("src")).toBe("data:image/jpeg;base64,/9j/EXISTENTE");
+  });
+
+  it("não renderiza preview quando o pool não tem logo", () => {
+    setup(makePool());
+    expect(screen.queryByAltText("Logo do grupo")).toBeNull();
+  });
+
+  it("confirmar o crop inclui logoBase64 no PATCH ao salvar", () => {
+    const { mutateMock } = setup(makePool());
+    // Abre o modal (mock) selecionando um arquivo válido.
+    const input = document.querySelector<HTMLInputElement>('input[type="file"][accept*="webp"]');
+    expect(input).toBeTruthy();
+    const file = new File(["x"], "logo.png", { type: "image/png" });
+    fireEvent.change(input!, { target: { files: [file] } });
+    // Modal aberto → confirma o crop (mock devolve data URL).
+    fireEvent.click(screen.getByRole("button", { name: /mock-confirm-crop/i }));
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { logoBase64: "data:image/jpeg;base64,LOGO" },
+      expect.any(Object),
+    );
   });
 });
