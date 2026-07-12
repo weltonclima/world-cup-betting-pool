@@ -101,9 +101,11 @@ a mais crítica é a TASK-03 (mexe no núcleo da pontuação). Ambas com TDD.
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Risco alto = parsing de dados externos com amostra pequena. Cobrir em
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Notes: Risco alto = parsing de dados externos com amostra pequena. Review
+  adversarial (opus): H1 (corte via displayValue), M1 (guarda team.id), M2
+  (penalties também), M3 (schema tolerante), L1 (+1) — todos corrigidos. Cobrir em
   teste: jogo com gol na prorrogação (90min = empate), jogo sem prorrogação
   (regulation == final ou ausente), gol de acréscimo do 1º/2º tempo (clock capado
   → conta no regulamentar), pênalti em jogo, gol contra, `details` ausente →
@@ -190,14 +192,12 @@ a mais crítica é a TASK-03 (mexe no núcleo da pontuação). Ambas com TDD.
   gate), flag off (final), regulamentar ausente (fallback), consistência entre os
   dois recalcs no mesmo `pool-{poolId}-geral`. Efeito só no recálculo; retroativo.
 
-### TASK-04 – Consistência de exibição das telas com a flag do pool (DECISÃO-GATED)
+### TASK-04 – Consistência de exibição das telas com a flag do pool (CONFIRMADA — escopo B)
 - Type: application
 - Goal: fazer as telas que exibem resultado por-jogo (home, lista de palpites,
   perfil) refletirem a flag do pool do usuário, para não contradizer o ranking em
-  jogos de mata-mata com prorrogação. **Só executar se o usuário optar por
-  consistência total** (ver Riscos/decisão) — caso contrário, fica fora de escopo
-  com a limitação documentada.
-- Scope (se aprovada):
+  jogos de mata-mata com prorrogação. **Confirmada no checkpoint (opção B).**
+- Scope:
   - Threa­d a flag do pool do usuário (via `groupId` → pool) nos hooks de exibição:
     `useHomeDashboard`, `usePredictionsList`, `useProfilePredictions`, passando
     `options` ao `scorePrediction`/`derivePredictionDisplayStatus`.
@@ -239,11 +239,10 @@ a mais crítica é a TASK-03 (mexe no núcleo da pontuação). Ambas com TDD.
 4. **TASK-04** (consistência de exibição; só se o usuário escolher consistência total)
 
 ## 6. Riscos de planejamento e bloqueios
-- **DECISÃO PENDENTE (escopo de consistência):** (A) ranking-only — flag afeta só
-  os docs de ranking por-pool; badges por-jogo nas telas podem divergir em jogos de
-  prorrogação (documentado). Menor, ships mais rápido. (B) consistência total —
-  inclui TASK-04 (telas). Recomendação: A como MVP. **Bloqueia a inclusão da
-  TASK-04.**
+- **DECISÃO TOMADA (escopo de consistência): (B) consistência total** — o usuário
+  optou por incluir a **TASK-04** (telas home/lista de palpites/perfil refletem a
+  flag do pool). Ranking global `geral` cross-pool e `points` persistido seguem no
+  placar final (limite arquitetural imutável).
 - **Limite arquitetural (imutável):** ranking GLOBAL `geral` (cross-pool) e o
   `points` persistido em `score/route.ts` **não** comportam flag por-pool — ficam
   no placar final por design. A feature é coerente só no escopo por-pool.

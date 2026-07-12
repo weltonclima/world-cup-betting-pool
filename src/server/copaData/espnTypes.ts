@@ -87,6 +87,34 @@ export const espnStatusSchema = z
   .object({ type: espnStatusTypeSchema })
   .passthrough();
 
+/**
+ * Item de `competition.details` — jogada de pontuação (gol) gol-a-gol (TASK-01).
+ * Usado para reconstruir o placar do tempo normal (90min). Campos tolerantes
+ * (API não-oficial). `clock.value` é o tempo em segundos ("45'+2'" vem capado no
+ * limite do período, ex.: 2700); gols de prorrogação vêm > 5400. `team.id` casa
+ * com o `id` do competitor. `shootout` marca gol de disputa de pênaltis (excluído).
+ */
+export const espnScoringPlaySchema = z
+  .object({
+    // Tolerante (API não-oficial): um item de `details` malformado NÃO deve
+    // derrubar o parse do evento inteiro (perderia placar ao vivo). Campos
+    // opcionais; `deriveRegulationScore` trata ausências defensivamente.
+    clock: z
+      .object({
+        value: z.number().optional(),
+        displayValue: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    team: z.object({ id: z.string().optional() }).passthrough().optional(),
+    scoreValue: z.number().optional(),
+    scoringPlay: z.boolean().optional(),
+    shootout: z.boolean().optional(),
+    penaltyKick: z.boolean().optional(),
+    ownGoal: z.boolean().optional(),
+  })
+  .passthrough();
+
 export const espnCompetitionSchema = z
   .object({
     status: espnStatusSchema,
@@ -94,6 +122,8 @@ export const espnCompetitionSchema = z
     venue: espnVenueSchema.optional(),
     // Fonte do grupo: "FIFA World Cup, Group A" (mata-mata: "FIFA World Cup").
     altGameNote: z.string().optional(),
+    // Jogadas de pontuação (gols) — opcional, nem todo evento traz (TASK-01).
+    details: z.array(espnScoringPlaySchema).optional(),
   })
   .passthrough();
 
@@ -117,6 +147,7 @@ export type EspnEvent = z.infer<typeof espnEventSchema>;
 export type EspnCompetition = z.infer<typeof espnCompetitionSchema>;
 export type EspnCompetitor = z.infer<typeof espnCompetitorSchema>;
 export type EspnTeam = z.infer<typeof espnTeamSchema>;
+export type EspnScoringPlay = z.infer<typeof espnScoringPlaySchema>;
 export type EspnSeason = z.infer<typeof espnSeasonSchema>;
 export type EspnVenue = z.infer<typeof espnVenueSchema>;
 export type EspnAddress = z.infer<typeof espnAddressSchema>;

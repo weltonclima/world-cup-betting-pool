@@ -439,3 +439,51 @@ describe("matches — TASK-02 invariante de pênaltis", () => {
     expect(matchSchema.safeParse(finished).success).toBe(true);
   });
 });
+
+describe("matches — TASK-01 placar regulamentar (90min)", () => {
+  it("aceita homeScoreRegulation + awayScoreRegulation (ambos presentes)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "overtime",
+        homeScoreRegulation: 1,
+        awayScoreRegulation: 1,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("aceita match sem os campos regulamentares (ambos ausentes)", () => {
+    expect(matchSchema.safeParse(koFinished).success).toBe(true);
+  });
+
+  it("rejeita apenas homeScoreRegulation (both-or-neither)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "overtime",
+        homeScoreRegulation: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita apenas awayScoreRegulation (both-or-neither)", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "overtime",
+        awayScoreRegulation: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejeita placar regulamentar negativo", () => {
+    expect(
+      matchSchema.safeParse({
+        ...koFinished,
+        outcome: "overtime",
+        homeScoreRegulation: -1,
+        awayScoreRegulation: 1,
+      }).success,
+    ).toBe(false);
+  });
+});

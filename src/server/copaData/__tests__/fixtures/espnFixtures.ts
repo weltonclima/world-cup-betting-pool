@@ -109,6 +109,8 @@ export interface EspnKoSide {
   isActive?: boolean;
   advance?: boolean;
   shootoutScore?: number;
+  // `team.id` — necessário para casar gols de `details` ao lado (TASK-01).
+  id?: string;
 }
 
 /** Competitor de mata-mata com campos ricos opcionais (TASK-02). */
@@ -121,9 +123,29 @@ export function espnKoCompetitor(homeAway: "home" | "away", side: EspnKoSide) {
     ...(side.shootoutScore !== undefined ? { shootoutScore: side.shootoutScore } : {}),
     team: {
       abbreviation: side.abbr,
+      ...(side.id !== undefined ? { id: side.id } : {}),
       ...(side.displayName !== undefined ? { displayName: side.displayName } : {}),
       ...(side.isActive !== undefined ? { isActive: side.isActive } : {}),
     },
+  };
+}
+
+/** Gol em `competition.details` (TASK-01) — mínimo p/ deriveRegulationScore. */
+export function espnGoalDetail(opts: {
+  clock: number;
+  teamId: string;
+  shootout?: boolean;
+  ownGoal?: boolean;
+  scoreValue?: number;
+}) {
+  return {
+    type: { id: "70", text: "Goal" },
+    clock: { value: opts.clock, displayValue: "" },
+    team: { id: opts.teamId },
+    scoreValue: opts.scoreValue ?? 1,
+    scoringPlay: true,
+    shootout: opts.shootout ?? false,
+    ...(opts.ownGoal !== undefined ? { ownGoal: opts.ownGoal } : {}),
   };
 }
 
@@ -143,6 +165,8 @@ export function espnKnockoutRichEvent(opts: {
   away: EspnKoSide;
   venue?: { fullName?: string; city?: string } | null;
   id?: string;
+  // Gols gol-a-gol (TASK-01) — use `espnGoalDetail`. Opcional.
+  details?: ReturnType<typeof espnGoalDetail>[];
 }) {
   const venue = opts.venue ?? null;
   const type = KO_SEASON_TYPE[opts.slug];
@@ -176,6 +200,7 @@ export function espnKnockoutRichEvent(opts: {
           espnKoCompetitor("home", opts.home),
           espnKoCompetitor("away", opts.away),
         ],
+        ...(opts.details !== undefined ? { details: opts.details } : {}),
       },
     ],
   };

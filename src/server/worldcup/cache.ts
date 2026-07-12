@@ -34,8 +34,10 @@ const TTL_DEFAULT_MS = 86_400_000;
  *
  *  - v2 (TASK-09): `parentMatchIds` (arestas da árvore) por confronto de mata-mata.
  *  - v3 (TASK-09): tabela de pareamento FIFA corrigida (R16 slots 1↔2/5↔6/7↔8).
+ *  - v4 (ignorar-gols-prorrogacao TASK-01): placar regulamentar (90min) nos
+ *    matches de mata-mata; snapshots antigos não o carregam.
  */
-export const CACHE_VERSION = 3;
+export const CACHE_VERSION = 4;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 

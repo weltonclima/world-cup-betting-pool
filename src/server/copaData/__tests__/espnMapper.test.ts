@@ -23,6 +23,7 @@ import {
   espnEvent,
   espnKnockoutRichEvent,
   espnGroupEvent,
+  espnGoalDetail,
 } from "./fixtures/espnFixtures";
 
 /** Parseia um evento cru pelo schema e devolve o EspnEvent validado. */
@@ -518,6 +519,130 @@ describe("mapEspnEventToMatch — TASK-02 pênaltis (invariante)", () => {
     expect(match.homeShootout ?? null).toBeNull();
     expect(match.awayShootout ?? null).toBeNull();
     expect(match.advanceSide).toBe("home");
+  });
+});
+
+describe("mapEspnEventToMatch — TASK-01 placar regulamentar (90min)", () => {
+  it("MEM-R1: ENG@NOR AET com details → placar final 1×2, regulamentar 1×1", () => {
+    // home=NOR(id nor), away=ENG(id eng). Final NOR 1 × 2 ENG (ENG marcou aos 93').
+    const ev = parseEvent(
+      espnKnockoutRichEvent({
+        date: "2026-07-11T21:00Z",
+        state: "post",
+        detail: "AET",
+        slug: "quarterfinals",
+        statusName: "STATUS_FINAL_AET",
+        home: { abbr: "NOR", id: "nor", score: "1" },
+        away: { abbr: "ENG", id: "eng", score: "2", advance: true },
+        details: [
+          espnGoalDetail({ clock: 2101, teamId: "nor" }), // 36'
+          espnGoalDetail({ clock: 2700, teamId: "eng" }), // 45'+2'
+          espnGoalDetail({ clock: 5554, teamId: "eng" }), // 93' prorrogação
+        ],
+      }),
+    );
+    const match = mapEspnEventToMatch(ev, 96);
+    expect(match.outcome).toBe("overtime");
+    // Placar final inclui o gol da prorrogação.
+    expect(match.homeScore).toBe(1);
+    expect(match.awayScore).toBe(2);
+    // Placar regulamentar (90min) exclui a prorrogação → empate.
+    expect(match.homeScoreRegulation).toBe(1);
+    expect(match.awayScoreRegulation).toBe(1);
+  });
+
+  it("MEM-R2: overtime SEM details → campos regulamentares ausentes (fallback)", () => {
+    const ev = parseEvent(
+      espnKnockoutRichEvent({
+        date: "2026-07-11T21:00Z",
+        state: "post",
+        detail: "AET",
+        slug: "quarterfinals",
+        statusName: "STATUS_FINAL_AET",
+        home: { abbr: "NOR", id: "nor", score: "1", advance: true },
+        away: { abbr: "ENG", id: "eng", score: "0" },
+      }),
+    );
+    const match = mapEspnEventToMatch(ev, 96);
+    expect(match.outcome).toBe("overtime");
+    expect(match.homeScoreRegulation).toBeUndefined();
+    expect(match.awayScoreRegulation).toBeUndefined();
+  });
+
+  it("MEM-R3: outcome 'normal' com details → sem campos regulamentares", () => {
+    // Jogo decidido no tempo normal não precisa de placar regulamentar separado.
+    const ev = parseEvent(
+      espnKnockoutRichEvent({
+        date: "2026-07-11T21:00Z",
+        state: "post",
+        detail: "FT",
+        slug: "quarterfinals",
+        statusName: "STATUS_FULL_TIME",
+        home: { abbr: "BRA", id: "bra", score: "2", advance: true },
+        away: { abbr: "ARG", id: "arg", score: "1" },
+        details: [
+          espnGoalDetail({ clock: 600, teamId: "bra" }),
+          espnGoalDetail({ clock: 1200, teamId: "arg" }),
+          espnGoalDetail({ clock: 3000, teamId: "bra" }),
+        ],
+      }),
+    );
+    const match = mapEspnEventToMatch(ev, 96);
+    expect(match.outcome).toBe("normal");
+    expect(match.homeScoreRegulation).toBeUndefined();
+    expect(match.awayScoreRegulation).toBeUndefined();
+  });
+
+  it("MEM-R4: penalties com details (sem gol na prorrogação) → regulamentar == final", () => {
+    // Pênaltis também passaram pela prorrogação: computamos o placar de 90min.
+    // Aqui não houve gol na prorrogação, então regulamentar == final (1×1).
+    const ev = parseEvent(
+      espnKnockoutRichEvent({
+        date: "2026-07-11T21:00Z",
+        state: "post",
+        detail: "FT (Pens)",
+        slug: "quarterfinals",
+        statusName: "STATUS_FINAL_PEN",
+        home: { abbr: "GER", id: "ger", score: "1", shootoutScore: 4 },
+        away: { abbr: "PAR", id: "par", score: "1", shootoutScore: 5, advance: true },
+        details: [
+          espnGoalDetail({ clock: 1500, teamId: "ger" }),
+          espnGoalDetail({ clock: 4000, teamId: "par" }),
+        ],
+      }),
+    );
+    const match = mapEspnEventToMatch(ev, 96);
+    expect(match.outcome).toBe("penalties");
+    expect(match.homeScoreRegulation).toBe(1);
+    expect(match.awayScoreRegulation).toBe(1);
+  });
+
+  it("MEM-R5: penalties COM gol na prorrogação → regulamentar difere do final", () => {
+    // 1×1 aos 90'; ambos marcam na prorrogação → 2×2 no fim da ET; pênaltis.
+    // Placar final = 2×2 (fim ET); regulamentar (90min) = 1×1.
+    const ev = parseEvent(
+      espnKnockoutRichEvent({
+        date: "2026-07-11T21:00Z",
+        state: "post",
+        detail: "FT (Pens)",
+        slug: "quarterfinals",
+        statusName: "STATUS_FINAL_PEN",
+        home: { abbr: "GER", id: "ger", score: "2", shootoutScore: 4 },
+        away: { abbr: "PAR", id: "par", score: "2", shootoutScore: 5, advance: true },
+        details: [
+          espnGoalDetail({ clock: 1500, teamId: "ger" }), // 25'
+          espnGoalDetail({ clock: 4000, teamId: "par" }), // 66'
+          espnGoalDetail({ clock: 6000, teamId: "ger" }), // 100' prorrogação
+          espnGoalDetail({ clock: 6600, teamId: "par" }), // 110' prorrogação
+        ],
+      }),
+    );
+    const match = mapEspnEventToMatch(ev, 96);
+    expect(match.outcome).toBe("penalties");
+    expect(match.homeScore).toBe(2);
+    expect(match.awayScore).toBe(2);
+    expect(match.homeScoreRegulation).toBe(1);
+    expect(match.awayScoreRegulation).toBe(1);
   });
 });
 
