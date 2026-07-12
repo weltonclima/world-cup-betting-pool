@@ -57,6 +57,9 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
   );
   const [allowInvites, setAllowInvites] = useState(pool.allowInvites !== false);
   const [splitPhaseRanking, setSplitPhaseRanking] = useState(pool.splitPhaseRanking === true);
+  const [ignoreOvertimeGoals, setIgnoreOvertimeGoals] = useState(
+    pool.ignoreOvertimeGoals === true,
+  );
 
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -72,6 +75,7 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     );
     setAllowInvites(pool.allowInvites !== false);
     setSplitPhaseRanking(pool.splitPhaseRanking === true);
+    setIgnoreOvertimeGoals(pool.ignoreOvertimeGoals === true);
   }, [pool]);
 
   async function onPickPhoto(file: File | undefined): Promise<void> {
@@ -121,6 +125,9 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     if (splitPhaseRanking !== (pool.splitPhaseRanking === true)) {
       patch.splitPhaseRanking = splitPhaseRanking;
     }
+    if (ignoreOvertimeGoals !== (pool.ignoreOvertimeGoals === true)) {
+      patch.ignoreOvertimeGoals = ignoreOvertimeGoals;
+    }
 
     if (Object.keys(patch).length === 0) {
       setSaved(true);
@@ -136,7 +143,8 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     (photo !== pool.photoBase64 && photo !== undefined) ||
     maxNum !== (pool.maxParticipants ?? null) ||
     allowInvites !== (pool.allowInvites !== false) ||
-    splitPhaseRanking !== (pool.splitPhaseRanking === true);
+    splitPhaseRanking !== (pool.splitPhaseRanking === true) ||
+    ignoreOvertimeGoals !== (pool.ignoreOvertimeGoals === true);
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
@@ -288,6 +296,28 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
           disabled={update.isPending}
           onCheckedChange={(v) => {
             setSplitPhaseRanking(v);
+            setSaved(false);
+          }}
+        />
+      </div>
+
+      {/* Ignorar gols da prorrogação */}
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-border p-4">
+        <div className="min-w-0">
+          <Label htmlFor="group-ignore-overtime-goals" className="font-medium">
+            Ignorar gols da prorrogação
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Nas fases eliminatórias, pontua os palpites pelo placar do tempo normal
+            (90 min), ignorando gols da prorrogação.
+          </p>
+        </div>
+        <Switch
+          id="group-ignore-overtime-goals"
+          checked={ignoreOvertimeGoals}
+          disabled={update.isPending}
+          onCheckedChange={(v) => {
+            setIgnoreOvertimeGoals(v);
             setSaved(false);
           }}
         />

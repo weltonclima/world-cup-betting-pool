@@ -12,9 +12,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeMock, getFirestoreMock } = vi.hoisted(() => ({
+const { authorizeMock, getFirestoreMock, recalcMock } = vi.hoisted(() => ({
   authorizeMock: vi.fn(),
   getFirestoreMock: vi.fn(),
+  recalcMock: vi.fn(async () => {}),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -22,6 +23,9 @@ vi.mock("@/app/api/group/_authorize", () => ({
   authorizeGroupAdminOfPool: authorizeMock,
 }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
+vi.mock("@/server/rankings/recalc", () => ({
+  recalcRankingsBestEffort: recalcMock,
+}));
 vi.mock("firebase-admin/firestore", () => ({
   FieldValue: { delete: () => "__delete__" },
 }));
@@ -205,5 +209,64 @@ describe("PATCH /api/group/settings", () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body["error"]).toBe("Dados inválidos.");
     expect(body["issues"]).toBeUndefined();
+  });
+
+  it("200 ignoreOvertimeGoals true → persiste true", async () => {
+    mockDb({ data: pool({ ignoreOvertimeGoals: true }) });
+    const res = await PATCH(makeReq({ body: { ignoreOvertimeGoals: true } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["ignoreOvertimeGoals"]).toBe(true);
+  });
+
+  it("200 ignoreOvertimeGoals false → persiste false (desligar)", async () => {
+    mockDb({ data: pool({ ignoreOvertimeGoals: false }) });
+    const res = await PATCH(makeReq({ body: { ignoreOvertimeGoals: false } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["ignoreOvertimeGoals"]).toBe(false);
+  });
+
+  it("200 sem ignoreOvertimeGoals → campo ausente no patch (não toca o valor existente)", async () => {
+    mockDb({ data: pool({ ignoreOvertimeGoals: true }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("ignoreOvertimeGoals" in patch).toBe(false);
+  });
+
+  it("422 ignoreOvertimeGoals string → rejeitado (strict type)", async () => {
+    const res = await PATCH(makeReq({ body: { ignoreOvertimeGoals: "yes" } }));
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["error"]).toBe("Dados inválidos.");
+  });
+
+  it("dispara recalc global quando ignoreOvertimeGoals MUDA (false → true)", async () => {
+    mockDb({ data: pool({ ignoreOvertimeGoals: false }) });
+    const res = await PATCH(makeReq({ body: { ignoreOvertimeGoals: true } }));
+    expect(res.status).toBe(200);
+    expect(recalcMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispara recalc quando liga a flag ausente (undefined → true)", async () => {
+    mockDb({ data: pool() }); // sem o campo → tratado como false
+    const res = await PATCH(makeReq({ body: { ignoreOvertimeGoals: true } }));
+    expect(res.status).toBe(200);
+    expect(recalcMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("NÃO dispara recalc quando ignoreOvertimeGoals não muda (true → true)", async () => {
+    mockDb({ data: pool({ ignoreOvertimeGoals: true }) });
+    const res = await PATCH(makeReq({ body: { ignoreOvertimeGoals: true } }));
+    expect(res.status).toBe(200);
+    expect(recalcMock).not.toHaveBeenCalled();
+  });
+
+  it("NÃO dispara recalc quando o PATCH não toca a flag (só nome)", async () => {
+    mockDb({ data: pool({ ignoreOvertimeGoals: true }) });
+    const res = await PATCH(makeReq({ body: { name: "Outro Nome" } }));
+    expect(res.status).toBe(200);
+    expect(recalcMock).not.toHaveBeenCalled();
   });
 });

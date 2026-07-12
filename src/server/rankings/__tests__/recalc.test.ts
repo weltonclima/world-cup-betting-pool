@@ -960,3 +960,226 @@ describe("recalc — doc de frescor (dirty-by-finish)", () => {
     expect(fresh!.version).toBe(CURRENT_VERSION);
   });
 });
+
+// ── TASK-03: ignorar gols de prorrogação (placar de 90min por pool) ─────────
+/**
+ * Mock que serve usuários aprovados, predictions cruas (`get` e `where uid in`),
+ * a coleção `pools` (flags `ignoreOvertimeGoals`, via `get` e `doc().get()`) e
+ * captura os payloads gravados em `rankings/*`. Exercita o scoring real com o
+ * placar regulamentar (90min) por pool.
+ */
+function makeFlagDb(
+  users: Array<Record<string, unknown>>,
+  preds: Array<Record<string, unknown>>,
+  pools: Array<Record<string, unknown>>,
+) {
+  const setPayloads = new Map<string, unknown>();
+  const poolById = new Map(pools.map((p) => [p["id"] as string, p]));
+  const collection = vi.fn((name: string) => {
+    if (name === "users") {
+      return {
+        where: vi.fn().mockReturnValue({
+          get: vi.fn().mockResolvedValue({
+            docs: users.map((u) => ({ id: u["uid"], data: () => u })),
+          }),
+        }),
+        get: vi.fn().mockResolvedValue({ docs: [] }),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "predictions") {
+      return {
+        get: vi.fn().mockResolvedValue({
+          docs: preds.map((p, i) => ({ id: `p${i}`, data: () => p })),
+        }),
+        where: vi.fn((field: string, op: string, val: unknown) => ({
+          get: vi.fn().mockResolvedValue({
+            docs: preds
+              .filter((p) =>
+                op === "in" && Array.isArray(val) ? val.includes(p["uid"]) : true,
+              )
+              .map((p, i) => ({ id: `p${i}`, data: () => p })),
+          }),
+        })),
+        doc: vi.fn(),
+      };
+    }
+    if (name === "pools") {
+      return {
+        get: vi.fn().mockResolvedValue({
+          docs: pools.map((p) => ({ id: p["id"], data: () => p })),
+        }),
+        where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+        doc: vi.fn((id: string) => ({
+          get: vi.fn().mockResolvedValue({
+            exists: poolById.has(id),
+            data: () => poolById.get(id),
+          }),
+        })),
+      };
+    }
+    return {
+      get: vi.fn().mockResolvedValue({ docs: [] }),
+      where: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ docs: [] }) }),
+      doc: vi.fn((id: string) => ({
+        get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
+        set: vi.fn(async (payload: unknown) => {
+          setPayloads.set(`${name}/${id}`, payload);
+        }),
+        ref: { delete: vi.fn() },
+      })),
+    };
+  });
+  return { db: { collection } as never, setPayloads };
+}
+
+/** Jogo de mata-mata (oitavas) que foi à prorrogação: final 2×1, 90min 1×1. */
+const koOtMatch = {
+  id: "k1",
+  status: "finished" as const,
+  homeScore: 2,
+  awayScore: 1,
+  stage: "oitavas",
+  groupId: null,
+  kickoffAt: "2026-07-05T13:00:00-06:00",
+  outcome: "overtime",
+  homeScoreRegulation: 1,
+  awayScoreRegulation: 1,
+};
+
+const pointsOf = (payload: unknown, uid: string): number | undefined =>
+  (payload as { entries: Array<{ uid: string; points: number }> } | undefined)?.entries.find(
+    (e) => e.uid === uid,
+  )?.points;
+
+describe("recalc — ignorar gols de prorrogação (TASK-03)", () => {
+  it("recalcRankings: pool flagged usa 90min; global e pool não-flagged usam final", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([koOtMatch] as never);
+    // u1 ∈ p1 (flagged), u2 ∈ p2 (não). Ambos palpitam 1×1 (o placar de 90min).
+    const users = [
+      baseUser({ uid: "u1", groupId: "p1" }),
+      baseUser({ uid: "u2", groupId: "p2" }),
+    ];
+    const preds = [
+      { uid: "u1", matchId: "k1", homeScore: 1, awayScore: 1 },
+      { uid: "u2", matchId: "k1", homeScore: 1, awayScore: 1 },
+    ];
+    const pools = [
+      { id: "p1", ignoreOvertimeGoals: true },
+      { id: "p2", ignoreOvertimeGoals: false },
+    ];
+    const { db, setPayloads } = makeFlagDb(users, preds, pools);
+
+    await recalcRankings(db);
+
+    // Global geral: placar FINAL 2×1 → palpite 1×1 é wrong → 0 pontos.
+    expect(pointsOf(setPayloads.get("rankings/geral"), "u1")).toBe(0);
+    expect(pointsOf(setPayloads.get("rankings/geral"), "u2")).toBe(0);
+    // Pool p1 (flagged): 90min 1×1 → palpite 1×1 correct → 10.
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-geral"), "u1")).toBe(10);
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-eliminatorias"), "u1")).toBe(10);
+    // Pool p2 (não flagged): placar final → 0.
+    expect(pointsOf(setPayloads.get("rankings/pool-p2-geral"), "u2")).toBe(0);
+  });
+
+  it("recalcRankings: sem pools flagged, docs de pool idênticos ao baseline (final)", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([koOtMatch] as never);
+    const users = [baseUser({ uid: "u1", groupId: "p1" })];
+    const preds = [{ uid: "u1", matchId: "k1", homeScore: 1, awayScore: 1 }];
+    const pools = [{ id: "p1", ignoreOvertimeGoals: false }];
+    const { db, setPayloads } = makeFlagDb(users, preds, pools);
+
+    await recalcRankings(db);
+
+    // Flag off → placar final 2×1 → palpite 1×1 wrong → 0 (baseline atual).
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-geral"), "u1")).toBe(0);
+    expect(pointsOf(setPayloads.get("rankings/geral"), "u1")).toBe(0);
+  });
+
+  it("recalcPoolRanking: pool flagged pontua o membro pelo 90min", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([koOtMatch] as never);
+    const users = [baseUser({ uid: "u1", groupId: "p1" })];
+    const preds = [{ uid: "u1", matchId: "k1", homeScore: 1, awayScore: 1 }];
+    const pools = [{ id: "p1", ignoreOvertimeGoals: true }];
+    const { db, setPayloads } = makeFlagDb(users, preds, pools);
+
+    await recalcPoolRanking(db, "p1");
+
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-geral"), "u1")).toBe(10);
+  });
+
+  it("recalcPoolRanking: pool não-flagged pontua pelo placar final", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([koOtMatch] as never);
+    const users = [baseUser({ uid: "u2", groupId: "p2" })];
+    const preds = [{ uid: "u2", matchId: "k1", homeScore: 1, awayScore: 1 }];
+    const pools = [{ id: "p2", ignoreOvertimeGoals: false }];
+    const { db, setPayloads } = makeFlagDb(users, preds, pools);
+
+    await recalcPoolRanking(db, "p2");
+
+    expect(pointsOf(setPayloads.get("rankings/pool-p2-geral"), "u2")).toBe(0);
+  });
+
+  it("pool flagged RE-RANKEIA por 90min: quem acertou o 90min passa à frente", async () => {
+    // Mesmo jogo AET (final 2×1, 90min 1×1). uA palpitou 1×1 (acerta 90min → 10),
+    // uB palpitou 2×1 (acertava o final, mas erra o 90min → 0). No pool flagged uA
+    // deve ficar em 1º; sem a flag, uB (que acertava o final) ficaria à frente.
+    getEffectiveMatchesMock.mockResolvedValue([koOtMatch] as never);
+    const users = [
+      baseUser({ uid: "uA", groupId: "p1" }),
+      baseUser({ uid: "uB", groupId: "p1" }),
+    ];
+    const preds = [
+      { uid: "uA", matchId: "k1", homeScore: 1, awayScore: 1 },
+      { uid: "uB", matchId: "k1", homeScore: 2, awayScore: 1 },
+    ];
+    const pools = [{ id: "p1", ignoreOvertimeGoals: true }];
+    const { db, setPayloads } = makeFlagDb(users, preds, pools);
+
+    await recalcRankings(db);
+
+    const poolGeral = setPayloads.get("rankings/pool-p1-geral") as {
+      entries: Array<{ uid: string; position: number; points: number }>;
+    };
+    const a = poolGeral.entries.find((e) => e.uid === "uA")!;
+    const b = poolGeral.entries.find((e) => e.uid === "uB")!;
+    expect(a.points).toBe(10);
+    expect(b.points).toBe(0);
+    expect(a.position).toBe(1);
+    expect(b.position).toBe(2);
+    // Global segue placar final: uB (acertou 2×1) 10, uA 0.
+    expect(pointsOf(setPayloads.get("rankings/geral"), "uB")).toBe(10);
+    expect(pointsOf(setPayloads.get("rankings/geral"), "uA")).toBe(0);
+  });
+
+  it("flag on afeta só eliminatórias: jogo de grupos permanece pelo placar (do jeito atual)", async () => {
+    // 1 jogo de grupos (final = 90min, sem prorrogação) + 1 KO AET. No pool flagged
+    // o grupo é inalterado (placar final) e o KO usa 90min.
+    const groupMatch = {
+      id: "g1",
+      status: "finished" as const,
+      homeScore: 2,
+      awayScore: 0,
+      stage: "grupos",
+      groupId: "A",
+      kickoffAt: "2026-06-12T13:00:00-06:00",
+    };
+    getEffectiveMatchesMock.mockResolvedValue([groupMatch, koOtMatch] as never);
+    const users = [baseUser({ uid: "u1", groupId: "p1" })];
+    const preds = [
+      { uid: "u1", matchId: "g1", homeScore: 2, awayScore: 0 }, // grupo: exato → 10
+      { uid: "u1", matchId: "k1", homeScore: 1, awayScore: 1 }, // KO: 90min 1×1 → 10
+    ];
+    const pools = [{ id: "p1", ignoreOvertimeGoals: true }];
+    const { db, setPayloads } = makeFlagDb(users, preds, pools);
+
+    await recalcRankings(db);
+
+    // Geral do pool = 10 (grupo) + 10 (KO 90min) = 20.
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-geral"), "u1")).toBe(20);
+    // Doc de grupo do pool = só o jogo de grupos (10), inalterado pela flag.
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-grupo-A"), "u1")).toBe(10);
+    // Eliminatórias do pool = KO pelo 90min = 10.
+    expect(pointsOf(setPayloads.get("rankings/pool-p1-eliminatorias"), "u1")).toBe(10);
+  });
+});

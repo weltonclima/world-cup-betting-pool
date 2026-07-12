@@ -12,6 +12,7 @@ type MatchWithId = Match & { id: string };
 
 import {
   derivePredictionDisplayStatus,
+  effectiveMatchScore,
   isPredictionLocked,
   isStageComplete,
   scorePrediction,
@@ -366,6 +367,123 @@ describe("scorePrediction (regra ponderada — TASK-02)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 2b. effectiveMatchScore + scorePrediction com ignoreOvertimeGoals (TASK-03)
+// ---------------------------------------------------------------------------
+
+/** Jogo de mata-mata finalizado com placar regulamentar (foi à prorrogação). */
+function makeKnockoutOtMatch(overrides: Partial<MatchWithId> = {}): MatchWithId {
+  return makeFinishedMatch({
+    id: "match-ko",
+    stage: "oitavas",
+    round: null,
+    groupId: null,
+    homeScore: 2,
+    awayScore: 1,
+    outcome: "overtime",
+    homeScoreRegulation: 1,
+    awayScoreRegulation: 1,
+    ...overrides,
+  });
+}
+
+describe("effectiveMatchScore (TASK-03)", () => {
+  it("sem options → placar final", () => {
+    const match = makeKnockoutOtMatch();
+    expect(effectiveMatchScore(match)).toEqual({ home: 2, away: 1 });
+  });
+
+  it("flag off → placar final (mesmo com regulamentar presente)", () => {
+    const match = makeKnockoutOtMatch();
+    expect(effectiveMatchScore(match, { ignoreOvertimeGoals: false })).toEqual({
+      home: 2,
+      away: 1,
+    });
+  });
+
+  it("flag on + eliminatória + regulamentar → placar de 90min", () => {
+    const match = makeKnockoutOtMatch();
+    expect(effectiveMatchScore(match, { ignoreOvertimeGoals: true })).toEqual({
+      home: 1,
+      away: 1,
+    });
+  });
+
+  it("flag on + eliminatória SEM regulamentar → placar final (fallback)", () => {
+    const match = makeKnockoutOtMatch({
+      homeScoreRegulation: undefined,
+      awayScoreRegulation: undefined,
+      outcome: "normal",
+    });
+    expect(effectiveMatchScore(match, { ignoreOvertimeGoals: true })).toEqual({
+      home: 2,
+      away: 1,
+    });
+  });
+
+  it("flag on + fase de grupos → placar final (gate por stage)", () => {
+    // Grupos nunca tem regulamentar, mas ainda que tivesse, o gate ignora.
+    const match = makeFinishedMatch({
+      stage: "grupos",
+      homeScore: 2,
+      awayScore: 1,
+      homeScoreRegulation: 1,
+      awayScoreRegulation: 1,
+    } as Partial<MatchWithId>);
+    expect(effectiveMatchScore(match, { ignoreOvertimeGoals: true })).toEqual({
+      home: 2,
+      away: 1,
+    });
+  });
+});
+
+describe("scorePrediction com ignoreOvertimeGoals (TASK-03)", () => {
+  it("flag off → regra atual (final 2×1): palpite 1×1 → wrong", () => {
+    const match = makeKnockoutOtMatch();
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    expect(scorePrediction(prediction, match)).toEqual({ status: "wrong", points: 0 });
+    expect(scorePrediction(prediction, match, { ignoreOvertimeGoals: false })).toEqual({
+      status: "wrong",
+      points: 0,
+    });
+  });
+
+  it("flag on → compara pelo 90min (1×1): palpite 1×1 → correct 10", () => {
+    const match = makeKnockoutOtMatch();
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    expect(scorePrediction(prediction, match, { ignoreOvertimeGoals: true })).toEqual({
+      status: "correct",
+      points: 10,
+    });
+  });
+
+  it("flag on → palpite que acertava o final (2×1) agora vira partial pelo 90min (1×1)", () => {
+    // Final 2×1 (vitória home); 90min 1×1 (empate). Palpite 2×1: acertava exato no
+    // final, mas pelo 90min o sinal é vitória-home ≠ empate → wrong.
+    const match = makeKnockoutOtMatch();
+    const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
+    expect(scorePrediction(prediction, match, { ignoreOvertimeGoals: true })).toEqual({
+      status: "wrong",
+      points: 0,
+    });
+  });
+
+  it("flag on + eliminatória sem prorrogação → placar final", () => {
+    const match = makeKnockoutOtMatch({
+      homeScore: 3,
+      awayScore: 0,
+      homeScoreRegulation: undefined,
+      awayScoreRegulation: undefined,
+      outcome: "normal",
+    });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 3, awayScore: 0 });
+    expect(scorePrediction(prediction, match, { ignoreOvertimeGoals: true })).toEqual({
+      status: "correct",
+      points: 10,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 3. derivePredictionDisplayStatus
 // ---------------------------------------------------------------------------
 
@@ -491,5 +609,31 @@ describe("derivePredictionDisplayStatus", () => {
     const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 0 });
     const now = new Date(kickoffMs + 7_200_000);
     expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
+  });
+
+  // --- TASK-04: options ignoreOvertimeGoals reflete o placar de 90min ---
+  it("flag off (sem options) em KO com prorrogação: palpite 1×1, final 2×1 → 'errou'", () => {
+    const match = makeKnockoutOtMatch({ kickoffAt }); // final 2×1, 90min 1×1
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(derivePredictionDisplayStatus(prediction, match, now)).toBe("errou");
+  });
+
+  it("flag on em KO com prorrogação: palpite 1×1 vira 'acertou' pelo 90min", () => {
+    const match = makeKnockoutOtMatch({ kickoffAt });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 1, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(
+      derivePredictionDisplayStatus(prediction, match, now, { ignoreOvertimeGoals: true }),
+    ).toBe("acertou");
+  });
+
+  it("flag on: palpite que acertava o final (2×1) vira 'errou' pelo 90min (1×1)", () => {
+    const match = makeKnockoutOtMatch({ kickoffAt });
+    const prediction = makePrediction({ matchId: match.id, homeScore: 2, awayScore: 1 });
+    const now = new Date(kickoffMs + 7_200_000);
+    expect(
+      derivePredictionDisplayStatus(prediction, match, now, { ignoreOvertimeGoals: true }),
+    ).toBe("errou");
   });
 });

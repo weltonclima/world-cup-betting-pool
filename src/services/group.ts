@@ -197,6 +197,7 @@ export interface UpdateGroupSettingsInput {
   allowInvites?: boolean;
   predictionsLocked?: boolean;
   splitPhaseRanking?: boolean;
+  ignoreOvertimeGoals?: boolean;
 }
 
 export async function updateGroupSettings(

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
+import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolSchema,
@@ -27,6 +28,7 @@ const settingsSchema = z
     allowInvites: z.boolean().optional(),
     predictionsLocked: z.boolean().optional(),
     splitPhaseRanking: z.boolean().optional(),
+    ignoreOvertimeGoals: z.boolean().optional(),
   })
   .strict();
 
@@ -84,6 +86,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     allowInvites,
     predictionsLocked,
     splitPhaseRanking,
+    ignoreOvertimeGoals,
   } = parsed.data;
   if (name !== undefined) patch["name"] = name;
   if (description !== undefined) patch["description"] = description;
@@ -102,6 +105,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (allowInvites !== undefined) patch["allowInvites"] = allowInvites;
   if (predictionsLocked !== undefined) patch["predictionsLocked"] = predictionsLocked;
   if (splitPhaseRanking !== undefined) patch["splitPhaseRanking"] = splitPhaseRanking;
+  if (ignoreOvertimeGoals !== undefined) patch["ignoreOvertimeGoals"] = ignoreOvertimeGoals;
 
   const db = getAdminFirestore();
   const poolRef = db.collection("pools").doc(groupId);
@@ -112,8 +116,22 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Grupo não encontrado." }, { status: 404 });
     }
 
+    // Mudança da flag `ignoreOvertimeGoals` altera a PONTUAÇÃO dos docs de ranking
+    // do pool (geral, fases e eliminatórias), mas não muda o placar final nem o
+    // shape — logo o gate de frescor (`ensureRankingsFresh`) não recomputa sozinho.
+    // Dispara um recalc global best-effort quando o valor efetivamente muda, para
+    // manter TODOS os docs do pool coerentes (o botão de recalc do pool só cobre o
+    // doc `geral`). Best-effort: nunca derruba o save.
+    const flagChanged =
+      ignoreOvertimeGoals !== undefined &&
+      ((snap.data() as { ignoreOvertimeGoals?: unknown }).ignoreOvertimeGoals === true) !==
+        ignoreOvertimeGoals;
+
     await poolRef.update(patch);
     const updatedSnap = await poolRef.get();
+    if (flagChanged) {
+      await recalcRankingsBestEffort(db);
+    }
     return NextResponse.json({ pool: poolSchema.parse(updatedSnap.data()) });
   } catch (err) {
     console.error("[group/settings PATCH] erro inesperado:", err);

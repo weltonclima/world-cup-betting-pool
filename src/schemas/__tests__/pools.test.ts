@@ -155,6 +155,22 @@ describe("pools › poolSchema", () => {
       poolSchema.safeParse({ ...valid, splitPhaseRanking: "true" }).success,
     ).toBe(false);
   });
+
+  it("ignoreOvertimeGoals: ausente → parse ok (default-na-leitura = OFF)", () => {
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("ignoreOvertimeGoals: aceita true e false, rejeita não-boolean", () => {
+    expect(
+      poolSchema.safeParse({ ...valid, ignoreOvertimeGoals: true }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, ignoreOvertimeGoals: false }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, ignoreOvertimeGoals: "true" }).success,
+    ).toBe(false);
+  });
 });
 
 describe("pools › poolStatusSchema", () => {

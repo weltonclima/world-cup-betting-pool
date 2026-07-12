@@ -34,6 +34,11 @@ export interface MatchListItem {
   status: MatchStatus;
   homeScore: number | null;
   awayScore: number | null;
+  // Placar do tempo normal (90min) em jogos de mata-mata com prorrogação
+  // (ignorar-gols-prorrogacao TASK-04). Ausente na maioria dos jogos; usado só
+  // quando o pool tem `ignoreOvertimeGoals` ligado (scoring client-side coerente).
+  homeScoreRegulation?: number;
+  awayScoreRegulation?: number;
   /** Id do time mandante — exposto para filtro por seleção (TASK-05). */
   homeTeamId: string;
   /** Id do time visitante — exposto para filtro por seleção (TASK-05). */
@@ -144,6 +149,12 @@ export function useMatchesList(): MatchesListData {
         status: match.status,
         homeScore: match.homeScore,
         awayScore: match.awayScore,
+        ...(match.homeScoreRegulation !== undefined
+          ? { homeScoreRegulation: match.homeScoreRegulation }
+          : {}),
+        ...(match.awayScoreRegulation !== undefined
+          ? { awayScoreRegulation: match.awayScoreRegulation }
+          : {}),
         homeTeamId: match.homeTeamId,
         awayTeamId: match.awayTeamId,
         homeTeam: resolveTeam(match.homeTeamId, teamMap),

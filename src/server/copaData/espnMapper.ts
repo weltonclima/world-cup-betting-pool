@@ -23,7 +23,12 @@ import { stageSchema } from "@/schemas/shared";
 import type { MatchWithId } from "@/types/matches";
 
 import { buildEspnMatchId, isGroupStage } from "./espnMatchId";
-import type { EspnCompetition, EspnCompetitor, EspnEvent } from "./espnTypes";
+import type {
+  EspnCompetition,
+  EspnCompetitor,
+  EspnEvent,
+  EspnScoringPlay,
+} from "./espnTypes";
 import { resolveTeamByCode } from "./teamRegistry";
 
 /** Patch parcial derivado de um competition ESPN. Status narrow (sem postponed/canceled). */
@@ -99,8 +104,10 @@ export function parseBracketSlot(displayName: string): BracketSlot | null {
 /**
  * Deriva o desfecho de um jogo de mata-mata a partir de `status.type.name` ESPN.
  * Só faz sentido em jogo finalizado (`state === "post"`) — antes disso retorna
- * `undefined`. `STATUS_FINAL_PEN` → pênaltis; `STATUS_OVERTIME` → prorrogação;
- * qualquer outro nome (ou ausente) em jogo finalizado → tempo normal. Pura.
+ * `undefined`. `STATUS_FINAL_PEN` → pênaltis; `STATUS_FINAL_AET`/`STATUS_OVERTIME`
+ * → prorrogação; qualquer outro nome (ou ausente) em jogo finalizado → tempo
+ * normal. Pura. (`STATUS_FINAL_AET` é o nome real da ESPN 2026 p/ "após
+ * prorrogação"; `STATUS_OVERTIME` mantido por compat.)
  */
 export function mapOutcome(
   statusTypeName: string | undefined,
@@ -112,11 +119,102 @@ export function mapOutcome(
   switch (statusTypeName) {
     case "STATUS_FINAL_PEN":
       return "penalties";
+    case "STATUS_FINAL_AET":
     case "STATUS_OVERTIME":
       return "overtime";
     default:
       return "normal";
   }
+}
+
+/** Fim do tempo normal em segundos (90min). Fallback quando `displayValue` falta. */
+const REGULATION_END_SECONDS = 5400;
+
+/**
+ * Classifica um gol como do tempo normal, da prorrogação, ou indeterminado.
+ *
+ * CRITÉRIO PRIMÁRIO = `displayValue` (o minuto exibido): a ESPN mostra acréscimo
+ * como "45'+2'"/"90'+4'" (minuto-base ≤ 90 = tempo normal) e prorrogação como
+ * "93'".."120'+1'" (minuto-base > 90). Isso distingue "90'+4'" (normal) de "94'"
+ * (prorrogação) SEM depender de suposição sobre o cap do `clock.value`.
+ *
+ * FALLBACK = `clock.value` em segundos (≤ 5400 = tempo normal), quando o
+ * `displayValue` está ausente/ilegível. Sem nenhuma info de tempo → `"unknown"`
+ * (o chamador aborta para não confiar num placar parcial).
+ */
+function classifyGoalTiming(
+  clock: EspnScoringPlay["clock"],
+): "regulation" | "overtime" | "unknown" {
+  const displayValue = clock?.displayValue?.trim();
+  if (displayValue) {
+    const m = displayValue.match(/^(\d+)/);
+    if (m) return Number(m[1]) <= 90 ? "regulation" : "overtime";
+  }
+  const value = clock?.value;
+  if (typeof value === "number") {
+    return value <= REGULATION_END_SECONDS ? "regulation" : "overtime";
+  }
+  return "unknown";
+}
+
+/**
+ * Reconstrói o placar do TEMPO NORMAL (90min + acréscimos) a partir do array
+ * `details` (gol-a-gol) da ESPN (TASK-01). Pura.
+ *
+ * Considera apenas gols (`scoringPlay === true`) do tempo normal (ver
+ * `classifyGoalTiming`), excluindo disputa de pênaltis (`shootout === true`).
+ * Gol em jogo (inclusive pênalti convertido) conta normalmente. Gol contra
+ * (`ownGoal === true`) é creditado ao lado ADVERSÁRIO do `team.id`.
+ *
+ * Conservador: retorna `null` (⇒ chamador usa placar final) quando não há base
+ * confiável — `details` ausente/vazio, `team.id` de algum lado ausente, ou um
+ * gol cujo tempo/time não pôde ser classificado. Conta +1 por gol (robusto a
+ * `scoreValue` ausente/atípico).
+ *
+ * @returns `{ home, away }` ou `null`.
+ */
+export function deriveRegulationScore(
+  details: EspnScoringPlay[] | undefined,
+  home: EspnCompetitor,
+  away: EspnCompetitor,
+): { home: number; away: number } | null {
+  if (!details || details.length === 0) {
+    return null;
+  }
+
+  const homeId = home.team.id;
+  const awayId = away.team.id;
+  // Sem ids dos dois lados não há como atribuir gols → fallback ao placar final.
+  if (homeId === undefined || awayId === undefined) {
+    return null;
+  }
+
+  let homeGoals = 0;
+  let awayGoals = 0;
+
+  for (const play of details) {
+    if (play.scoringPlay !== true || play.shootout === true) continue;
+
+    const timing = classifyGoalTiming(play.clock);
+    if (timing === "unknown") return null; // gol sem tempo classificável → não confiar
+    if (timing === "overtime") continue;
+
+    // Beneficiário: em gol normal é o próprio `team.id`; em gol contra, o adversário.
+    const scoringId = play.team?.id;
+    let beneficiaryIsHome: boolean;
+    if (scoringId === homeId) {
+      beneficiaryIsHome = play.ownGoal !== true;
+    } else if (scoringId === awayId) {
+      beneficiaryIsHome = play.ownGoal === true;
+    } else {
+      return null; // gol de tempo normal não atribuível a nenhum lado → não confiar
+    }
+
+    if (beneficiaryIsHome) homeGoals += 1;
+    else awayGoals += 1;
+  }
+
+  return { home: homeGoals, away: awayGoals };
 }
 
 /** Converte uma competition ESPN validada num patch de status/placar. */
@@ -221,6 +319,7 @@ function buildKnockoutFields(
   statusName: string | undefined,
   home: EspnCompetitor,
   away: EspnCompetitor,
+  details: EspnScoringPlay[] | undefined,
 ): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
 
@@ -249,6 +348,19 @@ function buildKnockoutFields(
   if (outcome === "penalties") {
     fields.homeShootout = home.shootoutScore ?? null;
     fields.awayShootout = away.shootoutScore ?? null;
+  }
+
+  // Placar do tempo normal (90min) — para jogos que passaram da prorrogação:
+  // `overtime` E `penalties` (pênaltis implicam prorrogação, e pode ter havido gol
+  // na prorrogação → o placar de 90min difere do placar final). `normal` não
+  // precisa (regulamentar == final). Both-or-neither: `deriveRegulationScore`
+  // retorna null sem base confiável → não seta os campos (fallback ao final).
+  if (outcome === "overtime" || outcome === "penalties") {
+    const regulation = deriveRegulationScore(details, home, away);
+    if (regulation !== null) {
+      fields.homeScoreRegulation = regulation.home;
+      fields.awayScoreRegulation = regulation.away;
+    }
   }
 
   return fields;
@@ -312,7 +424,13 @@ export function mapEspnEventToMatch(
     // quando decididos nos pênaltis, sempre SEPARADOS do placar de tempo normal.
     ...(isGroupStage(event)
       ? {}
-      : buildKnockoutFields(competition.status.type.state, competition.status.type.name, home, away)),
+      : buildKnockoutFields(
+          competition.status.type.state,
+          competition.status.type.name,
+          home,
+          away,
+          competition.details,
+        )),
   };
 
   // Falha ruidosa: ID silenciosamente errado é pior que throw.

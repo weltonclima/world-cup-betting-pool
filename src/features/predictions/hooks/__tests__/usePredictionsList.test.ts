@@ -40,6 +40,7 @@ vi.mock("@/hooks/useAuth", () => ({
 vi.mock("@/features/predictions/hooks/usePredictions");
 vi.mock("@/features/matches/hooks/useMatches");
 vi.mock("@/features/matches/hooks/useTeams");
+vi.mock("@/features/rankings/hooks/usePoolRanking");
 
 // ── imports pós-mock ──────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePredictions } from "@/features/predictions/hooks/usePredictions";
 import { useMatches } from "@/features/matches/hooks/useMatches";
 import { useTeams } from "@/features/matches/hooks/useTeams";
+import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
 import { usePredictionsList } from "../usePredictionsList";
 
 // ── typed mocks ───────────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ const mockedUseAuth = vi.mocked(useAuth);
 const mockedUsePredictions = vi.mocked(usePredictions);
 const mockedUseMatches = vi.mocked(useMatches);
 const mockedUseTeams = vi.mocked(useTeams);
+const mockedUsePoolRanking = vi.mocked(usePoolRanking);
 
 // ── helpers de query ──────────────────────────────────────────────────────────
 
@@ -180,6 +183,10 @@ function setupDefaultMocks(overrides: {
       isLoading: overrides.teamsLoading,
       isError: overrides.teamsError,
     }),
+  );
+  // Ranking do pool: default sem flag (OFF) → exibição pelo placar final.
+  mockedUsePoolRanking.mockReturnValue(
+    makeQueryResult<unknown>(null) as ReturnType<typeof usePoolRanking>,
   );
 }
 

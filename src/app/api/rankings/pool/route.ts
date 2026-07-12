@@ -55,12 +55,17 @@ export async function GET(): Promise<NextResponse> {
   const poolSnap = await db.collection("pools").doc(groupId).get();
   const rawFlag: unknown = poolSnap.data()?.["splitPhaseRanking"];
   const splitPhaseRanking = typeof rawFlag === "boolean" ? rawFlag : undefined;
+  // Flag de exibição p/ pontuar eliminatórias pelo 90min (TASK-04). Mesmo padrão:
+  // lida só da sessão; ausente/não-booleano = OFF (omitida do payload).
+  const rawOvertimeFlag: unknown = poolSnap.data()?.["ignoreOvertimeGoals"];
+  const ignoreOvertimeGoals =
+    typeof rawOvertimeFlag === "boolean" ? rawOvertimeFlag : undefined;
 
   // Foto/nome de exibição resolvidos AO VIVO (não do snapshot do recalc): garante que
   // trocar avatar/apelido reflita no ranking sem depender de um recalc disparar.
   const entries = await hydrateRankingEntries(db, parsed.data.entries);
   return NextResponse.json(
-    { ...parsed.data, entries, splitPhaseRanking },
+    { ...parsed.data, entries, splitPhaseRanking, ignoreOvertimeGoals },
     { status: 200 },
   );
 }

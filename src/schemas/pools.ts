@@ -44,6 +44,12 @@ export const poolSchema = z
     // no schema). `true` = telas exibem rankings de grupos e eliminatórias separados.
     // Só exibição; sem impacto em scoring/recalc.
     splitPhaseRanking: z.boolean().optional(),
+    // NET-NEW ignorar gols de prorrogação (ignorar-gols-prorrogacao TASK-02) —
+    // aditivo optional. Default NA LEITURA: `undefined` = OFF (sem `.default(false)`
+    // no schema). `true` = nas fases eliminatórias, palpites são pontuados pelo
+    // placar do tempo normal (90min), ignorando gols da prorrogação. Efeito na
+    // pontuação é aplicado na TASK-03 (aqui só persiste a flag).
+    ignoreOvertimeGoals: z.boolean().optional(),
   })
   .strict();
 

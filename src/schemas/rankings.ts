@@ -50,6 +50,10 @@ export const rankingSchema = z
 // cria um schema dedicado. Flag optional: ausente = OFF (telas tratam como false).
 export const poolRankingResponseSchema = rankingSchema.extend({
   splitPhaseRanking: z.boolean().optional(),
+  // Flag de exibição do pool (ignorar-gols-prorrogacao TASK-04): quando true, as
+  // telas pontuam palpites de eliminatórias pelo placar de 90min (coerência com o
+  // ranking do pool). Ausente = OFF. Fonte única no client via usePoolRanking.
+  ignoreOvertimeGoals: z.boolean().optional(),
 });
 
 // Ranking por grupo individual (A–L). Doc `rankings/group-{groupId}`.

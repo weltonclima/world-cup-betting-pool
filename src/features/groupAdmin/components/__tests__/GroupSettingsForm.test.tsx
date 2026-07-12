@@ -97,6 +97,10 @@ function getSplitSwitch(): HTMLElement {
   return screen.getByRole("switch", { name: /dividir ranking por fase/i });
 }
 
+function getOvertimeSwitch(): HTMLElement {
+  return screen.getByRole("switch", { name: /ignorar gols da prorrogação/i });
+}
+
 function clickSave(): void {
   fireEvent.click(screen.getByRole("button", { name: /salvar alterações/i }));
 }
@@ -209,5 +213,59 @@ describe("Switch 'Dividir ranking por fase' — reset ao refetch", () => {
     rerender(<GroupSettingsForm />);
 
     expect(getSplitSwitch().getAttribute("aria-checked")).toBe("true");
+  });
+});
+
+describe("Switch 'Ignorar gols da prorrogação' — estado inicial", () => {
+  it("renderiza desligado quando ignoreOvertimeGoals está ausente (undefined)", () => {
+    setup(makePool());
+    expect(getOvertimeSwitch().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("renderiza desligado quando ignoreOvertimeGoals é false", () => {
+    setup(makePool({ ignoreOvertimeGoals: false }));
+    expect(getOvertimeSwitch().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("renderiza ligado quando ignoreOvertimeGoals é true", () => {
+    setup(makePool({ ignoreOvertimeGoals: true }));
+    expect(getOvertimeSwitch().getAttribute("aria-checked")).toBe("true");
+  });
+});
+
+describe("Switch 'Ignorar gols da prorrogação' — PATCH parcial", () => {
+  it("inclui ignoreOvertimeGoals: true no PATCH ao ativar e salvar", () => {
+    const { mutateMock } = setup(makePool({ ignoreOvertimeGoals: false }));
+    fireEvent.click(getOvertimeSwitch());
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { ignoreOvertimeGoals: true },
+      expect.any(Object),
+    );
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("inclui ignoreOvertimeGoals: false no PATCH ao desativar e salvar", () => {
+    const { mutateMock } = setup(makePool({ ignoreOvertimeGoals: true }));
+    fireEvent.click(getOvertimeSwitch());
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { ignoreOvertimeGoals: false },
+      expect.any(Object),
+    );
+    expect(mutateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("não chama mutate quando ignoreOvertimeGoals não foi alterado", () => {
+    const { mutateMock } = setup(makePool({ ignoreOvertimeGoals: false }));
+    clickSave();
+    expect(mutateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("Switch 'Ignorar gols da prorrogação' — loading", () => {
+  it("switch fica desabilitado durante update.isPending", () => {
+    setup(makePool(), true);
+    expect((getOvertimeSwitch() as HTMLButtonElement).disabled).toBe(true);
   });
 });

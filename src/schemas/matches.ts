@@ -67,6 +67,14 @@ export const matchSchema = z
     advanceSide: z.enum(["home", "away"]).nullable().optional(),
     // Como o jogo foi decidido. Só em mata-mata encerrado; ausente em grupo.
     outcome: z.enum(["normal", "overtime", "penalties"]).optional(),
+    // NET-NEW TASK-01 (ignorar-gols-prorrogacao) — placar do TEMPO NORMAL (90min +
+    // acréscimos), reconstruído do array `details` da ESPN. Só presente em
+    // mata-mata que foi à prorrogação (`outcome === "overtime"`). Aditivos e
+    // opcionais: matches sem prorrogação/sem details não os têm. NUNCA substituem
+    // homeScore/awayScore (placar final) — são um dado adicional p/ scoring
+    // configurável por pool (TASK-03).
+    homeScoreRegulation: z.int().min(0).optional(),
+    awayScoreRegulation: z.int().min(0).optional(),
   })
   .strict()
   .refine(
@@ -113,6 +121,22 @@ export const matchSchema = z
       message:
         "Pênaltis: 'penalties' exige homeShootout e awayShootout numéricos; demais outcomes não devem ter shootout.",
       path: ["homeShootout"],
+    },
+  )
+  .refine(
+    (match) => {
+      // Placar regulamentar (TASK-01): both-or-neither. Reconstruído em par (dois
+      // lados) ou ausente; um lado só nunca é válido.
+      const home = match.homeScoreRegulation;
+      const away = match.awayScoreRegulation;
+      const ambos = typeof home === "number" && typeof away === "number";
+      const nenhum = home === undefined && away === undefined;
+      return ambos || nenhum;
+    },
+    {
+      message:
+        "Placar regulamentar: homeScoreRegulation e awayScoreRegulation devem estar ambos presentes ou ambos ausentes.",
+      path: ["homeScoreRegulation"],
     },
   );
 
