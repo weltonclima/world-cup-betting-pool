@@ -139,9 +139,11 @@ a mais crítica é a TASK-03 (mexe no núcleo da pontuação). Ambas com TDD.
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/medium
-- Status: pending
-- Phases done: (none)
-- Notes: is_frontend parcial (toggle no form) — o /ui-spec pode ser dispensado por
+- Status: done
+- Phases done: spec, implement, test, review
+- Notes: is_frontend parcial (toggle no form). ui-spec/patterns pulados (Switch
+  idêntico ao splitPhaseRanking, sem novo padrão visual). Não adicionado ao
+  poolEditSchema (espelha splitPhaseRanking, que também não está lá). — o /ui-spec pode ser dispensado por
   ser um Switch idêntico ao existente; decidir no spec. Precedente exato:
   `splitPhaseRanking` (route.ts:29,104; form linhas 275-294).
 

@@ -27,6 +27,7 @@ const settingsSchema = z
     allowInvites: z.boolean().optional(),
     predictionsLocked: z.boolean().optional(),
     splitPhaseRanking: z.boolean().optional(),
+    ignoreOvertimeGoals: z.boolean().optional(),
   })
   .strict();
 
@@ -84,6 +85,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     allowInvites,
     predictionsLocked,
     splitPhaseRanking,
+    ignoreOvertimeGoals,
   } = parsed.data;
   if (name !== undefined) patch["name"] = name;
   if (description !== undefined) patch["description"] = description;
@@ -102,6 +104,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (allowInvites !== undefined) patch["allowInvites"] = allowInvites;
   if (predictionsLocked !== undefined) patch["predictionsLocked"] = predictionsLocked;
   if (splitPhaseRanking !== undefined) patch["splitPhaseRanking"] = splitPhaseRanking;
+  if (ignoreOvertimeGoals !== undefined) patch["ignoreOvertimeGoals"] = ignoreOvertimeGoals;
 
   const db = getAdminFirestore();
   const poolRef = db.collection("pools").doc(groupId);
