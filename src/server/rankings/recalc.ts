@@ -4,7 +4,7 @@ import type { Firestore } from "firebase-admin/firestore";
 
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { applyAvatarBudget } from "@/server/rankings/avatarBudget";
-import { scorePrediction } from "@/features/predictions/lib";
+import { scorePrediction, type ScoreOptions } from "@/features/predictions/lib";
 import {
   buildDistribution,
   computeAccuracy,
@@ -147,6 +147,87 @@ function emptyAgg(): UserAgg {
   };
 }
 
+/**
+ * Agrega os palpites finalizados de UM usuário num `UserAgg` (todos os scopes:
+ * geral, fases, eliminatórias, grupos, streak, firstPredictionAt). Pura.
+ *
+ * `options` é repassado a `scorePrediction`: sem options (default) reproduz
+ * EXATAMENTE o comportamento anterior (placar final) — usado no recalc global e
+ * nos docs globais. Com `{ ignoreOvertimeGoals: true }` pontua eliminatórias com
+ * prorrogação pelo placar de 90min — usado por pool flagged (TASK-03).
+ */
+function aggregateUser(
+  userPreds: Array<ReturnType<typeof predictionSchema.parse>>,
+  matchById: Map<string, MatchWithId>,
+  options?: ScoreOptions,
+): UserAgg {
+  const agg = emptyAgg();
+
+  for (const pred of userPreds) {
+    // firstPredictionAt = menor createdAt (considera todos os palpites).
+    if (pred.createdAt !== undefined) {
+      if (agg.firstPredictionAt === undefined || pred.createdAt < agg.firstPredictionAt) {
+        agg.firstPredictionAt = pred.createdAt;
+      }
+    }
+
+    const match = matchById.get(pred.matchId);
+    if (!match) continue; // partida não finalizada / inexistente
+
+    const { status, points } = scorePrediction(pred, match, options);
+    const correct = status === "correct"; // EXATO (10). `partial` (5) NÃO é correct.
+    // `partial` (5): vencedor sem placar vs empate sem placar — split pelo PALPITE.
+    const isWinner = status === "partial" && pred.homeScore !== pred.awayScore;
+    const isDraw = status === "partial" && pred.homeScore === pred.awayScore;
+    agg.finishedPreds.push({ kickoffAt: match.kickoffAt, correct });
+
+    // Pontos PONDERADOS (5/10) somam ao escopo; acertos EXATOS contam à parte.
+    agg.pointsGeral += points;
+    if (correct) agg.correctGeral += 1;
+    if (isWinner) agg.winnerGeral += 1;
+    if (isDraw) agg.drawGeral += 1;
+    if (status === "wrong") agg.wrongGeral += 1;
+    // correctByStage = contagem de EXATOS por fase (D2); `partial` não entra.
+    if (correct) {
+      agg.correctByStage[match.stage] = (agg.correctByStage[match.stage] ?? 0) + 1;
+    }
+
+    if ((RANKING_STAGE_SCOPES as readonly string[]).includes(match.stage)) {
+      const s = match.stage as RankingStageScope;
+      const cur = agg.byStageScope.get(s) ?? emptyScopeCounts();
+      cur.points += points;
+      if (correct) cur.correct += 1;
+      if (isWinner) cur.winner += 1;
+      if (isDraw) cur.draw += 1;
+      if (status === "wrong") cur.wrong += 1;
+      agg.byStageScope.set(s, cur);
+    }
+
+    // AGREGADO eliminatórias: path próprio (inclui dezesseis-avos, fora de
+    // RANKING_STAGE_SCOPES). NÃO derivar de byStageScope (dropparia 16-avos, D2).
+    if ((ELIMINATION_STAGES as readonly string[]).includes(match.stage)) {
+      const el = agg.byElimination;
+      el.points += points;
+      if (correct) el.correct += 1;
+      if (isWinner) el.winner += 1;
+      if (isDraw) el.draw += 1;
+      if (status === "wrong") el.wrong += 1;
+    }
+
+    if (match.stage === "grupos" && match.groupId) {
+      const cur = agg.byGroup.get(match.groupId) ?? emptyScopeCounts();
+      cur.points += points;
+      if (correct) cur.correct += 1;
+      if (isWinner) cur.winner += 1;
+      if (isDraw) cur.draw += 1;
+      if (status === "wrong") cur.wrong += 1;
+      agg.byGroup.set(match.groupId, cur);
+    }
+  }
+
+  return agg;
+}
+
 /** Maior sequência de acertos consecutivos (ordem cronológica por kickoff). */
 function longestStreak(preds: Array<{ kickoffAt: string; correct: boolean }>): number {
   const ordered = [...preds].sort((a, b) => Date.parse(a.kickoffAt) - Date.parse(b.kickoffAt));
@@ -251,76 +332,114 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     predsByUid.set(parsed.data.uid, list);
   }
 
-  // ─── 4. Agregação por usuário ──────────────────────────────────────────────
+  // ─── 4. Agregação por usuário (GLOBAL, placar final) ───────────────────────
+  // Sem options → placar final. Alimenta TODOS os docs globais (geral, fases,
+  // grupos, eliminatórias) — comportamento inalterado.
   const aggByUid = new Map<string, UserAgg>();
   for (const user of approved) {
-    const agg = emptyAgg();
-    const userPreds = predsByUid.get(user.uid) ?? [];
+    aggByUid.set(user.uid, aggregateUser(predsByUid.get(user.uid) ?? [], matchById));
+  }
 
-    for (const pred of userPreds) {
-      // firstPredictionAt = menor createdAt (considera todos os palpites).
-      if (pred.createdAt !== undefined) {
-        if (agg.firstPredictionAt === undefined || pred.createdAt < agg.firstPredictionAt) {
-          agg.firstPredictionAt = pred.createdAt;
-        }
-      }
-
-      const match = matchById.get(pred.matchId);
-      if (!match) continue; // partida não finalizada / inexistente
-
-      const { status, points } = scorePrediction(pred, match);
-      const correct = status === "correct"; // EXATO (10). `partial` (5) NÃO é correct.
-      // `partial` (5): vencedor sem placar vs empate sem placar — split pelo PALPITE.
-      const isWinner = status === "partial" && pred.homeScore !== pred.awayScore;
-      const isDraw = status === "partial" && pred.homeScore === pred.awayScore;
-      agg.finishedPreds.push({ kickoffAt: match.kickoffAt, correct });
-
-      // Pontos PONDERADOS (5/10) somam ao escopo; acertos EXATOS contam à parte.
-      agg.pointsGeral += points;
-      if (correct) agg.correctGeral += 1;
-      if (isWinner) agg.winnerGeral += 1;
-      if (isDraw) agg.drawGeral += 1;
-      if (status === "wrong") agg.wrongGeral += 1;
-      // correctByStage = contagem de EXATOS por fase (D2); `partial` não entra.
-      if (correct) {
-        agg.correctByStage[match.stage] = (agg.correctByStage[match.stage] ?? 0) + 1;
-      }
-
-      if ((RANKING_STAGE_SCOPES as readonly string[]).includes(match.stage)) {
-        const s = match.stage as RankingStageScope;
-        const cur = agg.byStageScope.get(s) ?? emptyScopeCounts();
-        cur.points += points;
-        if (correct) cur.correct += 1;
-        if (isWinner) cur.winner += 1;
-        if (isDraw) cur.draw += 1;
-        if (status === "wrong") cur.wrong += 1;
-        agg.byStageScope.set(s, cur);
-      }
-
-      // AGREGADO eliminatórias: path próprio (inclui dezesseis-avos, fora de
-      // RANKING_STAGE_SCOPES). NÃO derivar de byStageScope (dropparia 16-avos, D2).
-      if ((ELIMINATION_STAGES as readonly string[]).includes(match.stage)) {
-        const el = agg.byElimination;
-        el.points += points;
-        if (correct) el.correct += 1;
-        if (isWinner) el.winner += 1;
-        if (isDraw) el.draw += 1;
-        if (status === "wrong") el.wrong += 1;
-      }
-
-      if (match.stage === "grupos" && match.groupId) {
-        const cur = agg.byGroup.get(match.groupId) ?? emptyScopeCounts();
-        cur.points += points;
-        if (correct) cur.correct += 1;
-        if (isWinner) cur.winner += 1;
-        if (isDraw) cur.draw += 1;
-        if (status === "wrong") cur.wrong += 1;
-        agg.byGroup.set(match.groupId, cur);
+  // ─── 4.1 Flags de pool + re-agregação por pool flagged (TASK-03) ───────────
+  // Pools com `ignoreOvertimeGoals === true` pontuam eliminatórias com
+  // prorrogação pelo placar de 90min. Leitura tolerante (flag ausente/false = OFF;
+  // pool malformado não quebra o recalc). Re-agrega só os membros desses pools.
+  const flaggedPoolIds = new Set<string>();
+  try {
+    const poolsSnap = await db.collection("pools").get();
+    for (const d of poolsSnap.docs) {
+      if ((d.data() as { ignoreOvertimeGoals?: unknown }).ignoreOvertimeGoals === true) {
+        flaggedPoolIds.add(d.id);
       }
     }
-
-    aggByUid.set(user.uid, agg);
+  } catch (err) {
+    // Falha ao ler pools não deve derrubar o recalc: degrada para nenhum flagged
+    // (placar final em tudo) — fallback seguro.
+    console.warn("[recalc] falha ao ler flags de pool (ignoreOvertimeGoals):", err);
   }
+
+  // Agregado 90min por (poolId flagged → uid → UserAgg). Só membros de pool flagged.
+  const flaggedAggByPool = new Map<string, Map<string, UserAgg>>();
+  for (const u of approved) {
+    if (!u.groupId || !flaggedPoolIds.has(u.groupId)) continue;
+    const perUid = flaggedAggByPool.get(u.groupId) ?? new Map<string, UserAgg>();
+    perUid.set(
+      u.uid,
+      aggregateUser(predsByUid.get(u.uid) ?? [], matchById, { ignoreOvertimeGoals: true }),
+    );
+    flaggedAggByPool.set(u.groupId, perUid);
+  }
+
+  /**
+   * Agregado a usar ao montar os docs de um pool: flagged (90min) quando o pool
+   * tem a flag; senão o agregado global (placar final). Docs GLOBAIS nunca usam
+   * isto — sempre `aggByUid` direto.
+   */
+  const aggForPool = (poolId: string, uid: string): UserAgg =>
+    flaggedAggByPool.get(poolId)?.get(uid) ?? aggByUid.get(uid)!;
+
+  // Construtores de RankableParticipant por escopo, a partir de um UserAgg. Usados
+  // com `aggByUid` (docs globais, placar final) e com `aggForPool` (docs de pool,
+  // 90min quando flagged). Centralizam a montagem p/ garantir consistência global↔pool.
+  const geralPart = (uid: string, a: UserAgg): RankableParticipant => ({
+    uid,
+    points: a.pointsGeral,
+    accuracy: computeAccuracy(a.correctGeral, finishedGeral),
+    wrong: a.wrongGeral,
+    correct: a.correctGeral,
+    winner: a.winnerGeral,
+    draw: a.drawGeral,
+    firstPredictionAt: a.firstPredictionAt,
+  });
+  const stagePart = (
+    uid: string,
+    a: UserAgg,
+    scope: RankingStageScope,
+    denom: number,
+  ): RankableParticipant => {
+    const s = a.byStageScope.get(scope) ?? emptyScopeCounts();
+    return {
+      uid,
+      points: s.points,
+      accuracy: computeAccuracy(s.correct, denom),
+      wrong: s.wrong,
+      correct: s.correct,
+      winner: s.winner,
+      draw: s.draw,
+      firstPredictionAt: a.firstPredictionAt,
+    };
+  };
+  const elimPart = (uid: string, a: UserAgg): RankableParticipant => {
+    const el = a.byElimination;
+    return {
+      uid,
+      points: el.points,
+      accuracy: computeAccuracy(el.correct, finishedElimination),
+      wrong: el.wrong,
+      correct: el.correct,
+      winner: el.winner,
+      draw: el.draw,
+      firstPredictionAt: a.firstPredictionAt,
+    };
+  };
+  const groupPart = (
+    uid: string,
+    a: UserAgg,
+    groupId: string,
+    denom: number,
+  ): RankableParticipant => {
+    const g = a.byGroup.get(groupId) ?? emptyScopeCounts();
+    return {
+      uid,
+      points: g.points,
+      accuracy: computeAccuracy(g.correct, denom),
+      wrong: g.wrong,
+      correct: g.correct,
+      winner: g.winner,
+      draw: g.draw,
+      firstPredictionAt: a.firstPredictionAt,
+    };
+  };
 
   const userByUid = new Map(approved.map((u) => [u.uid, u]));
   const toEntry = (r: RankedParticipant): RankingEntry => {
@@ -354,20 +473,10 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   const nowIso = new Date().toISOString();
   const writes: Array<Promise<unknown>> = [];
 
-  // ─── 5. Ranking geral ──────────────────────────────────────────────────────
-  const geralParticipants: RankableParticipant[] = approved.map((u) => {
-    const a = aggByUid.get(u.uid)!;
-    return {
-      uid: u.uid,
-      points: a.pointsGeral, // ponderado (ordena o ranking)
-      accuracy: computeAccuracy(a.correctGeral, finishedGeral), // exatos
-      wrong: a.wrongGeral,
-      correct: a.correctGeral,
-      winner: a.winnerGeral,
-      draw: a.drawGeral,
-      firstPredictionAt: a.firstPredictionAt,
-    };
-  });
+  // ─── 5. Ranking geral (GLOBAL, placar final) ───────────────────────────────
+  const geralParticipants: RankableParticipant[] = approved.map((u) =>
+    geralPart(u.uid, aggByUid.get(u.uid)!),
+  );
   const geralRanked = rankParticipants(geralParticipants);
   const geralPositionByUid = new Map(geralRanked.map((r) => [r.uid, r.position]));
   writes.push(
@@ -396,7 +505,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     poolMembers.set(u.groupId, list);
   }
   let poolsWritten = 0;
-  for (const [poolId, participants] of poolMembers) {
+  for (const [poolId, members] of poolMembers) {
+    // Pool flagged → re-pontua pelo 90min (aggForPool); senão usa o global.
+    const participants = members.map((m) => geralPart(m.uid, aggForPool(poolId, m.uid)));
     writes.push(
       db
         .collection("rankings")
@@ -440,20 +551,8 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   let scopesWritten = 1;
   for (const scope of RANKING_STAGE_SCOPES) {
     const denom = finishedByStage.get(scope) ?? 0;
-    const partByUid = new Map<string, RankableParticipant>();
-    for (const u of approved) {
-      const a = aggByUid.get(u.uid)!.byStageScope.get(scope) ?? emptyScopeCounts();
-      partByUid.set(u.uid, {
-        uid: u.uid,
-        points: a.points, // ponderado
-        accuracy: computeAccuracy(a.correct, denom), // exatos
-        wrong: a.wrong,
-        correct: a.correct,
-        winner: a.winner,
-        draw: a.draw,
-        firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
-      });
-    }
+    // Global (placar final).
+    const globalPart = approved.map((u) => stagePart(u.uid, aggByUid.get(u.uid)!, scope, denom));
     writes.push(
       db
         .collection("rankings")
@@ -461,13 +560,14 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
         .set({
           scope,
           updatedAt: nowIso,
-          entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
+          entries: toBudgetedEntries(rankParticipants(globalPart)),
         }),
     );
     scopesWritten += 1;
 
+    // Por pool — flagged re-pontua pelo 90min (só afeta fases eliminatórias).
     for (const [poolId, members] of poolMembers) {
-      const poolPart = members.map((m) => partByUid.get(m.uid)!);
+      const poolPart = members.map((m) => stagePart(m.uid, aggForPool(poolId, m.uid), scope, denom));
       writes.push(
         db
           .collection("rankings")
@@ -485,20 +585,7 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   // Soma das 5 fases mata-mata (incl. dezesseis-avos) — `rankings/eliminatorias`
   // (global) + `pool-{poolId}-eliminatorias` (re-rankeado só entre membros do pool,
   // pelos pontos do agregado, NÃO por pointsGeral). Espelha o loop das fases.
-  const elimPartByUid = new Map<string, RankableParticipant>();
-  for (const u of approved) {
-    const el = aggByUid.get(u.uid)!.byElimination;
-    elimPartByUid.set(u.uid, {
-      uid: u.uid,
-      points: el.points, // ponderado (ordena o agregado)
-      accuracy: computeAccuracy(el.correct, finishedElimination), // exatos / finalizadas elim
-      wrong: el.wrong,
-      correct: el.correct,
-      winner: el.winner,
-      draw: el.draw,
-      firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
-    });
-  }
+  const elimGlobalPart = approved.map((u) => elimPart(u.uid, aggByUid.get(u.uid)!));
   writes.push(
     db
       .collection("rankings")
@@ -506,12 +593,13 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
       .set({
         scope: ELIMINATION_SCOPE,
         updatedAt: nowIso,
-        entries: toBudgetedEntries(rankParticipants([...elimPartByUid.values()])),
+        entries: toBudgetedEntries(rankParticipants(elimGlobalPart)),
       }),
   );
   scopesWritten += 1;
+  // Por pool — flagged re-pontua o agregado eliminatórias pelo 90min.
   for (const [poolId, members] of poolMembers) {
-    const poolPart = members.map((m) => elimPartByUid.get(m.uid)!);
+    const poolPart = members.map((m) => elimPart(m.uid, aggForPool(poolId, m.uid)));
     writes.push(
       db
         .collection("rankings")
@@ -529,20 +617,9 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   // PRD-09 Tela 03): mesma pontuação no grupo, RE-RANKEADA só entre os membros do pool.
   let groupsWritten = 0;
   for (const [groupId, denom] of finishedByGroup) {
-    const partByUid = new Map<string, RankableParticipant>();
-    for (const u of approved) {
-      const a = aggByUid.get(u.uid)!.byGroup.get(groupId) ?? emptyScopeCounts();
-      partByUid.set(u.uid, {
-        uid: u.uid,
-        points: a.points, // ponderado
-        accuracy: computeAccuracy(a.correct, denom), // exatos
-        wrong: a.wrong,
-        correct: a.correct,
-        winner: a.winner,
-        draw: a.draw,
-        firstPredictionAt: aggByUid.get(u.uid)!.firstPredictionAt,
-      });
-    }
+    // Fase de grupos nunca tem prorrogação → aggForPool == aggByUid aqui (flag
+    // inócua). Uso uniforme dos helpers p/ consistência com os demais scopes.
+    const globalPart = approved.map((u) => groupPart(u.uid, aggByUid.get(u.uid)!, groupId, denom));
     writes.push(
       db
         .collection("rankings")
@@ -550,13 +627,15 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
         .set({
           groupId,
           updatedAt: nowIso,
-          entries: toBudgetedEntries(rankParticipants([...partByUid.values()])),
+          entries: toBudgetedEntries(rankParticipants(globalPart)),
         }),
     );
     groupsWritten += 1;
 
     for (const [poolId, members] of poolMembers) {
-      const poolPart = members.map((m) => partByUid.get(m.uid)!);
+      const poolPart = members.map((m) =>
+        groupPart(m.uid, aggForPool(poolId, m.uid), groupId, denom),
+      );
       writes.push(
         db
           .collection("rankings")
@@ -714,6 +793,18 @@ export async function recalcPoolRanking(db: Firestore, poolId: string): Promise<
   const matchById = new Map(finished.map((m) => [m.id, m]));
   const finishedGeral = finished.length;
 
+  // Flag do pool: ignorar gols de prorrogação nas eliminatórias (TASK-03). Leitura
+  // tolerante (ausente/false = OFF; falha não derruba o recalc → placar final).
+  let ignoreOvertimeGoals = false;
+  try {
+    const poolSnap = await db.collection("pools").doc(poolId).get();
+    ignoreOvertimeGoals =
+      (poolSnap.data() as { ignoreOvertimeGoals?: unknown } | undefined)
+        ?.ignoreOvertimeGoals === true;
+  } catch (err) {
+    console.warn("[recalc-pool] falha ao ler flag ignoreOvertimeGoals:", err);
+  }
+
   // Membros aprovados do pool. Filtra `groupId` em memória (evita índice composto
   // status+groupId); só este pool é tocado — isolamento multi-tenant (D2).
   const usersSnap = await db.collection("users").where("status", "==", "approved").get();
@@ -761,7 +852,7 @@ export async function recalcPoolRanking(db: Firestore, poolId: string): Promise<
       }
       const match = matchById.get(pred.matchId);
       if (!match) continue; // partida não finalizada / inexistente
-      const scored = scorePrediction(pred, match);
+      const scored = scorePrediction(pred, match, { ignoreOvertimeGoals });
       points += scored.points; // ponderado (5/10)
       if (scored.status === "correct")
         correct += 1; // EXATO

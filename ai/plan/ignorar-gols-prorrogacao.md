@@ -184,9 +184,12 @@ a mais crítica é a TASK-03 (mexe no núcleo da pontuação). Ambas com TDD.
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Núcleo de pontuação → critical + risk high (re-estrutura agregação por
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Notes: Núcleo de pontuação → critical + risk high. Review adversarial (opus)
+  confirmou consistência/isolamento/regressão-zero. M1 corrigido: PATCH de settings
+  dispara recalcRankingsBestEffort ao mudar a flag (coerência de todos os docs do
+  pool). L1 (statistics/pool_stats globais) tratado na TASK-04. (re-estrutura agregação por
   pool no recalc global). Manter `scorePrediction` puro/idempotente e o default
   byte-idêntico ao atual. **Testes de regressão obrigatórios:** flag off / sem
   options → retorno idêntico ao atual (caminho global intacto). Cobrir: flag on +

@@ -135,32 +135,68 @@ export function isStageComplete(matches: MatchWithId[], stage: Stage): boolean {
  * @param prediction - Palpite do usuário.
  * @param match      - Partida com resultado oficial.
  */
+/**
+ * Opções de pontuação por escopo (TASK-03, ignorar-gols-prorrogacao).
+ * `ignoreOvertimeGoals`: quando true, jogos de mata-mata com prorrogação são
+ * pontuados pelo placar do TEMPO NORMAL (90min). É uma flag POR POOL — passada
+ * pelo recalc do escopo; `scorePrediction` permanece pura (sem I/O).
+ */
+export interface ScoreOptions {
+  ignoreOvertimeGoals?: boolean;
+}
+
+/**
+ * Placar EFETIVO a comparar contra o palpite (TASK-03). Puro.
+ *
+ * Retorna o placar do tempo normal (`homeScoreRegulation`/`awayScoreRegulation`)
+ * quando TODAS as condições valem: `options.ignoreOvertimeGoals === true`, o jogo
+ * é de mata-mata (`stage !== "grupos"`) e ambos os campos regulamentares estão
+ * presentes. Caso contrário, retorna o placar FINAL (`homeScore`/`awayScore`) —
+ * fallback seguro (jogo sem prorrogação, sem dado regulamentar, ou flag off).
+ */
+export function effectiveMatchScore(
+  match: MatchWithId,
+  options?: ScoreOptions,
+): { home: number | null; away: number | null } {
+  if (
+    options?.ignoreOvertimeGoals === true &&
+    match.stage !== "grupos" &&
+    typeof match.homeScoreRegulation === "number" &&
+    typeof match.awayScoreRegulation === "number"
+  ) {
+    return { home: match.homeScoreRegulation, away: match.awayScoreRegulation };
+  }
+  return { home: match.homeScore, away: match.awayScore };
+}
+
 export function scorePrediction(
   prediction: Prediction,
   match: MatchWithId,
+  options?: ScoreOptions,
 ): ScorePredictionResult {
   if (match.status !== "finished") {
     return { status: "pending", points: 0 };
   }
 
-  // Type narrowing: homeScore e awayScore são number | null no tipo TypeScript,
+  // Placar efetivo: final, ou regulamentar (90min) quando a flag do pool pede e o
+  // jogo de mata-mata foi à prorrogação (TASK-03). Fallback seguro ao final.
+  const { home, away } = effectiveMatchScore(match, options);
+
+  // Type narrowing: home e away são number | null no tipo TypeScript,
   // mesmo que o refinement Zod garanta number quando finished em runtime.
-  if (match.homeScore === null || match.awayScore === null) {
+  if (home === null || away === null) {
     return { status: "wrong", points: 0 };
   }
 
   // Placar exato → 10.
-  if (
-    prediction.homeScore === match.homeScore &&
-    prediction.awayScore === match.awayScore
-  ) {
+  if (prediction.homeScore === home && prediction.awayScore === away) {
     return { status: "correct", points: 10 };
   }
 
   // Acertou o resultado (mesmo sinal de home − away), placar não-exato → 5.
   // Math.sign compara por sinal: 1 (mandante), -1 (visitante), 0 (empate).
   // Inclui empate parcial: sinal 0 do palpite casa com sinal 0 do jogo.
-  const matchSign = Math.sign(match.homeScore - match.awayScore);
+  const matchSign = Math.sign(home - away);
   const predictionSign = Math.sign(prediction.homeScore - prediction.awayScore);
   if (predictionSign === matchSign) {
     return { status: "partial", points: 5 };
