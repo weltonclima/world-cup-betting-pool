@@ -331,3 +331,42 @@ describe("Seção 'Logo do Grupo' (TASK-01 personalizacao-grupo)", () => {
     );
   });
 });
+
+describe("Seção 'Cores do Grupo' (TASK-02 personalizacao-grupo)", () => {
+  function getColorLight(): HTMLInputElement {
+    return screen.getByLabelText("Cor primária (tema claro)") as HTMLInputElement;
+  }
+  function getColorDark(): HTMLInputElement {
+    return screen.getByLabelText("Cor primária (tema escuro)") as HTMLInputElement;
+  }
+
+  it("renderiza os 2 seletores; fallback #000000 quando ausentes", () => {
+    setup(makePool());
+    expect(getColorLight().value).toBe("#000000");
+    expect(getColorDark().value).toBe("#000000");
+  });
+
+  it("reflete as cores do pool quando presentes", () => {
+    setup(makePool({ primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" }));
+    expect(getColorLight().value).toBe("#1a2b3c");
+    expect(getColorDark().value).toBe("#abcdef");
+  });
+
+  it("mudar a cor do claro inclui só primaryColorLight no PATCH", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getColorLight(), { target: { value: "#22ff88" } });
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#22ff88" },
+      expect.any(Object),
+    );
+  });
+
+  it("não chama mutate quando as cores não mudam", () => {
+    const { mutateMock } = setup(
+      makePool({ primaryColorLight: "#111111", primaryColorDark: "#222222" }),
+    );
+    clickSave();
+    expect(mutateMock).not.toHaveBeenCalled();
+  });
+});

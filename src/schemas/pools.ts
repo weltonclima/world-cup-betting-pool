@@ -21,6 +21,11 @@ export const MAX_POOL_PHOTO_BASE64_LENGTH = 700_000;
 // foto + logo caibam sob o teto de 1 MB do doc Firestore. ~225 KB binário.
 export const MAX_POOL_LOGO_BASE64_LENGTH = 300_000;
 
+// Cor de marca do grupo (personalizacao-grupo TASK-02): hex `#RRGGBB`
+// case-insensitive. Fonte única da regra — reusada na rota e no client.
+export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
+export const hexColorSchema = z.string().regex(HEX_COLOR_REGEX, "Cor inválida.");
+
 export const poolSchema = z
   .object({
     id: nonEmptyString, // = id do doc
@@ -31,6 +36,11 @@ export const poolSchema = z
     // NET-NEW logo do grupo (personalizacao-grupo TASK-01) — aditivo optional,
     // distinto de photoBase64. Teto menor (cabe com a foto sob 1MB do doc).
     logoBase64: z.string().max(MAX_POOL_LOGO_BASE64_LENGTH).optional(),
+    // NET-NEW cor primária por tema (personalizacao-grupo TASK-02) — aditivos
+    // optional, hex #RRGGBB. Ausente = usa o --primary padrão do app. Aplicação
+    // visual é a TASK-03 (aqui só persiste).
+    primaryColorLight: hexColorSchema.optional(),
+    primaryColorDark: hexColorSchema.optional(),
     status: poolStatusSchema,
     adminId: nonEmptyString, // referência users.uid (criador/admin do pool)
     createdAt: isoDateTime,
@@ -85,6 +95,8 @@ export const poolEditSchema = z
     description: z.string().max(160),
     photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH),
     logoBase64: z.string().max(MAX_POOL_LOGO_BASE64_LENGTH),
+    primaryColorLight: hexColorSchema,
+    primaryColorDark: hexColorSchema,
     maxParticipants: z.int().min(1).nullable(),
     allowInvites: z.boolean(),
     predictionsLocked: z.boolean(), // toggle lock de palpites (TASK-01); `.partial()` abaixo o torna opcional no patch

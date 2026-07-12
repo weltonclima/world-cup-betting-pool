@@ -325,4 +325,46 @@ describe("PATCH /api/group/settings", () => {
     expect(res.status).toBe(200);
     expect(recalcMock).not.toHaveBeenCalled();
   });
+
+  // ── TASK-02 personalizacao-grupo: cores por tema ──────────────────────────
+  it("200 primaryColorLight/Dark hex válido → persiste cada campo", async () => {
+    mockDb({ data: pool({ primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" }) });
+    const res = await PATCH(
+      makeReq({ body: { primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" } }),
+    );
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["primaryColorLight"]).toBe("#1a2b3c");
+    expect(patch["primaryColorDark"]).toBe("#abcdef");
+  });
+
+  it("200 sem cores → campos ausentes no patch", async () => {
+    mockDb({ data: pool({ primaryColorLight: "#111111" }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("primaryColorLight" in patch).toBe(false);
+    expect("primaryColorDark" in patch).toBe(false);
+  });
+
+  it("200 aceita definir só uma das cores (independentes)", async () => {
+    mockDb({ data: pool({ primaryColorDark: "#222222" }) });
+    const res = await PATCH(makeReq({ body: { primaryColorDark: "#222222" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["primaryColorDark"]).toBe("#222222");
+    expect("primaryColorLight" in patch).toBe(false);
+  });
+
+  it("422 cor hex inválida → rejeitado", async () => {
+    for (const bad of ["red", "#123", "123456", "#12345g"]) {
+      const res = await PATCH(makeReq({ body: { primaryColorLight: bad } }));
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it("422 cor não-string → rejeitado", async () => {
+    const res = await PATCH(makeReq({ body: { primaryColorDark: 123 } }));
+    expect(res.status).toBe(422);
+  });
 });

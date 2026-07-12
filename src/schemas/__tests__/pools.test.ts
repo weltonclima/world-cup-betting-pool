@@ -88,6 +88,29 @@ describe("pools › poolSchema", () => {
     ).toBe(false);
   });
 
+  it("primaryColorLight/Dark: ausentes → parse ok (opcionais)", () => {
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("primaryColorLight/Dark: aceitam hex #RRGGBB (case-insensitive)", () => {
+    for (const color of ["#000000", "#FFFFFF", "#1a2B3c", "#abcdef"]) {
+      expect(poolSchema.safeParse({ ...valid, primaryColorLight: color }).success).toBe(
+        true,
+      );
+      expect(poolSchema.safeParse({ ...valid, primaryColorDark: color }).success).toBe(
+        true,
+      );
+    }
+  });
+
+  it("primaryColorLight: rejeita hex inválido (sem #, tamanho errado, não-hex)", () => {
+    for (const bad of ["000000", "#123", "#12345", "#1234567", "#gggggg", "red", ""]) {
+      expect(poolSchema.safeParse({ ...valid, primaryColorLight: bad }).success).toBe(
+        false,
+      );
+    }
+  });
+
   it("status: aceita pending/active/blocked, rejeita inválidos", () => {
     for (const status of ["pending", "active", "blocked"]) {
       expect(poolSchema.safeParse({ ...valid, status }).success).toBe(true);

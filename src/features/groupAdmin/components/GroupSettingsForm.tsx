@@ -24,6 +24,8 @@ import { ErrorState } from "./GroupPendingUsers";
 const MAX_DESCRIPTION = 160;
 // Teto de bytes da foto: ~3/4 do limite de chars base64 (margem segura).
 const PHOTO_MAX_BYTES = Math.floor((MAX_POOL_PHOTO_BASE64_LENGTH * 3) / 4) - 1024;
+// Cor exibida no seletor quando o grupo ainda não personalizou a cor (TASK-02).
+const COLOR_FALLBACK = "#000000";
 
 /**
  * Configurações do Grupo (PRD10-05). Edita Nome*, Descrição (contador NN/160),
@@ -58,6 +60,12 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  // Cores por tema (TASK-02). `undefined` = ainda não personalizada; o seletor
+  // exibe COLOR_FALLBACK sem persistir até o usuário mudar.
+  const [primaryLight, setPrimaryLight] = useState<string | undefined>(
+    pool.primaryColorLight,
+  );
+  const [primaryDark, setPrimaryDark] = useState<string | undefined>(pool.primaryColorDark);
   const [maxParticipants, setMaxParticipants] = useState(
     pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
   );
@@ -77,6 +85,8 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     setDescription(pool.description ?? "");
     setPhoto(pool.photoBase64);
     setLogo(pool.logoBase64);
+    setPrimaryLight(pool.primaryColorLight);
+    setPrimaryDark(pool.primaryColorDark);
     setMaxParticipants(
       pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
     );
@@ -152,6 +162,12 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     if (logo !== pool.logoBase64 && logo !== undefined) {
       patch.logoBase64 = logo;
     }
+    if (primaryLight !== pool.primaryColorLight && primaryLight !== undefined) {
+      patch.primaryColorLight = primaryLight;
+    }
+    if (primaryDark !== pool.primaryColorDark && primaryDark !== undefined) {
+      patch.primaryColorDark = primaryDark;
+    }
     const currentMax = pool.maxParticipants ?? null;
     if (maxNum !== currentMax) patch.maxParticipants = maxNum;
     if (allowInvites !== (pool.allowInvites !== false)) {
@@ -177,6 +193,8 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     description.trim() !== (pool.description ?? "") ||
     (photo !== pool.photoBase64 && photo !== undefined) ||
     (logo !== pool.logoBase64 && logo !== undefined) ||
+    (primaryLight !== pool.primaryColorLight && primaryLight !== undefined) ||
+    (primaryDark !== pool.primaryColorDark && primaryDark !== undefined) ||
     maxNum !== (pool.maxParticipants ?? null) ||
     allowInvites !== (pool.allowInvites !== false) ||
     splitPhaseRanking !== (pool.splitPhaseRanking === true) ||
@@ -280,6 +298,54 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
         onConfirm={onLogoCropConfirm}
         onCancel={() => setLogoFile(null)}
       />
+
+      {/* Cores do Grupo (TASK-02): 2 seletores por tema. Aplicação visual = TASK-03. */}
+      <div className="flex flex-col gap-1.5">
+        <Label>Cores do Grupo</Label>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              id="group-color-light"
+              aria-label="Cor primária (tema claro)"
+              value={primaryLight ?? COLOR_FALLBACK}
+              onChange={(e) => {
+                setPrimaryLight(e.target.value);
+                setSaved(false);
+              }}
+              className="size-11 cursor-pointer rounded-lg border border-input bg-transparent"
+            />
+            <div className="flex flex-col">
+              <span className="text-sm">Tema claro</span>
+              <span className="text-xs text-muted-foreground">
+                {(primaryLight ?? COLOR_FALLBACK).toUpperCase()}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              id="group-color-dark"
+              aria-label="Cor primária (tema escuro)"
+              value={primaryDark ?? COLOR_FALLBACK}
+              onChange={(e) => {
+                setPrimaryDark(e.target.value);
+                setSaved(false);
+              }}
+              className="size-11 cursor-pointer rounded-lg border border-input bg-transparent"
+            />
+            <div className="flex flex-col">
+              <span className="text-sm">Tema escuro</span>
+              <span className="text-xs text-muted-foreground">
+                {(primaryDark ?? COLOR_FALLBACK).toUpperCase()}
+              </span>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Cor de destaque exibida nas telas do grupo em cada tema.
+        </p>
+      </div>
 
       {/* Nome */}
       <div className="flex flex-col gap-1.5">

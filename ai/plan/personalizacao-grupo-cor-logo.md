@@ -96,9 +96,10 @@ TASK-01 e TASK-02 são **independentes** entre si. TASK-03 depende da TASK-02
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/medium
-- Status: pending
-- Phases done: (none)
-- Notes: is_frontend: true (2 color pickers no form). Validação de contraste FORA
+- Status: done
+- Phases done: spec, implement, test, review
+- Notes: is_frontend: true (2 color pickers no form). ui-spec/patterns pulados
+  (bloco de form simples, sem novo padrão visual). Validação de contraste FORA
   do escopo (follow-up). Padrão consolidado (espelha `splitPhaseRanking` na
   persistência; adiciona validação de formato).
 
