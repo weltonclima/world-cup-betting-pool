@@ -6,8 +6,9 @@
  *
  * Contrato: ai/spec/palpites-massa-task-06.md §6 · ai/screen/palpites-massa-task-06.md §5
  *
- * Tema: tokens apenas (`bg-card`, `text-primary`, `text-win`, `text-muted-foreground`).
- * Dentro de `.palpites-theme` o ícone/realce primário herda o verde.
+ * Tema: tokens apenas (`bg-card`, `text-primary`, `text-muted-foreground`). O
+ * estado "Concluído" (texto + ✓ à direita) usa `text-primary` para seguir a cor
+ * do pool dentro de `.palpites-theme` (não `text-win`, que é semântico de acerto).
  */
 
 import Link from "next/link";
@@ -78,7 +79,7 @@ export function PhaseCard({
         <span
           className={cn(
             "text-xs",
-            isDone ? "text-win" : "text-muted-foreground",
+            isDone ? "text-primary" : "text-muted-foreground",
           )}
         >
           {subtitle}
@@ -86,7 +87,7 @@ export function PhaseCard({
       </div>
 
       {isLocked ? null : isDone ? (
-        <CheckCircle2 size={20} aria-hidden="true" className="shrink-0 text-win" />
+        <CheckCircle2 size={20} aria-hidden="true" className="shrink-0 text-primary" />
       ) : (
         <ChevronRight size={20} aria-hidden="true" className="shrink-0 text-muted-foreground" />
       )}
