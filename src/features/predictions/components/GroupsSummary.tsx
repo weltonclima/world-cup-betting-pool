@@ -109,7 +109,7 @@ function GroupSummaryCard({ group }: { group: GroupSummaryItem }) {
           {group.label}
         </h2>
         {group.isComplete ? (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-win">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
             <CheckCircle2 size={18} aria-hidden="true" />
             <span>Concluído</span>
           </span>

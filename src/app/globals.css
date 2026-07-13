@@ -244,10 +244,10 @@
  * (§2.4-palpites) e na decisão de tela TASK-06 (§6).
  */
 .palpites-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -256,11 +256,11 @@
  * linha do gráfico de evolução e as barras de distribuição herdarem a identidade.
  */
 .ranking-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -270,11 +270,11 @@
  * vermelho de "Encerrar Sessão" continua vindo de --destructive (não tematizado).
  */
 .profile-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -282,11 +282,11 @@
  * local na rota /notificacoes (filtros, switches, ícones, CTAs do detalhe).
  */
 .notifications-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -294,11 +294,11 @@
  * /admin (banner do dashboard, badges, filtros de logs).
  */
 .admin-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -307,11 +307,11 @@
  * realce de seleção e links das telas PRD09-01..05).
  */
 .grupos-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -319,11 +319,11 @@
  * escopo local na rota /matches (abas temporais, chips de filtro rápido, CTAs).
  */
 .matches-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -331,11 +331,11 @@
  * na rota /home (CTAs, realces, donut/raio-x, links de jogos abertos).
  */
 .home-theme {
-    --primary: oklch(0.46 0.16 150);
-    --primary-foreground: oklch(0.985 0 0);
-    --ring: oklch(0.46 0.16 150);
-    --sidebar-primary: oklch(0.46 0.16 150);
-    --chart-1: oklch(0.46 0.16 150);
+    --primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground, oklch(0.985 0 0));
+    --ring: var(--pool-primary, oklch(0.46 0.16 150));
+    --sidebar-primary: var(--pool-primary, oklch(0.46 0.16 150));
+    --chart-1: var(--pool-primary, oklch(0.46 0.16 150));
 }
 
 /*
@@ -352,13 +352,13 @@
 .dark .matches-theme,
 .dark .home-theme,
 .dark .admin-theme {
-    --primary: oklch(0.72 0.16 150);
-    --primary-foreground: oklch(0.205 0.02 150);
-    --ring: oklch(0.72 0.16 150);
-    --sidebar-primary: oklch(0.72 0.16 150);
+    --primary: var(--pool-primary-dark, oklch(0.72 0.16 150));
+    --primary-foreground: var(--pool-primary-foreground-dark, oklch(0.205 0.02 150));
+    --ring: var(--pool-primary-dark, oklch(0.72 0.16 150));
+    --sidebar-primary: var(--pool-primary-dark, oklch(0.72 0.16 150));
 }
 .dark .ranking-theme {
-    --chart-1: oklch(0.72 0.16 150);
+    --chart-1: var(--pool-primary-dark, oklch(0.72 0.16 150));
 }
 
 @layer base {

@@ -1,8 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
-import { getAdminAuth } from "@/server/firebaseAdmin";
+import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
 import { SESSION_COOKIE_NAME } from "@/server/auth/sessionCookie";
+import {
+  POOL_THEME_COOKIE,
+  serializePoolThemeCookie,
+} from "@/features/groupAdmin/lib/poolTheme";
 
 /**
  * Route Handler de sessão (TASK-09) — troca o ID token do client por um session
@@ -46,6 +50,44 @@ function cookieOptions(maxAge: number) {
 }
 
 /**
+ * Cor de marca do pool do usuário → valor do cookie `pool-primary` (não-httpOnly,
+ * lido no root layout p/ SSR sem flash — TASK-03). Best-effort: qualquer falha
+ * retorna null (login não pode quebrar por causa da cor). 2 reads (users → pools).
+ */
+async function resolvePoolThemeCookieValue(uid: string): Promise<string | null> {
+  try {
+    const db = getAdminFirestore();
+    const userSnap = await db.collection("users").doc(uid).get();
+    const groupId = userSnap.data()?.["groupId"];
+    if (typeof groupId !== "string" || groupId === "") return null;
+    const poolSnap = await db.collection("pools").doc(groupId).get();
+    const data = poolSnap.data();
+    const light = data?.["primaryColorLight"];
+    const dark = data?.["primaryColorDark"];
+    return serializePoolThemeCookie(
+      typeof light === "string" ? light : undefined,
+      typeof dark === "string" ? dark : undefined,
+    );
+  } catch (err) {
+    console.warn("[auth/session] falha ao resolver cor do pool (ignorada):", err);
+    return null;
+  }
+}
+
+/** Opções do cookie de cor (NÃO-httpOnly: precisa ser legível no server layout). */
+function poolThemeCookieOptions(maxAge: number, value: string) {
+  return {
+    name: POOL_THEME_COOKIE,
+    value,
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge,
+  };
+}
+
+/**
  * POST: recebe `{ idToken }`, valida o token, cria o session cookie e o seta na
  * resposta. Token inválido/expirado → 401. Body malformado → 400.
  */
@@ -73,7 +115,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     // Valida o ID token (assinatura + expiração + revogação opcional).
-    await auth.verifyIdToken(idToken);
+    const decoded = await auth.verifyIdToken(idToken);
 
     // Troca o ID token por um session cookie de longa duração.
     const sessionCookie = await auth.createSessionCookie(idToken, {
@@ -85,6 +127,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...cookieOptions(SESSION_MAX_AGE_S),
       value: sessionCookie,
     });
+
+    // Cookie de cor do pool p/ SSR sem flash (TASK-03). Best-effort — não bloqueia
+    // o login. Ausente → não seta (fallback verde no layout).
+    const themeValue = await resolvePoolThemeCookieValue(decoded.uid);
+    if (themeValue !== null) {
+      response.cookies.set(poolThemeCookieOptions(SESSION_MAX_AGE_S, themeValue));
+    }
     return response;
   } catch {
     // Token inválido/expirado/revogado → não autorizado. Mensagem genérica.
@@ -105,5 +154,7 @@ export async function DELETE(): Promise<NextResponse> {
     ...cookieOptions(0),
     value: "",
   });
+  // Limpa também o cookie de cor do pool (TASK-03).
+  response.cookies.set(poolThemeCookieOptions(0, ""));
   return response;
 }

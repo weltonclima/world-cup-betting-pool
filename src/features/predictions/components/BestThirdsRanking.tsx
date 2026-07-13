@@ -13,8 +13,9 @@
  *
  * Contrato: ai/spec/palpites-massa-task-12.md · ai/screen/palpites-massa-task-12.md
  *
- * Tema: tokens apenas (`text-win`, `bg-win-bg`, `bg-muted`, `text-foreground`).
- * Herda o verde dentro de `.palpites-theme` (container da rota). Neutro fora.
+ * Tema: tokens apenas. O destaque dos melhores terceiros usa `text-primary`/
+ * `bg-primary/10` (segue a cor do pool dentro de `.palpites-theme`, não o verde
+ * semântico de acerto). Neutro fora.
  */
 
 import Link from "next/link";
@@ -269,7 +270,7 @@ export function BestThirdsRanking({
                     <td className="py-2 pr-2">
                       <span
                         aria-label={`${rank}º melhor terceiro`}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-win-bg text-xs font-bold text-win"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary"
                       >
                         {rank}
                       </span>
@@ -304,7 +305,7 @@ export function BestThirdsRanking({
             <CheckCircle2
               size={16}
               aria-hidden="true"
-              className="shrink-0 text-win"
+              className="shrink-0 text-primary"
             />
             <span className="text-sm text-foreground">
               Os 8 melhores terceiros avançam para os 16 avos.

@@ -269,4 +269,118 @@ describe("PATCH /api/group/settings", () => {
     expect(res.status).toBe(200);
     expect(recalcMock).not.toHaveBeenCalled();
   });
+
+  // ── TASK-01 personalizacao-grupo: logoBase64 ──────────────────────────────
+  it("200 logoBase64 → persiste o valor", async () => {
+    const dataUrl = "data:image/jpeg;base64,/9j/logo";
+    mockDb({ data: pool({ logoBase64: dataUrl }) });
+    const res = await PATCH(makeReq({ body: { logoBase64: dataUrl } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["logoBase64"]).toBe(dataUrl);
+  });
+
+  it("200 sem logoBase64 → campo ausente no patch (não toca o valor existente)", async () => {
+    mockDb({ data: pool({ logoBase64: "data:image/jpeg;base64,/9j/x" }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("logoBase64" in patch).toBe(false);
+  });
+
+  it("422 logoBase64 acima do limite → rejeitado", async () => {
+    const res = await PATCH(makeReq({ body: { logoBase64: "a".repeat(300_001) } }));
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["error"]).toBe("Dados inválidos.");
+  });
+
+  it("422 logoBase64 não-string → rejeitado (strict type)", async () => {
+    const res = await PATCH(makeReq({ body: { logoBase64: 123 } }));
+    expect(res.status).toBe(422);
+  });
+
+  it("422 logoBase64 com prefixo não-raster (SVG/HTML) → rejeitado (defense-in-depth M1)", async () => {
+    for (const bad of [
+      "data:image/svg+xml;base64,PHN2Zz48c2NyaXB0Pg==",
+      "data:text/html,<script>alert(1)</script>",
+      "https://evil.example/x.png",
+    ]) {
+      const res = await PATCH(makeReq({ body: { logoBase64: bad } }));
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it("200 logoBase64 com prefixo raster válido (png/webp) → aceito", async () => {
+    for (const ok of ["data:image/png;base64,iVBOR", "data:image/webp;base64,UklGR"]) {
+      mockDb({ data: pool({ logoBase64: ok }) });
+      const res = await PATCH(makeReq({ body: { logoBase64: ok } }));
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it("NÃO dispara recalc ao mudar apenas o logo", async () => {
+    mockDb({ data: pool({ logoBase64: "data:image/jpeg;base64,/9j/y" }) });
+    const res = await PATCH(makeReq({ body: { logoBase64: "data:image/jpeg;base64,/9j/y" } }));
+    expect(res.status).toBe(200);
+    expect(recalcMock).not.toHaveBeenCalled();
+  });
+
+  // ── TASK-02 personalizacao-grupo: cores por tema ──────────────────────────
+  it("200 primaryColorLight/Dark hex válido → persiste cada campo", async () => {
+    mockDb({ data: pool({ primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" }) });
+    const res = await PATCH(
+      makeReq({ body: { primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" } }),
+    );
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["primaryColorLight"]).toBe("#1a2b3c");
+    expect(patch["primaryColorDark"]).toBe("#abcdef");
+  });
+
+  it("200 sem cores → campos ausentes no patch", async () => {
+    mockDb({ data: pool({ primaryColorLight: "#111111" }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("primaryColorLight" in patch).toBe(false);
+    expect("primaryColorDark" in patch).toBe(false);
+  });
+
+  it("200 aceita definir só uma das cores (independentes)", async () => {
+    mockDb({ data: pool({ primaryColorDark: "#222222" }) });
+    const res = await PATCH(makeReq({ body: { primaryColorDark: "#222222" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["primaryColorDark"]).toBe("#222222");
+    expect("primaryColorLight" in patch).toBe(false);
+  });
+
+  it("422 cor hex inválida → rejeitado", async () => {
+    for (const bad of ["red", "#123", "123456", "#12345g"]) {
+      const res = await PATCH(makeReq({ body: { primaryColorLight: bad } }));
+      expect(res.status).toBe(422);
+    }
+  });
+
+  it("422 cor não-string → rejeitado", async () => {
+    const res = await PATCH(makeReq({ body: { primaryColorDark: 123 } }));
+    expect(res.status).toBe(422);
+  });
+
+  it("seta o cookie pool-primary ao mudar uma cor (SSR sem flash, TASK-03)", async () => {
+    mockDb({ data: pool({ primaryColorLight: "#1a2b3c" }) });
+    const res = await PATCH(makeReq({ body: { primaryColorLight: "#1a2b3c" } }));
+    expect(res.status).toBe(200);
+    const cookie = res.cookies.get("pool-primary");
+    expect(cookie?.value).toContain("#1a2b3c");
+    expect(cookie?.httpOnly).toBe(false);
+  });
+
+  it("NÃO seta o cookie pool-primary quando o PATCH não toca cor", async () => {
+    mockDb({ data: pool({ name: "Novo" }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo" } }));
+    expect(res.status).toBe(200);
+    expect(res.cookies.get("pool-primary")).toBeUndefined();
+  });
 });

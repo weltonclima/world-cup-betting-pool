@@ -12,8 +12,8 @@
  *
  * Contrato: ai/spec/palpites-massa-task-10.md · ai/screen/palpites-massa-task-10.md
  *
- * Tema: tokens apenas (`text-win`, `bg-win-bg`, `bg-muted`, `text-foreground`).
- * Herda o verde dentro de `.palpites-theme` (container da rota).
+ * Tema: tokens apenas. O destaque de classificado usa `text-primary`/`bg-primary/10`
+ * (segue a cor do pool dentro de `.palpites-theme`, não o verde semântico de acerto).
  */
 
 import { CheckCircle2, Star } from "lucide-react";
@@ -142,7 +142,7 @@ export function PredictedStandings({
             const team = resolveTeamName(entry.teamId);
             const chipClasses =
               qualification === "qualified"
-                ? "bg-win-bg text-win"
+                ? "bg-primary/10 text-primary"
                 : "bg-muted text-muted-foreground";
             return (
               <tr key={entry.teamId} className="border-b border-border">
@@ -192,7 +192,7 @@ export function PredictedStandings({
               <CheckCircle2
                 size={16}
                 aria-hidden="true"
-                className="shrink-0 text-win"
+                className="shrink-0 text-primary"
               />
               <span className="text-sm text-foreground">
                 {resolveTeamName(entry.teamId).name} ({entry.position}º)

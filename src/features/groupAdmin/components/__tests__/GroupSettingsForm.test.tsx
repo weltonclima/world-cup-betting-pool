@@ -57,7 +57,31 @@ vi.mock("@/components/ui/switch", () => ({
 // fileToCompressedDataUrl usa Canvas API ausente no jsdom.
 vi.mock("@/features/profile/lib/imageToDataUrl", () => ({
   fileToCompressedDataUrl: vi.fn(),
+  validateLogoInput: vi.fn(),
   AvatarImageError: class AvatarImageError extends Error {},
+}));
+
+// ImageCropModal usa Canvas/Pointer — mock leve que expõe confirm/cancel.
+vi.mock("@/components/media/ImageCropModal", () => ({
+  ImageCropModal: ({
+    open,
+    onConfirm,
+    onCancel,
+  }: {
+    open: boolean;
+    onConfirm: (d: string) => void;
+    onCancel: () => void;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Ajustar logo">
+        <button type="button" onClick={() => onConfirm("data:image/jpeg;base64,LOGO")}>
+          mock-confirm-crop
+        </button>
+        <button type="button" onClick={onCancel}>
+          mock-cancel-crop
+        </button>
+      </div>
+    ) : null,
 }));
 
 import { GroupSettingsForm } from "@/features/groupAdmin/components/GroupSettingsForm";
@@ -103,6 +127,10 @@ function getOvertimeSwitch(): HTMLElement {
 
 function clickSave(): void {
   fireEvent.click(screen.getByRole("button", { name: /salvar alterações/i }));
+}
+
+function getLogoButton(): HTMLElement {
+  return screen.getByRole("button", { name: /alterar logo/i });
 }
 
 beforeEach(() => {
@@ -267,5 +295,121 @@ describe("Switch 'Ignorar gols da prorrogação' — loading", () => {
   it("switch fica desabilitado durante update.isPending", () => {
     setup(makePool(), true);
     expect((getOvertimeSwitch() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("Seção 'Logo do Grupo' (TASK-01 personalizacao-grupo)", () => {
+  it("mostra o botão 'Alterar logo'", () => {
+    setup(makePool());
+    expect(getLogoButton()).toBeTruthy();
+  });
+
+  it("renderiza o preview quando o pool tem logoBase64", () => {
+    setup(makePool({ logoBase64: "data:image/jpeg;base64,/9j/EXISTENTE" }));
+    const img = screen.getByAltText("Logo do grupo") as HTMLImageElement;
+    expect(img.getAttribute("src")).toBe("data:image/jpeg;base64,/9j/EXISTENTE");
+  });
+
+  it("não renderiza preview quando o pool não tem logo", () => {
+    setup(makePool());
+    expect(screen.queryByAltText("Logo do grupo")).toBeNull();
+  });
+
+  it("confirmar o crop inclui logoBase64 no PATCH ao salvar", () => {
+    const { mutateMock } = setup(makePool());
+    // Abre o modal (mock) selecionando um arquivo válido.
+    const input = document.querySelector<HTMLInputElement>('input[type="file"][accept*="webp"]');
+    expect(input).toBeTruthy();
+    const file = new File(["x"], "logo.png", { type: "image/png" });
+    fireEvent.change(input!, { target: { files: [file] } });
+    // Modal aberto → confirma o crop (mock devolve data URL).
+    fireEvent.click(screen.getByRole("button", { name: /mock-confirm-crop/i }));
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { logoBase64: "data:image/jpeg;base64,LOGO" },
+      expect.any(Object),
+    );
+  });
+});
+
+describe("Seção 'Cores do Grupo' (TASK-02 personalizacao-grupo)", () => {
+  function getColorLight(): HTMLInputElement {
+    return screen.getByLabelText("Tema claro — seletor visual") as HTMLInputElement;
+  }
+  function getColorDark(): HTMLInputElement {
+    return screen.getByLabelText("Tema escuro — seletor visual") as HTMLInputElement;
+  }
+  function getHexLight(): HTMLInputElement {
+    return screen.getByLabelText("Tema claro — código hexadecimal") as HTMLInputElement;
+  }
+
+  it("renderiza os 2 seletores; fallback #000000 quando ausentes", () => {
+    setup(makePool());
+    expect(getColorLight().value).toBe("#000000");
+    expect(getColorDark().value).toBe("#000000");
+  });
+
+  it("reflete as cores do pool quando presentes (picker + hex)", () => {
+    setup(makePool({ primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" }));
+    expect(getColorLight().value).toBe("#1a2b3c");
+    expect(getColorDark().value).toBe("#abcdef");
+    expect(getHexLight().value).toBe("#1a2b3c");
+  });
+
+  it("mudar a cor do claro pelo picker inclui só primaryColorLight no PATCH", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getColorLight(), { target: { value: "#22ff88" } });
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#22ff88" },
+      expect.any(Object),
+    );
+  });
+
+  it("digitar um HEX válido no campo de texto atualiza a cor", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getHexLight(), { target: { value: "#3B82F6" } });
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#3B82F6" },
+      expect.any(Object),
+    );
+  });
+
+  it("HEX inválido mostra erro e não persiste", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getHexLight(), { target: { value: "#12" } });
+    expect(screen.getByText(/formato #RRGGBB/i)).toBeTruthy();
+    clickSave();
+    expect(mutateMock).not.toHaveBeenCalled();
+  });
+
+  it("prefixa '#' automaticamente ao digitar sem o cerquilha", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getHexLight(), { target: { value: "ff8800" } });
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#ff8800" },
+      expect.any(Object),
+    );
+  });
+
+  it("clicar num swatch da paleta define a cor", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    // O swatch tem aria-label = o próprio hex; pega o do tema claro (1ª ocorrência).
+    fireEvent.click(screen.getAllByRole("button", { name: "#2563eb" })[0]!);
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#2563eb" },
+      expect.any(Object),
+    );
+  });
+
+  it("não chama mutate quando as cores não mudam", () => {
+    const { mutateMock } = setup(
+      makePool({ primaryColorLight: "#111111", primaryColorDark: "#222222" }),
+    );
+    clickSave();
+    expect(mutateMock).not.toHaveBeenCalled();
   });
 });

@@ -266,4 +266,39 @@ describe("GET /api/rankings/pool", () => {
     expect(body.splitPhaseRanking).toBe(true);
     expect(body.ignoreOvertimeGoals).toBe(true);
   });
+
+  // ── cores de marca no payload (personalizacao-grupo TASK-03) ────────────────
+  it("anexa primaryColorLight/Dark quando o pool tem cores", async () => {
+    approved();
+    mockDb({
+      groupId: "pool-1",
+      poolDoc: { primaryColorLight: "#1a2b3c", primaryColorDark: "#aabbcc" },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.primaryColorLight).toBe("#1a2b3c");
+    expect(body.primaryColorDark).toBe("#aabbcc");
+  });
+
+  it("cores ausentes → payload sem primaryColor* (grupo sem cor)", async () => {
+    approved();
+    mockDb({ groupId: "pool-1", poolDoc: {} });
+    const res = await GET();
+    const body = await res.json();
+    expect(body.primaryColorLight).toBeUndefined();
+    expect(body.primaryColorDark).toBeUndefined();
+  });
+
+  it("cor malformada no banco → omitida (não quebra o parse do payload)", async () => {
+    approved();
+    mockDb({
+      groupId: "pool-1",
+      poolDoc: { primaryColorLight: "verde", primaryColorDark: "#00ff00" },
+    });
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.primaryColorLight).toBeUndefined();
+    expect(body.primaryColorDark).toBe("#00ff00");
+  });
 });

@@ -5,8 +5,14 @@ import { z } from "zod";
 
 import { authorizeGroupAdminOfPool } from "@/app/api/group/_authorize";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
+import {
+  POOL_THEME_COOKIE,
+  serializePoolThemeCookie,
+} from "@/features/groupAdmin/lib/poolTheme";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
 import {
+  hexColorSchema,
+  MAX_POOL_LOGO_BASE64_LENGTH,
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolSchema,
 } from "@/schemas";
@@ -24,6 +30,17 @@ const settingsSchema = z
     name: z.string().min(1).optional(),
     description: z.string().max(160).optional(),
     photoBase64: z.string().max(MAX_POOL_PHOTO_BASE64_LENGTH).optional(),
+    // Defense-in-depth (review M1): além do teto, exige data URL de imagem RASTER
+    // (o compressor sempre gera JPEG; png/webp aceitos por robustez). Fecha a
+    // porta a `data:image/svg+xml,...`/`data:text/html,...` persistidos por um
+    // client malicioso e servidos a membros no futuro (XSS armazenado).
+    logoBase64: z
+      .string()
+      .max(MAX_POOL_LOGO_BASE64_LENGTH)
+      .regex(/^data:image\/(png|jpe?g|webp);base64,/, "Logo inválido.")
+      .optional(),
+    primaryColorLight: hexColorSchema.optional(),
+    primaryColorDark: hexColorSchema.optional(),
     maxParticipants: z.int().min(1).nullable().optional(),
     allowInvites: z.boolean().optional(),
     predictionsLocked: z.boolean().optional(),
@@ -82,6 +99,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     name,
     description,
     photoBase64,
+    logoBase64,
+    primaryColorLight,
+    primaryColorDark,
     maxParticipants,
     allowInvites,
     predictionsLocked,
@@ -91,6 +111,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (name !== undefined) patch["name"] = name;
   if (description !== undefined) patch["description"] = description;
   if (photoBase64 !== undefined) patch["photoBase64"] = photoBase64;
+  if (logoBase64 !== undefined) patch["logoBase64"] = logoBase64;
+  if (primaryColorLight !== undefined) patch["primaryColorLight"] = primaryColorLight;
+  if (primaryColorDark !== undefined) patch["primaryColorDark"] = primaryColorDark;
   // null → limpa o limite (FieldValue.delete direto, sem sentinela ""); número →
   // define. Decidido na MONTAGEM do patch (review BR-01): sem o intermediário ""
   // não há janela em que um valor inválido possa ser persistido por reordenação.
@@ -132,7 +155,29 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     if (flagChanged) {
       await recalcRankingsBestEffort(db);
     }
-    return NextResponse.json({ pool: poolSchema.parse(updatedSnap.data()) });
+    const updatedPool = poolSchema.parse(updatedSnap.data());
+    const response = NextResponse.json({ pool: updatedPool });
+
+    // Refresca o cookie de cor do pool (TASK-03) quando o admin muda uma cor, para
+    // o SSR sem flash refletir imediatamente (sem re-login). Best-effort.
+    if (primaryColorLight !== undefined || primaryColorDark !== undefined) {
+      const value = serializePoolThemeCookie(
+        updatedPool.primaryColorLight,
+        updatedPool.primaryColorDark,
+      );
+      if (value !== null) {
+        response.cookies.set({
+          name: POOL_THEME_COOKIE,
+          value,
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: 5 * 24 * 60 * 60,
+        });
+      }
+    }
+    return response;
   } catch (err) {
     console.error("[group/settings PATCH] erro inesperado:", err);
     return NextResponse.json(

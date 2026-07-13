@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  MAX_POOL_LOGO_BASE64_LENGTH,
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolEditSchema,
   poolInputSchema,
@@ -66,6 +67,48 @@ describe("pools › poolSchema", () => {
         photoBase64: "a".repeat(MAX_POOL_PHOTO_BASE64_LENGTH + 1),
       }).success,
     ).toBe(false);
+  });
+
+  it("logoBase64: ausente → parse ok (opcional, aditivo)", () => {
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("logoBase64: aceita dentro do limite, rejeita acima", () => {
+    expect(
+      poolSchema.safeParse({
+        ...valid,
+        logoBase64: "a".repeat(MAX_POOL_LOGO_BASE64_LENGTH),
+      }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({
+        ...valid,
+        logoBase64: "a".repeat(MAX_POOL_LOGO_BASE64_LENGTH + 1),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("primaryColorLight/Dark: ausentes → parse ok (opcionais)", () => {
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("primaryColorLight/Dark: aceitam hex #RRGGBB (case-insensitive)", () => {
+    for (const color of ["#000000", "#FFFFFF", "#1a2B3c", "#abcdef"]) {
+      expect(poolSchema.safeParse({ ...valid, primaryColorLight: color }).success).toBe(
+        true,
+      );
+      expect(poolSchema.safeParse({ ...valid, primaryColorDark: color }).success).toBe(
+        true,
+      );
+    }
+  });
+
+  it("primaryColorLight: rejeita hex inválido (sem #, tamanho errado, não-hex)", () => {
+    for (const bad of ["000000", "#123", "#12345", "#1234567", "#gggggg", "red", ""]) {
+      expect(poolSchema.safeParse({ ...valid, primaryColorLight: bad }).success).toBe(
+        false,
+      );
+    }
   });
 
   it("status: aceita pending/active/blocked, rejeita inválidos", () => {

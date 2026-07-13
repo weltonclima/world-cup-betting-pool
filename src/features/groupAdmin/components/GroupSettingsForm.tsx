@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type JSX } from "react";
-import { Camera, LoaderCircle } from "lucide-react";
+import { Camera, ImageIcon, LoaderCircle } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,8 +12,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AvatarImageError,
   fileToCompressedDataUrl,
+  validateLogoInput,
 } from "@/features/profile/lib/imageToDataUrl";
-import { MAX_POOL_PHOTO_BASE64_LENGTH } from "@/schemas/pools";
+import { ImageCropModal } from "@/components/media/ImageCropModal";
+import { HEX_COLOR_REGEX, MAX_POOL_PHOTO_BASE64_LENGTH } from "@/schemas/pools";
 import { useGroupSettings, useUpdateGroupSettings } from "@/features/groupAdmin/hooks";
 import type { Pool } from "@/types/pools";
 
@@ -22,6 +25,120 @@ import { ErrorState } from "./GroupPendingUsers";
 const MAX_DESCRIPTION = 160;
 // Teto de bytes da foto: ~3/4 do limite de chars base64 (margem segura).
 const PHOTO_MAX_BYTES = Math.floor((MAX_POOL_PHOTO_BASE64_LENGTH * 3) / 4) - 1024;
+// Cor exibida no seletor quando o grupo ainda não personalizou a cor (TASK-02).
+const COLOR_FALLBACK = "#000000";
+
+// Paleta de atalho (personalizacao-grupo): cores prontas p/ escolha rápida além do
+// picker/hex. Tons médios com bom contraste nos dois temas.
+const COLOR_PRESETS = [
+  "#16a34a", // verde
+  "#0d9488", // teal
+  "#0891b2", // ciano
+  "#2563eb", // azul
+  "#4f46e5", // índigo
+  "#7c3aed", // roxo
+  "#db2777", // rosa
+  "#dc2626", // vermelho
+  "#ea580c", // laranja
+  "#ca8a04", // âmbar
+  "#475569", // cinza
+  "#111827", // grafite
+] as const;
+
+/**
+ * Seletor de cor por tema (personalizacao-grupo): combina o picker nativo, um
+ * campo de HEX digitável (`#RRGGBB`, útil no mobile onde o picker não deixa
+ * digitar) e uma paleta de atalho. Só emite `onChange` com um hex válido; o
+ * texto intermediário fica no estado local sem persistir.
+ */
+function ColorField({
+  idBase,
+  label,
+  value,
+  onChange,
+}: {
+  idBase: string;
+  label: string;
+  value: string | undefined;
+  onChange: (hex: string) => void;
+}): JSX.Element {
+  const effective = value ?? COLOR_FALLBACK;
+  const [hexText, setHexText] = useState(effective);
+
+  // Ressincroniza o texto quando a cor efetiva muda por fora (picker, swatch,
+  // reset do pool). Como só persistimos hex válido, digitação parcial não é
+  // sobrescrita aqui (o `effective` não muda até o hex ficar válido).
+  useEffect(() => {
+    setHexText(effective);
+  }, [effective]);
+
+  const commitHex = (raw: string): void => {
+    let v = raw.trim();
+    if (v.length > 0 && !v.startsWith("#")) v = `#${v}`;
+    setHexText(v);
+    if (HEX_COLOR_REGEX.test(v)) onChange(v);
+  };
+
+  const isInvalid = hexText.length > 0 && !HEX_COLOR_REGEX.test(hexText);
+  const errorId = `${idBase}-hex-error`;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm">{label}</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          id={idBase}
+          aria-label={`${label} — seletor visual`}
+          value={HEX_COLOR_REGEX.test(hexText) ? hexText : effective}
+          onChange={(e) => onChange(e.target.value)}
+          className="size-11 shrink-0 cursor-pointer rounded-lg border border-input bg-transparent"
+        />
+        <Input
+          id={`${idBase}-hex`}
+          aria-label={`${label} — código hexadecimal`}
+          aria-invalid={isInvalid || undefined}
+          aria-describedby={isInvalid ? errorId : undefined}
+          value={hexText}
+          onChange={(e) => commitHex(e.target.value)}
+          placeholder="#RRGGBB"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+          maxLength={7}
+          className="w-32 font-mono uppercase"
+        />
+      </div>
+      {isInvalid ? (
+        <p id={errorId} role="alert" className="text-xs text-destructive">
+          Use o formato #RRGGBB (ex.: #2563EB).
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${label} — paleta`}>
+        {COLOR_PRESETS.map((preset) => {
+          const selected = effective.toLowerCase() === preset.toLowerCase();
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onChange(preset)}
+              aria-label={preset}
+              aria-pressed={selected}
+              title={preset}
+              style={{ backgroundColor: preset }}
+              className={cn(
+                "size-6 rounded-full border transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                selected
+                  ? "border-foreground ring-2 ring-ring ring-offset-1"
+                  : "border-input hover:scale-110",
+              )}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Configurações do Grupo (PRD10-05). Edita Nome*, Descrição (contador NN/160),
@@ -52,6 +169,16 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
   const [name, setName] = useState(pool.name);
   const [description, setDescription] = useState(pool.description ?? "");
   const [photo, setPhoto] = useState<string | undefined>(pool.photoBase64);
+  const [logo, setLogo] = useState<string | undefined>(pool.logoBase64);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  // Cores por tema (TASK-02). `undefined` = ainda não personalizada; o seletor
+  // exibe COLOR_FALLBACK sem persistir até o usuário mudar.
+  const [primaryLight, setPrimaryLight] = useState<string | undefined>(
+    pool.primaryColorLight,
+  );
+  const [primaryDark, setPrimaryDark] = useState<string | undefined>(pool.primaryColorDark);
   const [maxParticipants, setMaxParticipants] = useState(
     pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
   );
@@ -70,6 +197,9 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     setName(pool.name);
     setDescription(pool.description ?? "");
     setPhoto(pool.photoBase64);
+    setLogo(pool.logoBase64);
+    setPrimaryLight(pool.primaryColorLight);
+    setPrimaryDark(pool.primaryColorDark);
     setMaxParticipants(
       pool.maxParticipants !== undefined ? String(pool.maxParticipants) : "",
     );
@@ -98,6 +228,31 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     }
   }
 
+  /** Seleciona o arquivo do logo, valida tipo/tamanho e abre o editor de corte. */
+  function onPickLogo(file: File | undefined): void {
+    if (!file) return;
+    setLogoError(null);
+    try {
+      validateLogoInput(file);
+      setLogoFile(file); // abre o ImageCropModal (open = logoFile !== null)
+    } catch (error) {
+      setLogoError(
+        error instanceof AvatarImageError
+          ? error.message
+          : "Não foi possível processar a imagem.",
+      );
+    } finally {
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
+  /** Recebe a data URL recortada do modal e a aplica ao estado. */
+  function onLogoCropConfirm(dataUrl: string): void {
+    setLogo(dataUrl);
+    setLogoFile(null);
+    setSaved(false);
+  }
+
   const trimmedName = name.trim();
   const nameInvalid = trimmedName.length === 0;
   const maxNum = maxParticipants.trim() === "" ? null : Number(maxParticipants);
@@ -116,6 +271,15 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     }
     if (photo !== pool.photoBase64 && photo !== undefined) {
       patch.photoBase64 = photo;
+    }
+    if (logo !== pool.logoBase64 && logo !== undefined) {
+      patch.logoBase64 = logo;
+    }
+    if (primaryLight !== pool.primaryColorLight && primaryLight !== undefined) {
+      patch.primaryColorLight = primaryLight;
+    }
+    if (primaryDark !== pool.primaryColorDark && primaryDark !== undefined) {
+      patch.primaryColorDark = primaryDark;
     }
     const currentMax = pool.maxParticipants ?? null;
     if (maxNum !== currentMax) patch.maxParticipants = maxNum;
@@ -141,6 +305,9 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
     trimmedName !== pool.name ||
     description.trim() !== (pool.description ?? "") ||
     (photo !== pool.photoBase64 && photo !== undefined) ||
+    (logo !== pool.logoBase64 && logo !== undefined) ||
+    (primaryLight !== pool.primaryColorLight && primaryLight !== undefined) ||
+    (primaryDark !== pool.primaryColorDark && primaryDark !== undefined) ||
     maxNum !== (pool.maxParticipants ?? null) ||
     allowInvites !== (pool.allowInvites !== false) ||
     splitPhaseRanking !== (pool.splitPhaseRanking === true) ||
@@ -192,6 +359,86 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
             {photoError}
           </p>
         ) : null}
+      </div>
+
+      {/* Logo (personalizacao-grupo TASK-01): preview retangular + editor de corte. */}
+      <div className="flex flex-col gap-1.5">
+        <Label>Logo do Grupo</Label>
+        <div className="flex items-center gap-4">
+          <div className="flex h-20 w-28 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
+            {logo ? (
+              // eslint-disable-next-line @next/next/no-img-element -- data URL inline; next/image não se aplica
+              <img
+                src={logo}
+                alt="Logo do grupo"
+                className="max-h-full max-w-full object-contain"
+              />
+            ) : (
+              <ImageIcon size={24} className="text-muted-foreground" aria-hidden="true" />
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={update.isPending}
+              className="min-h-[44px]"
+            >
+              <ImageIcon size={16} aria-hidden="true" />
+              Alterar logo
+            </Button>
+            <p className="text-xs text-muted-foreground">PNG, JPG ou WebP até 10MB</p>
+          </div>
+        </div>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          onChange={(e) => onPickLogo(e.target.files?.[0])}
+        />
+        {logoError ? (
+          <p role="alert" className="text-xs text-destructive">
+            {logoError}
+          </p>
+        ) : null}
+      </div>
+
+      <ImageCropModal
+        open={logoFile !== null}
+        file={logoFile}
+        onConfirm={onLogoCropConfirm}
+        onCancel={() => setLogoFile(null)}
+      />
+
+      {/* Cores do Grupo (TASK-02): picker + hex + paleta por tema. Aplicação visual = TASK-03. */}
+      <div className="flex flex-col gap-3">
+        <Label>Cores do Grupo</Label>
+        <div className="flex flex-wrap gap-x-8 gap-y-4">
+          <ColorField
+            idBase="group-color-light"
+            label="Tema claro"
+            value={primaryLight}
+            onChange={(hex) => {
+              setPrimaryLight(hex);
+              setSaved(false);
+            }}
+          />
+          <ColorField
+            idBase="group-color-dark"
+            label="Tema escuro"
+            value={primaryDark}
+            onChange={(hex) => {
+              setPrimaryDark(hex);
+              setSaved(false);
+            }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Cor de destaque exibida nas telas do grupo em cada tema. Escolha na
+          paleta, no seletor ou digite o código hexadecimal (#RRGGBB).
+        </p>
       </div>
 
       {/* Nome */}

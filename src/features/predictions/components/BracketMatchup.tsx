@@ -12,8 +12,9 @@
  *
  * Contrato: ai/spec/palpites-massa-task-13.md · ai/screen/palpites-massa-task-13.md
  *
- * Tema: tokens apenas (`bg-card`, `text-foreground`, `text-win`, `text-muted-foreground`).
- * Herda o verde dentro de `.palpites-theme` (container da rota TASK-14).
+ * Tema: tokens apenas (`bg-card`, `text-foreground`, `text-muted-foreground`). O
+ * vencedor previsto usa `text-primary` (segue a cor do pool dentro de
+ * `.palpites-theme`, não o verde semântico de acerto). Container da rota TASK-14.
  */
 
 import { Crown, Lock } from "lucide-react";
@@ -126,7 +127,7 @@ export function BracketMatchup({
           <span
             className={cn(
               "line-clamp-2 text-center text-xs leading-tight break-words",
-              homeWins ? "font-semibold text-win" : "text-foreground",
+              homeWins ? "font-semibold text-primary" : "text-foreground",
             )}
           >
             {home.name}
@@ -152,7 +153,7 @@ export function BracketMatchup({
           <span
             className={cn(
               "line-clamp-2 text-center text-xs leading-tight break-words",
-              awayWins ? "font-semibold text-win" : "text-foreground",
+              awayWins ? "font-semibold text-primary" : "text-foreground",
             )}
           >
             {away.name}

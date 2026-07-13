@@ -6,8 +6,9 @@
  *
  * Contrato: ai/spec/palpites-massa-task-06.md §6 · ai/screen/palpites-massa-task-06.md §5
  *
- * Tema: tokens apenas (`bg-card`, `border-primary`, `ring-primary`, `text-win`).
- * Dentro de `.palpites-theme` o realce de seleção herda o verde.
+ * Tema: tokens apenas (`bg-card`, `border-primary`, `ring-primary`, `text-primary`).
+ * Dentro de `.palpites-theme` o realce de seleção e o ✓ de concluído herdam a cor
+ * do pool (`text-primary`, não `text-win` — que é semântico de acerto).
  */
 
 import Link from "next/link";
@@ -67,7 +68,7 @@ export function GroupCard({
       <div className="flex items-center justify-between gap-1">
         <span className="text-sm font-semibold text-foreground">{name}</span>
         {isDone ? (
-          <CheckCircle2 size={16} aria-hidden="true" className="shrink-0 text-win" />
+          <CheckCircle2 size={16} aria-hidden="true" className="shrink-0 text-primary" />
         ) : null}
       </div>
       <ProgressBar
