@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { Camera, ImageIcon, LoaderCircle } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import {
   validateLogoInput,
 } from "@/features/profile/lib/imageToDataUrl";
 import { ImageCropModal } from "@/components/media/ImageCropModal";
-import { MAX_POOL_PHOTO_BASE64_LENGTH } from "@/schemas/pools";
+import { HEX_COLOR_REGEX, MAX_POOL_PHOTO_BASE64_LENGTH } from "@/schemas/pools";
 import { useGroupSettings, useUpdateGroupSettings } from "@/features/groupAdmin/hooks";
 import type { Pool } from "@/types/pools";
 
@@ -26,6 +27,118 @@ const MAX_DESCRIPTION = 160;
 const PHOTO_MAX_BYTES = Math.floor((MAX_POOL_PHOTO_BASE64_LENGTH * 3) / 4) - 1024;
 // Cor exibida no seletor quando o grupo ainda não personalizou a cor (TASK-02).
 const COLOR_FALLBACK = "#000000";
+
+// Paleta de atalho (personalizacao-grupo): cores prontas p/ escolha rápida além do
+// picker/hex. Tons médios com bom contraste nos dois temas.
+const COLOR_PRESETS = [
+  "#16a34a", // verde
+  "#0d9488", // teal
+  "#0891b2", // ciano
+  "#2563eb", // azul
+  "#4f46e5", // índigo
+  "#7c3aed", // roxo
+  "#db2777", // rosa
+  "#dc2626", // vermelho
+  "#ea580c", // laranja
+  "#ca8a04", // âmbar
+  "#475569", // cinza
+  "#111827", // grafite
+] as const;
+
+/**
+ * Seletor de cor por tema (personalizacao-grupo): combina o picker nativo, um
+ * campo de HEX digitável (`#RRGGBB`, útil no mobile onde o picker não deixa
+ * digitar) e uma paleta de atalho. Só emite `onChange` com um hex válido; o
+ * texto intermediário fica no estado local sem persistir.
+ */
+function ColorField({
+  idBase,
+  label,
+  value,
+  onChange,
+}: {
+  idBase: string;
+  label: string;
+  value: string | undefined;
+  onChange: (hex: string) => void;
+}): JSX.Element {
+  const effective = value ?? COLOR_FALLBACK;
+  const [hexText, setHexText] = useState(effective);
+
+  // Ressincroniza o texto quando a cor efetiva muda por fora (picker, swatch,
+  // reset do pool). Como só persistimos hex válido, digitação parcial não é
+  // sobrescrita aqui (o `effective` não muda até o hex ficar válido).
+  useEffect(() => {
+    setHexText(effective);
+  }, [effective]);
+
+  const commitHex = (raw: string): void => {
+    let v = raw.trim();
+    if (v.length > 0 && !v.startsWith("#")) v = `#${v}`;
+    setHexText(v);
+    if (HEX_COLOR_REGEX.test(v)) onChange(v);
+  };
+
+  const isInvalid = hexText.length > 0 && !HEX_COLOR_REGEX.test(hexText);
+  const errorId = `${idBase}-hex-error`;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm">{label}</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          id={idBase}
+          aria-label={`${label} — seletor visual`}
+          value={HEX_COLOR_REGEX.test(hexText) ? hexText : effective}
+          onChange={(e) => onChange(e.target.value)}
+          className="size-11 shrink-0 cursor-pointer rounded-lg border border-input bg-transparent"
+        />
+        <Input
+          id={`${idBase}-hex`}
+          aria-label={`${label} — código hexadecimal`}
+          aria-invalid={isInvalid || undefined}
+          aria-describedby={isInvalid ? errorId : undefined}
+          value={hexText}
+          onChange={(e) => commitHex(e.target.value)}
+          placeholder="#RRGGBB"
+          spellCheck={false}
+          autoCapitalize="none"
+          autoCorrect="off"
+          maxLength={7}
+          className="w-32 font-mono uppercase"
+        />
+      </div>
+      {isInvalid ? (
+        <p id={errorId} role="alert" className="text-xs text-destructive">
+          Use o formato #RRGGBB (ex.: #2563EB).
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${label} — paleta`}>
+        {COLOR_PRESETS.map((preset) => {
+          const selected = effective.toLowerCase() === preset.toLowerCase();
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => onChange(preset)}
+              aria-label={preset}
+              aria-pressed={selected}
+              title={preset}
+              style={{ backgroundColor: preset }}
+              className={cn(
+                "size-6 rounded-full border transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                selected
+                  ? "border-foreground ring-2 ring-ring ring-offset-1"
+                  : "border-input hover:scale-110",
+              )}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Configurações do Grupo (PRD10-05). Edita Nome*, Descrição (contador NN/160),
@@ -299,51 +412,32 @@ function SettingsFields({ pool }: { pool: Pool }): JSX.Element {
         onCancel={() => setLogoFile(null)}
       />
 
-      {/* Cores do Grupo (TASK-02): 2 seletores por tema. Aplicação visual = TASK-03. */}
-      <div className="flex flex-col gap-1.5">
+      {/* Cores do Grupo (TASK-02): picker + hex + paleta por tema. Aplicação visual = TASK-03. */}
+      <div className="flex flex-col gap-3">
         <Label>Cores do Grupo</Label>
-        <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              id="group-color-light"
-              aria-label="Cor primária (tema claro)"
-              value={primaryLight ?? COLOR_FALLBACK}
-              onChange={(e) => {
-                setPrimaryLight(e.target.value);
-                setSaved(false);
-              }}
-              className="size-11 cursor-pointer rounded-lg border border-input bg-transparent"
-            />
-            <div className="flex flex-col">
-              <span className="text-sm">Tema claro</span>
-              <span className="text-xs text-muted-foreground">
-                {(primaryLight ?? COLOR_FALLBACK).toUpperCase()}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              id="group-color-dark"
-              aria-label="Cor primária (tema escuro)"
-              value={primaryDark ?? COLOR_FALLBACK}
-              onChange={(e) => {
-                setPrimaryDark(e.target.value);
-                setSaved(false);
-              }}
-              className="size-11 cursor-pointer rounded-lg border border-input bg-transparent"
-            />
-            <div className="flex flex-col">
-              <span className="text-sm">Tema escuro</span>
-              <span className="text-xs text-muted-foreground">
-                {(primaryDark ?? COLOR_FALLBACK).toUpperCase()}
-              </span>
-            </div>
-          </div>
+        <div className="flex flex-wrap gap-x-8 gap-y-4">
+          <ColorField
+            idBase="group-color-light"
+            label="Tema claro"
+            value={primaryLight}
+            onChange={(hex) => {
+              setPrimaryLight(hex);
+              setSaved(false);
+            }}
+          />
+          <ColorField
+            idBase="group-color-dark"
+            label="Tema escuro"
+            value={primaryDark}
+            onChange={(hex) => {
+              setPrimaryDark(hex);
+              setSaved(false);
+            }}
+          />
         </div>
         <p className="text-xs text-muted-foreground">
-          Cor de destaque exibida nas telas do grupo em cada tema.
+          Cor de destaque exibida nas telas do grupo em cada tema. Escolha na
+          paleta, no seletor ou digite o código hexadecimal (#RRGGBB).
         </p>
       </div>
 

@@ -334,10 +334,13 @@ describe("Seção 'Logo do Grupo' (TASK-01 personalizacao-grupo)", () => {
 
 describe("Seção 'Cores do Grupo' (TASK-02 personalizacao-grupo)", () => {
   function getColorLight(): HTMLInputElement {
-    return screen.getByLabelText("Cor primária (tema claro)") as HTMLInputElement;
+    return screen.getByLabelText("Tema claro — seletor visual") as HTMLInputElement;
   }
   function getColorDark(): HTMLInputElement {
-    return screen.getByLabelText("Cor primária (tema escuro)") as HTMLInputElement;
+    return screen.getByLabelText("Tema escuro — seletor visual") as HTMLInputElement;
+  }
+  function getHexLight(): HTMLInputElement {
+    return screen.getByLabelText("Tema claro — código hexadecimal") as HTMLInputElement;
   }
 
   it("renderiza os 2 seletores; fallback #000000 quando ausentes", () => {
@@ -346,18 +349,58 @@ describe("Seção 'Cores do Grupo' (TASK-02 personalizacao-grupo)", () => {
     expect(getColorDark().value).toBe("#000000");
   });
 
-  it("reflete as cores do pool quando presentes", () => {
+  it("reflete as cores do pool quando presentes (picker + hex)", () => {
     setup(makePool({ primaryColorLight: "#1a2b3c", primaryColorDark: "#abcdef" }));
     expect(getColorLight().value).toBe("#1a2b3c");
     expect(getColorDark().value).toBe("#abcdef");
+    expect(getHexLight().value).toBe("#1a2b3c");
   });
 
-  it("mudar a cor do claro inclui só primaryColorLight no PATCH", () => {
+  it("mudar a cor do claro pelo picker inclui só primaryColorLight no PATCH", () => {
     const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
     fireEvent.change(getColorLight(), { target: { value: "#22ff88" } });
     clickSave();
     expect(mutateMock).toHaveBeenCalledWith(
       { primaryColorLight: "#22ff88" },
+      expect.any(Object),
+    );
+  });
+
+  it("digitar um HEX válido no campo de texto atualiza a cor", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getHexLight(), { target: { value: "#3B82F6" } });
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#3B82F6" },
+      expect.any(Object),
+    );
+  });
+
+  it("HEX inválido mostra erro e não persiste", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getHexLight(), { target: { value: "#12" } });
+    expect(screen.getByText(/formato #RRGGBB/i)).toBeTruthy();
+    clickSave();
+    expect(mutateMock).not.toHaveBeenCalled();
+  });
+
+  it("prefixa '#' automaticamente ao digitar sem o cerquilha", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    fireEvent.change(getHexLight(), { target: { value: "ff8800" } });
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#ff8800" },
+      expect.any(Object),
+    );
+  });
+
+  it("clicar num swatch da paleta define a cor", () => {
+    const { mutateMock } = setup(makePool({ primaryColorLight: "#111111" }));
+    // O swatch tem aria-label = o próprio hex; pega o do tema claro (1ª ocorrência).
+    fireEvent.click(screen.getAllByRole("button", { name: "#2563eb" })[0]!);
+    clickSave();
+    expect(mutateMock).toHaveBeenCalledWith(
+      { primaryColorLight: "#2563eb" },
       expect.any(Object),
     );
   });
