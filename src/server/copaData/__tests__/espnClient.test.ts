@@ -75,7 +75,7 @@ describe("EspnScoreClient — EC-01..EC-08", () => {
     abortError.name = "AbortError";
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortError));
 
-    await expect(new EspnScoreClient(100).fetchScoreboard(DATE)).rejects.toThrow(EspnTimeoutError);
+    await expect(new EspnScoreClient(undefined, 100).fetchScoreboard(DATE)).rejects.toThrow(EspnTimeoutError);
   });
 
   it("EC-06: lança EspnParseError quando shape inválido (state desconhecido)", async () => {
@@ -233,7 +233,7 @@ describe("EspnScoreClient.fetchSchedule — FS-01..FS-10", () => {
       .mockRejectedValueOnce(abortError);
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(new EspnScoreClient(100).fetchSchedule()).rejects.toThrow(
+    await expect(new EspnScoreClient(undefined, 100).fetchSchedule()).rejects.toThrow(
       EspnTimeoutError,
     );
   });

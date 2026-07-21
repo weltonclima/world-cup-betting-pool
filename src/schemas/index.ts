@@ -7,6 +7,7 @@ export * from "./poolStatusTransition";
 export * from "./userStatusTransition";
 export * from "./teams";
 export * from "./groups";
+export * from "./championships";
 export * from "./matches";
 export * from "./predictions";
 export * from "./rankings";

@@ -15,6 +15,8 @@
  * A restrição server-only é aplicada no caller (matchSource, TASK-06).
  */
 
+import type { Championship } from "@/types/championships";
+
 import { parseEspnScoreboard, type EspnScoreboard, type EspnEvent } from "./espnTypes";
 
 // ─── Erros customizados ─────────────────────────────────────────────────────
@@ -42,11 +44,22 @@ export class EspnParseError extends Error {
 
 // ─── Configuração ───────────────────────────────────────────────────────────
 
-const ESPN_SCOREBOARD_URL =
-  "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
+/** Base do scoreboard ESPN por slug de liga. `{slug}` → path da competição. */
+const ESPN_SCOREBOARD_BASE =
+  "https://site.api.espn.com/apis/site/v2/sports/soccer";
+
+/** Slug default — Copa 2026 (compat: chamadas sem slug não mudam de destino). */
+const DEFAULT_ESPN_SLUG = "fifa.world";
 
 /** Cache 1min — janela ao vivo (status/placar ESPN refrescam a cada 60s). */
 const REVALIDATE_LIVE = 60;
+
+/**
+ * Cap ESPN de eventos por chamada (hard cap, sem cursor — spike TASK-00/01).
+ * Um range que retorna >= este valor está (ou pode estar) TRUNCADO → falha
+ * ruidosa em vez de perder jogos em silêncio.
+ */
+const ESPN_EVENT_CAP = 100;
 
 /**
  * Ranges disjuntos (`YYYYMMDD-YYYYMMDD`) que cobrem o torneio inteiro (104 jogos).
@@ -59,12 +72,82 @@ export const ESPN_TOURNAMENT_RANGES: readonly string[] = [
   "20260628-20260719",
 ];
 
+// ─── Derivação de ranges por campeonato ─────────────────────────────────────
+
+/** Último dia do mês `m` (1-12) do ano `y`, como número (28-31). */
+function lastDayOfMonth(y: number, m: number): number {
+  // `new Date(y, m, 0)` = último dia do mês anterior a `m+1` = último dia de `m`.
+  return new Date(y, m, 0).getDate();
+}
+
+/** Formata `YYYYMMDD` a partir de ano/mês/dia numéricos. */
+function ymd(y: number, m: number, d: number): string {
+  return `${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * Deriva os ranges de datas (`YYYYMMDD-YYYYMMDD`) que cobrem a temporada de um
+ * campeonato, respeitando o cap ESPN de 100 eventos/chamada.
+ *
+ * - **Legado (`fifa.world`)**: retorna exatamente os ranges canônicos da Copa
+ *   (`ESPN_TOURNAMENT_RANGES`) — compat byte-a-byte, calendário fixo do torneio.
+ * - **Com paginação (`needsPagination: true`, ligas + copas longas)**: 12 ranges
+ *   MENSAIS cobrindo o ano da `season` (jan–dez), disjuntos e sem buraco. Uma
+ *   liga de 38 rodadas tem ~10 jogos/mês → folga larga sob o cap de 100.
+ * - **Sem paginação (torneios curtos)**: um único range do ano inteiro.
+ *
+ * O ano vem dos 4 primeiros dígitos de `season` (ex.: `"2026"` ou `"2026-27"`
+ * → 2026). Janela ago–mai de temporada europeia NÃO é modelada aqui (o catálogo
+ * ainda não guarda start/end); o ano-calendário cobre com margem — ver TASK-05.
+ */
+export function deriveRanges(
+  championship: Pick<
+    Championship,
+    "espnSlug" | "season" | "needsPagination" | "legacyMatchId"
+  >,
+): readonly string[] {
+  if (championship.legacyMatchId === true) {
+    return ESPN_TOURNAMENT_RANGES;
+  }
+
+  // Só `YYYY` é suportado hoje. Temporada partida (`2025-26`, europeia ago–mai)
+  // exige janela real (seasonStart/seasonEnd) — não dá para aproximar por
+  // ano-calendário sem misturar duas temporadas. Falha ruidosa até TASK-05
+  // adicionar esses campos ao catálogo (nunca derivar ano errado em silêncio).
+  const m = championship.season.match(/^(\d{4})$/);
+  if (!m) {
+    throw new Error(
+      `deriveRanges: season "${championship.season}" não suportada ` +
+        `(${championship.espnSlug}). Só "YYYY" é aceito; temporadas partidas ` +
+        `(ex.: "2025-26") exigem seasonStart/seasonEnd no catálogo — TASK-05.`,
+    );
+  }
+  const year = Number(m[1]);
+
+  if (!championship.needsPagination) {
+    return [`${ymd(year, 1, 1)}-${ymd(year, 12, 31)}`];
+  }
+
+  const ranges: string[] = [];
+  for (let m = 1; m <= 12; m++) {
+    ranges.push(`${ymd(year, m, 1)}-${ymd(year, m, lastDayOfMonth(year, m))}`);
+  }
+  return ranges;
+}
+
 // ─── Implementação HTTP ─────────────────────────────────────────────────────
 
 export class EspnScoreClient {
   private readonly timeoutMs: number;
+  private readonly espnSlug: string;
 
-  constructor(timeoutMs = 10_000) {
+  /**
+   * @param espnSlug slug ESPN da competição (ex.: `"bra.1"`). Default
+   *                 `"fifa.world"` — compat: chamadas atuais não mudam de destino.
+   * @param timeoutMs timeout por chamada HTTP.
+   */
+  constructor(espnSlug: string = DEFAULT_ESPN_SLUG, timeoutMs = 10_000) {
+    this.espnSlug = espnSlug;
     this.timeoutMs = timeoutMs;
   }
 
@@ -105,9 +188,19 @@ export class EspnScoreClient {
     return [...byId.values()];
   }
 
-  /** Busca um range de datas e retorna apenas os eventos do scoreboard. */
+  /**
+   * Busca um range de datas e retorna apenas os eventos do scoreboard.
+   * @throws EspnParseError se o range atingiu o cap ESPN (possível truncamento):
+   *         falha ruidosa força um split mais fino em vez de perder jogos.
+   */
   private async fetchRange(range: string): Promise<EspnEvent[]> {
     const scoreboard = await this.fetchByDates(range);
+    if (scoreboard.events.length >= ESPN_EVENT_CAP) {
+      throw new EspnParseError(
+        `range ${range} atingiu o cap de ${ESPN_EVENT_CAP} eventos ` +
+          `(${this.espnSlug}) — possível truncamento; requer split mais fino.`,
+      );
+    }
     return scoreboard.events;
   }
 
@@ -117,7 +210,7 @@ export class EspnScoreClient {
    *              (`YYYYMMDD-YYYYMMDD`); o endpoint aceita ambos.
    */
   private async fetchByDates(dates: string): Promise<EspnScoreboard> {
-    const url = `${ESPN_SCOREBOARD_URL}?dates=${dates}`;
+    const url = `${ESPN_SCOREBOARD_BASE}/${this.espnSlug}/scoreboard?dates=${dates}`;
 
     const controller = new AbortController();
     const timerId = setTimeout(() => controller.abort(), this.timeoutMs);
