@@ -48,7 +48,7 @@ describe("system_settings", () => {
     expectTypeOf<
       SystemSettings["currentStage"]
     >().toEqualTypeOf<
-      "grupos" | "dezesseis-avos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final" | undefined
+      "grupos" | "liga" | "dezesseis-avos" | "oitavas" | "quartas" | "semifinal" | "terceiro" | "final" | undefined
     >();
   });
 });

@@ -11,6 +11,7 @@ const ITEMS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/rankings/phase", label: "Fases" },
   { href: "/rankings/me", label: "Meu Ranking" },
   { href: "/rankings/statistics", label: "Estatísticas" },
+  { href: "/rankings/history", label: "Histórico" },
 ];
 
 /**

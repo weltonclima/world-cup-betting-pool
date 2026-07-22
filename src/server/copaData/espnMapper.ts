@@ -22,7 +22,10 @@ import { matchSchema } from "@/schemas/matches";
 import { stageSchema } from "@/schemas/shared";
 import type { MatchWithId } from "@/types/matches";
 
+import type { Championship } from "@/types/championships";
+
 import { buildEspnMatchId, isGroupStage } from "./espnMatchId";
+import { matchBaseId } from "./matchBaseId";
 import type {
   EspnCompetition,
   EspnCompetitor,
@@ -454,4 +457,124 @@ export function mapEspnEventsToMatches(events: EspnEvent[]): MatchWithId[] {
   );
 
   return [...groupMatches, ...knockoutMatches];
+}
+
+/**
+ * Converte um `EspnEvent` de LIGA (pontos corridos) num `MatchWithId` (TASK-05,
+ * multi-championship-launch). Divergências vs `mapEspnEventToMatch` (Copa):
+ *
+ * - **teamId = id ESPN do clube** (`team.id ?? abbreviation`). Clubes NÃO estão no
+ *   `TEAM_REGISTRY` (só 48 seleções) → `resolveTeamId` lançaria; e somos 100% ESPN
+ *   ao vivo, então o id ESPN é a chave natural (sem registry de clubes).
+ * - **stage = `"liga"`** (fase única; sem grupos/mata-mata). `round` = matchday
+ *   (`event.week.number`) ou `null` quando a ESPN não expõe.
+ * - **id = `matchBaseId(event, championship)`** = `{championshipId}:{event.id}`
+ *   (path novo; nunca colide com id legado da Copa).
+ * - **SEM campos de mata-mata** (bracket/pênaltis/outcome) — gate de tipo é TASK-10.
+ *
+ * Saída validada por `matchSchema.parse` (falha ruidosa em dado inconsistente).
+ *
+ * @throws Error competition ausente ou sem home/away.
+ * @throws Error propaga `matchBaseId` (event.id vazio) e `matchSchema` (ZodError).
+ */
+export function mapEspnEventToLeagueMatch(
+  event: EspnEvent,
+  championship: Championship,
+): MatchWithId {
+  const competition = event.competitions[0];
+  if (!competition) {
+    throw new Error(
+      `mapEspnEventToLeagueMatch: evento sem competition. event.id=${event.id}.`,
+    );
+  }
+
+  const home = competition.competitors.find((c) => c.homeAway === "home");
+  const away = competition.competitors.find((c) => c.homeAway === "away");
+  if (!home || !away) {
+    throw new Error(
+      `mapEspnEventToLeagueMatch: competition sem home/away. event.id=${event.id}.`,
+    );
+  }
+
+  const id = matchBaseId(event, championship);
+  const patch = mapEspnCompetition(competition);
+
+  const match = {
+    championshipId: championship.id,
+    // `||` (não `??`): `team.id` pode vir "" (string vazia) na ESPN → cai para a
+    // abbreviation em vez de virar "" e quebrar o `nonEmptyString` sem motivo.
+    homeTeamId: home.team.id || home.team.abbreviation,
+    awayTeamId: away.team.id || away.team.abbreviation,
+    kickoffAt: event.date,
+    stage: "liga" as const,
+    round: event.week?.number ?? null,
+    groupId: null,
+    venue: extractVenue(competition),
+    status: patch.status,
+    homeScore: patch.homeScore,
+    awayScore: patch.awayScore,
+  };
+
+  return { id, ...matchSchema.parse(match) };
+}
+
+/**
+ * Processa o schedule ESPN inteiro de uma LIGA → `MatchWithId[]` (TASK-05).
+ * Cada evento mapeia direto (sem numeração de mata-mata). Exceções propagam.
+ */
+export function mapEspnEventsToLeagueMatches(
+  events: EspnEvent[],
+  championship: Championship,
+): MatchWithId[] {
+  return events.map((e) => mapEspnEventToLeagueMatch(e, championship));
+}
+
+/**
+ * Escudo válido para display = URL http(s) ABSOLUTA. A ESPN às vezes devolve
+ * `logo: ""` ou caminho relativo; propagá-los como `crestUrl` quebraria o
+ * `z.url()` do `leagueStandingsResponseSchema` (`.parse()` throwing na rota),
+ * derrubando a tabela inteira por causa de um único clube (review TASK-20 H-1).
+ * Inválido → descarta (o fallback de iniciais renderiza). Restringir a http(s)
+ * também barra `javascript:`/`data:` por profundidade (L-1).
+ */
+function sanitizeCrestUrl(logo: string | undefined): string | undefined {
+  if (!logo) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(logo);
+  } catch {
+    return undefined; // relativo/malformado
+  }
+  return parsed.protocol === "https:" || parsed.protocol === "http:"
+    ? logo
+    : undefined;
+}
+
+/**
+ * Extrai o mapa de display de clubes (id → {name, crestUrl?}) dos MESMOS eventos
+ * de liga (TASK-20). Usado pela tabela de classificação: clubes não estão no
+ * `TEAM_REGISTRY`, então nome + escudo vêm dos competidores ESPN.
+ *
+ * Chave = `team.id || abbreviation` — IDÊNTICA à resolução de `homeTeamId`/
+ * `awayTeamId` em `mapEspnEventToLeagueMatch`, para casar as linhas da tabela.
+ * `name` = `displayName` (fallback = chave, nunca vazio); `crestUrl` = `logo`
+ * validado como URL http(s) absoluta (inválido/ausente → omitido).
+ */
+export function extractLeagueTeamDisplay(
+  events: EspnEvent[],
+): Map<string, { name: string; crestUrl?: string }> {
+  const display = new Map<string, { name: string; crestUrl?: string }>();
+  for (const event of events) {
+    const competition = event.competitions[0];
+    if (!competition) continue;
+    for (const competitor of competition.competitors) {
+      const { team } = competitor;
+      const id = team.id || team.abbreviation;
+      if (!id) continue;
+      const name = team.displayName && team.displayName.length > 0 ? team.displayName : id;
+      const crestUrl = sanitizeCrestUrl(team.logo);
+      display.set(id, crestUrl !== undefined ? { name, crestUrl } : { name });
+    }
+  }
+  return display;
 }

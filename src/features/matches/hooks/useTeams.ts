@@ -3,6 +3,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { listAllTeams } from "@/services";
+import { DEFAULT_CHAMPIONSHIP_ID } from "@/server/copaData/championshipCatalog";
 import { STALE_TIME } from "@/server/cache/tiers";
 import type { TeamWithId } from "@/types";
 
@@ -25,10 +26,14 @@ import { matchesKeys } from "./matchesKeys";
  * re-exporta ESTE hook, então Home, tela de Jogos e `GroupManualPredictions`
  * compartilham a mesma query key (`["matches","teams"]`) → 1 único fetch.
  */
-export function useTeams(): UseQueryResult<TeamWithId[]> {
+export function useTeams(
+  championshipId: string = DEFAULT_CHAMPIONSHIP_ID,
+): UseQueryResult<TeamWithId[]> {
   return useQuery({
-    queryKey: matchesKeys.teams(),
-    queryFn: listAllTeams,
+    // Fatiado por campeonato (TASK-09); default = Copa. Ver nota em `listAllTeams`
+    // sobre o server ainda não segmentar teams (foundation gap).
+    queryKey: matchesKeys.teams(championshipId),
+    queryFn: () => listAllTeams(championshipId),
     staleTime: STALE_TIME.selecoes,
   });
 }

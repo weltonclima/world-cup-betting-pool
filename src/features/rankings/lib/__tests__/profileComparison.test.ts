@@ -42,6 +42,7 @@ function makeItem(
 function makeMatch(matchId: string, kickoffAt: string) {
   return {
     id: matchId,
+    championshipId: "fifa.world",
     homeTeamId: "bra",
     awayTeamId: "srb",
     kickoffAt,

@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { Clock, Info } from "lucide-react";
 import Link from "next/link";
 
 import { AuthLogo } from "@/components/auth/AuthLogo";
@@ -51,6 +51,17 @@ export default async function InvitePage({ params }: InvitePageProps) {
                 </strong>
                 .
               </p>
+            </div>
+
+            <div
+              role="note"
+              className="flex items-start gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-left text-sm text-muted-foreground"
+            >
+              <Info aria-hidden className="h-4 w-4 shrink-0" />
+              <span>
+                Sua entrada precisa da aprovação do administrador do grupo antes
+                de liberar o acesso.
+              </span>
             </div>
 
             <SignupForm

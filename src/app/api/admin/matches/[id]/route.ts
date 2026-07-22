@@ -46,9 +46,18 @@ export async function PUT(
   const auth = await authorizeGroupAdmin(request);
   if ("errorResponse" in auth) return auth.errorResponse;
 
-  const { id } = await ctx.params;
-  if (!id) {
+  const { id: rawId } = await ctx.params;
+  if (!rawId) {
     return NextResponse.json({ error: "Partida inválida." }, { status: 400 });
+  }
+  // Consistência com GET /api/matches/[id]: um id namespaced de liga traz ':' que
+  // Next normaliza para `%3A` no param. Decodifica p/ doc-id/lookup usarem o id CRU
+  // (hoje só Copa/bare — idempotente; futuro-proof p/ edição de liga).
+  let id: string;
+  try {
+    id = decodeURIComponent(rawId);
+  } catch {
+    id = rawId;
   }
 
   let raw: unknown;
@@ -157,9 +166,18 @@ export async function DELETE(
   const auth = await authorizeGroupAdmin(request);
   if ("errorResponse" in auth) return auth.errorResponse;
 
-  const { id } = await ctx.params;
-  if (!id) {
+  const { id: rawId } = await ctx.params;
+  if (!rawId) {
     return NextResponse.json({ error: "Partida inválida." }, { status: 400 });
+  }
+  // Consistência com GET /api/matches/[id]: um id namespaced de liga traz ':' que
+  // Next normaliza para `%3A` no param. Decodifica p/ doc-id/lookup usarem o id CRU
+  // (hoje só Copa/bare — idempotente; futuro-proof p/ edição de liga).
+  let id: string;
+  try {
+    id = decodeURIComponent(rawId);
+  } catch {
+    id = rawId;
   }
 
   const db = getAdminFirestore();

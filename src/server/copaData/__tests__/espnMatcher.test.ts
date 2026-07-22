@@ -50,6 +50,7 @@ function match(opts: {
 }): MatchWithId {
   return {
     id: opts.id,
+    championshipId: "fifa.world",
     homeTeamId: opts.homeTeamId,
     awayTeamId: opts.awayTeamId,
     kickoffAt: opts.kickoffAt,

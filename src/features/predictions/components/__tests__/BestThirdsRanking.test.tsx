@@ -36,6 +36,7 @@ function match(
   matchCounter += 1;
   return {
     id: `m-${groupId}-${matchCounter}`,
+    championshipId: "fifa.world",
     homeTeamId,
     awayTeamId,
     kickoffAt: "2026-06-11T18:00:00-06:00",

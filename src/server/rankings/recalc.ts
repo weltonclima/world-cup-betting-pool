@@ -3,7 +3,15 @@ import "server-only";
 import type { Firestore } from "firebase-admin/firestore";
 
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
+import { DEFAULT_CHAMPIONSHIP_ID, getChampionship } from "@/server/copaData/championshipCatalog";
+import { loadChampionshipStatuses } from "@/server/copaData/championshipState";
 import { applyAvatarBudget } from "@/server/rankings/avatarBudget";
+import { championshipScope } from "@/server/rankings/championshipScope";
+import {
+  aggregateChampionshipScopes,
+  type ChampionshipScopeSource,
+} from "@/server/rankings/aggregateScopes";
+import { getEnabledChampionships } from "@/lib/poolChampionships";
 import { scorePrediction, type ScoreOptions } from "@/features/predictions/lib";
 import {
   buildDistribution,
@@ -15,6 +23,7 @@ import {
 import { predictionSchema, userSchema } from "@/schemas";
 import type { Match, RankingEntry } from "@/types";
 import type { MatchWithId } from "@/types/matches";
+import type { Pool } from "@/types/pools";
 
 /**
  * Núcleo de recálculo de rankings/estatísticas (PRD-05, TASK-03) extraído do
@@ -60,8 +69,22 @@ const FRESHNESS_DOC_ID = "_freshness";
  *  4 — + ranking agregado das eliminatórias (`rankings/eliminatorias` e
  *      `pool-{poolId}-eliminatorias`): soma das 5 fases mata-mata incl. dezesseis-avos
  *      (PRD-16 / TASK-02).
+ *  5 — + rankings `geral` por campeonato habilitado NÃO-legado (`rankings/{C}-geral`
+ *      global e `pool-{poolId}-{C}-geral` por pool que habilitou): scoring multi-championship
+ *      (multi-championship-launch / TASK-11). Copa legada segue nos escopos bare (sem regressão).
+ *  6 — + ranking `geral` AGREGADO por pool (`pool-{poolId}-agregado`): soma bruta dos pontos
+ *      do membro entre os campeonatos pontuáveis que o pool habilita (Copa legada + ligas
+ *      ativas). Escrito só quando o pool tem ≥2 campeonatos pontuáveis (multi-championship-launch
+ *      / TASK-12). Modo `geral` da pool serve este doc; `por-campeonato` serve por campeonato.
  */
-export const RECALC_VERSION = 4;
+export const RECALC_VERSION = 6;
+
+/**
+ * Scope do ranking `geral` AGREGADO por pool (`pool-{poolId}-agregado`, TASK-12).
+ * Não é uma fase da Copa (não entra em RANKING_STAGE_SCOPES) nem carrega
+ * `championshipId` — é a soma bruta entre campeonatos habilitados do pool.
+ */
+export const AGGREGATE_SCOPE = "agregado";
 
 /**
  * Assinatura determinística do conjunto de partidas FINALIZADAS, incluindo o
@@ -263,6 +286,17 @@ export interface RecalcSummary {
   finishedMatches: number;
   statisticsUpdated: number;
   /**
+   * Campeonatos NÃO-legados pontuados neste recalc (TASK-11). Aditivo — a Copa
+   * legada (escopos bare) não conta aqui. `0` quando nenhum pool habilitou outro
+   * campeonato ou todas as fontes extras falharam (best-effort).
+   */
+  championshipsProcessed: number;
+  /**
+   * Docs de ranking `geral` AGREGADO escritos (`pool-{poolId}-agregado`, TASK-12) —
+   * um por pool com ≥2 campeonatos pontuáveis. `0` quando nenhum pool agrega.
+   */
+  aggregatesWritten: number;
+  /**
    * Delta geral (global) por usuário — `previousPosition` = última posição `geral`
    * do `positionHistory`; `newPosition` = posição recém-rankeada. Aditivo: derivado
    * do que o loop de statistics já computa, sem novo fetch/write.
@@ -345,17 +379,50 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   // prorrogação pelo placar de 90min. Leitura tolerante (flag ausente/false = OFF;
   // pool malformado não quebra o recalc). Re-agrega só os membros desses pools.
   const flaggedPoolIds = new Set<string>();
+  // TASK-11: campeonatos habilitados por pool (default de leitura = só Copa). Alimenta
+  // o cleanup de órfão dos escopos por campeonato E os writes por campeonato (§7.5).
+  const enabledByPool = new Map<string, string[]>();
   try {
     const poolsSnap = await db.collection("pools").get();
     for (const d of poolsSnap.docs) {
-      if ((d.data() as { ignoreOvertimeGoals?: unknown }).ignoreOvertimeGoals === true) {
+      const data = d.data();
+      if ((data as { ignoreOvertimeGoals?: unknown }).ignoreOvertimeGoals === true) {
         flaggedPoolIds.add(d.id);
       }
+      enabledByPool.set(d.id, getEnabledChampionships(data as Pool));
     }
   } catch (err) {
     // Falha ao ler pools não deve derrubar o recalc: degrada para nenhum flagged
-    // (placar final em tudo) — fallback seguro.
-    console.warn("[recalc] falha ao ler flags de pool (ignoreOvertimeGoals):", err);
+    // (placar final em tudo) e nenhum campeonato extra — fallback seguro (só Copa).
+    console.warn("[recalc] falha ao ler flags/campeonatos de pool:", err);
+  }
+
+  // União dos campeonatos PONTUÁVEIS habilitados em qualquer pool — os que ganham
+  // escopo `geral` próprio (§7.5). A Copa (`fifa.world`) sai da união: já é coberta
+  // pelos escopos bare acima. Sem pool habilitando outro campeonato → conjunto vazio.
+  //
+  // GATE DE TIPO (invariante crítica — proteção da Copa legada): SÓ `type: "league"`.
+  // Só o path de liga (`mapEspnEventToLeagueMatch`) namespaceia o matchId
+  // (`{championshipId}:{event.id}`). Cups NÃO-legados roteiam pelo mapper da Copa
+  // (`mapEspnEventsToMatches`), que gera ids BARE (`m73`, `{data}-{home}-{away}`) —
+  // idênticos aos da Copa. Pontuá-los aqui sobrescreveria palpites/rankings reais
+  // da Copa (colisão de matchId). Cups ficam de fora até seus ids serem namespaced
+  // (foundation/TASK-10). Sem isso, o gate quebraria a garantia de zero-regressão.
+  // TASK-13: status resolvido DINAMICAMENTE (override do doc `championships/{id}`
+  // sobre o default estático do catálogo), não `champ.status` cru — assim ligas
+  // arquivadas EM RUNTIME saem do union. Uma leitura por passada (batch). Falha
+  // degrada para os defaults do catálogo (fallback seguro dentro do resolvedor).
+  const dynamicStatuses = await loadChampionshipStatuses(db);
+  const championshipUnion = new Set<string>();
+  for (const ids of enabledByPool.values()) {
+    for (const id of ids) {
+      if (id === DEFAULT_CHAMPIONSHIP_ID) continue;
+      const champ = getChampionship(id);
+      // TASK-21/13: sweep só ATIVOS — liga (único path namespaced) E não-arquivado
+      // (arquivado é congelado/servido do banco pela TASK-13/14; não re-pontuar ao vivo).
+      const status = dynamicStatuses.get(id) ?? champ?.status;
+      if (champ?.type === "league" && status !== "archived") championshipUnion.add(id);
+    }
   }
 
   // Agregado 90min por (poolId flagged → uid → UserAgg). Só membros de pool flagged.
@@ -385,6 +452,20 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     uid,
     points: a.pointsGeral,
     accuracy: computeAccuracy(a.correctGeral, finishedGeral),
+    wrong: a.wrongGeral,
+    correct: a.correctGeral,
+    winner: a.winnerGeral,
+    draw: a.drawGeral,
+    firstPredictionAt: a.firstPredictionAt,
+  });
+  // TASK-11: participante `geral` de um campeonato NÃO-legado. Idêntico a `geralPart`,
+  // exceto o denominador de aproveitamento — o total de finalizadas DAQUELE campeonato
+  // (não `finishedGeral`, que é da Copa). `a` vem de `aggregateUser` sobre as partidas
+  // do campeonato → `pointsGeral`/`correctGeral` já são exclusivos dele.
+  const champGeralPart = (uid: string, a: UserAgg, finishedCount: number): RankableParticipant => ({
+    uid,
+    points: a.pointsGeral,
+    accuracy: computeAccuracy(a.correctGeral, finishedCount),
     wrong: a.wrongGeral,
     correct: a.correctGeral,
     winner: a.winnerGeral,
@@ -529,17 +610,46 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
   // pertencimento (e não por regex que extrai o poolId) evita ambiguidade quando
   // o próprio poolId contém hífens.
   const livePoolIds = [...poolMembers.keys()];
+  // TASK-12: nº de campeonatos PONTUÁVEIS que um pool habilita — Copa legada
+  // (`fifa.world`, escopo bare) + ligas ATIVAS (na união). Gate do doc `agregado`.
+  const countableChampionships = (poolId: string): number =>
+    (enabledByPool.get(poolId) ?? []).reduce(
+      (n, cid) => (cid === DEFAULT_CHAMPIONSHIP_ID || championshipUnion.has(cid) ? n + 1 : n),
+      0,
+    );
   const ownedByLivePool = (docId: string): boolean =>
     livePoolIds.some(
       (p) =>
         docId === `pool-${p}-geral` ||
         docId === `pool-${p}-${ELIMINATION_SCOPE}` ||
         (RANKING_STAGE_SCOPES as readonly string[]).some((s) => docId === `pool-${p}-${s}`) ||
-        docId.startsWith(`pool-${p}-grupo-`),
+        docId.startsWith(`pool-${p}-grupo-`) ||
+        // TASK-12: agregado só é reivindicado por pool com ≥2 campeonatos pontuáveis
+        // (idêntico ao gate de escrita §7.6). Pool que caiu para 1 → doc vira órfão → limpo.
+        (docId === `pool-${p}-${AGGREGATE_SCOPE}` && countableChampionships(p) >= 2) ||
+        // TASK-11: doc `geral` por campeonato de um pool VIVO que ainda habilita o
+        // campeonato E que está sendo pontuado (`championshipUnion` = ligas). Sem esta
+        // cláusula o cleanup apagaria o doc recém-escrito; com `championshipUnion.has`,
+        // um pool que DESABILITOU a liga (ou um cup nunca pontuado) não é protegido → limpo.
+        (enabledByPool.get(p) ?? []).some(
+          (cid) => championshipUnion.has(cid) && docId === `pool-${p}-${cid}-geral`,
+        ),
     );
+  // TASK-11 (MR-01): doc GLOBAL `{C}-geral` de campeonato pontuável some quando C sai
+  // da união (nenhum pool o habilita mais) — senão serviria ranking stale para sempre.
+  // Só alcança docs cujo prefixo é um campeonato NÃO-default do catálogo: o `geral`
+  // bare da Copa (`getChampionship("") === undefined`) e escopos de fase/grupo nunca casam.
+  const isStaleChampionshipGlobal = (docId: string): boolean => {
+    if (!docId.endsWith("-geral")) return false;
+    const cid = docId.slice(0, -"-geral".length);
+    const champ = getChampionship(cid);
+    return champ !== undefined && cid !== DEFAULT_CHAMPIONSHIP_ID && !championshipUnion.has(cid);
+  };
   const existingRankingDocs = await db.collection("rankings").get();
   for (const d of existingRankingDocs.docs) {
-    if (d.id.startsWith("pool-") && !ownedByLivePool(d.id)) {
+    if (d.id.startsWith("pool-")) {
+      if (!ownedByLivePool(d.id)) writes.push(d.ref.delete());
+    } else if (isStaleChampionshipGlobal(d.id)) {
       writes.push(d.ref.delete());
     }
   }
@@ -647,6 +757,112 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
           }),
       );
     }
+  }
+
+  // ─── 7.5 Rankings `geral` por campeonato habilitado (TASK-11) ──────────────
+  // Além da Copa legada (escopos bare acima), pontua cada campeonato NÃO-legado
+  // habilitado em algum pool. SÓ a dimensão `geral`: global (`rankings/{C}-geral`)
+  // + por pool que habilitou (`pool-{poolId}-{C}-geral`). Ligas e copas novas NÃO
+  // replicam a máquina de fase/grupo da Copa (decisão travada da TASK-11).
+  // Best-effort POR campeonato: matchId é globalmente único (namespaced), então a
+  // pontuação não colide entre campeonatos; a falha da fonte de UM campeonato loga
+  // e é pulada, sem cascatear para os demais nem para a Copa.
+  // TASK-12: acumula, por pool, as fontes por campeonato (participantes já pontuados
+  // + total de finalizadas) para montar o ranking `geral` AGREGADO abaixo (§7.6).
+  // Só ligas efetivamente pontuadas aqui entram — falha de fonte (best-effort) exclui
+  // o campeonato do agregado E da contagem do gate, mantendo a coerência.
+  const poolChampSources = new Map<string, ChampionshipScopeSource[]>();
+  let championshipsProcessed = 0;
+  for (const championshipId of championshipUnion) {
+    const championship = getChampionship(championshipId);
+    if (!championship || championship.legacyMatchId === true) continue; // legado já coberto
+    try {
+      const champMatches = await getEffectiveMatches(championshipId);
+      const champFinished = champMatches.filter((m) => m.status === "finished");
+      const champMatchById = new Map(champFinished.map((m) => [m.id, m]));
+      const champFinishedCount = champFinished.length;
+      const scope = championshipScope(championship, "geral"); // ex.: `bra.1-2026-geral`
+
+      // Agregado por usuário SOBRE as partidas deste campeonato — palpites de outros
+      // campeonatos não resolvem em `champMatchById` e são ignorados (isolamento).
+      const champAggByUid = new Map<string, UserAgg>();
+      for (const u of approved) {
+        champAggByUid.set(u.uid, aggregateUser(predsByUid.get(u.uid) ?? [], champMatchById));
+      }
+
+      // Global — todos os aprovados pontuados no campeonato.
+      const champGlobalPart = approved.map((u) =>
+        champGeralPart(u.uid, champAggByUid.get(u.uid)!, champFinishedCount),
+      );
+      writes.push(
+        db
+          .collection("rankings")
+          .doc(scope)
+          .set({
+            scope,
+            championshipId,
+            updatedAt: nowIso,
+            entries: toBudgetedEntries(rankParticipants(champGlobalPart)),
+          }),
+      );
+
+      // Por pool — só pools VIVOS que habilitaram este campeonato, re-rankeados
+      // apenas entre os próprios membros (`pool-{poolId}-{C}-geral`).
+      for (const [poolId, members] of poolMembers) {
+        if (!(enabledByPool.get(poolId) ?? []).includes(championshipId)) continue;
+        const poolPart = members.map((m) =>
+          champGeralPart(m.uid, champAggByUid.get(m.uid)!, champFinishedCount),
+        );
+        writes.push(
+          db
+            .collection("rankings")
+            .doc(`pool-${poolId}-${scope}`)
+            .set({
+              scope,
+              championshipId,
+              updatedAt: nowIso,
+              entries: toBudgetedEntries(rankParticipants(poolPart)),
+            }),
+        );
+        // TASK-12: mesma contribuição por membro alimenta o agregado do pool.
+        const sources = poolChampSources.get(poolId) ?? [];
+        sources.push({ finished: champFinishedCount, participants: poolPart });
+        poolChampSources.set(poolId, sources);
+      }
+      championshipsProcessed += 1;
+    } catch (err) {
+      console.warn(`[recalc] falha ao pontuar campeonato ${championshipId}:`, err);
+    }
+  }
+
+  // ─── 7.6 Ranking `geral` AGREGADO por pool (TASK-12) ───────────────────────
+  // Soma bruta dos pontos do membro entre os campeonatos PONTUÁVEIS do pool: a Copa
+  // legada (escopo bare `geral`, respeitando a flag 90min via `aggForPool`) MAIS cada
+  // liga ativa já pontuada em §7.5 (`poolChampSources`). Escrito em
+  // `pool-{poolId}-agregado` SÓ quando o pool tem ≥2 campeonatos pontuáveis — senão o
+  // "geral" do pool continua sendo o bare `pool-{poolId}-geral` (zero doc extra, zero
+  // regressão). `accuracy` recomputada sobre a soma das finalizadas (helper puro).
+  let aggregatesWritten = 0;
+  for (const [poolId, members] of poolMembers) {
+    const sources: ChampionshipScopeSource[] = [...(poolChampSources.get(poolId) ?? [])];
+    if ((enabledByPool.get(poolId) ?? []).includes(DEFAULT_CHAMPIONSHIP_ID)) {
+      sources.unshift({
+        finished: finishedGeral,
+        participants: members.map((m) => geralPart(m.uid, aggForPool(poolId, m.uid))),
+      });
+    }
+    if (sources.length < 2) continue; // gate: agregação exige ≥2 campeonatos pontuáveis
+    writes.push(
+      db
+        .collection("rankings")
+        .doc(`pool-${poolId}-${AGGREGATE_SCOPE}`)
+        .set({
+          scope: AGGREGATE_SCOPE,
+          updatedAt: nowIso,
+          entries: toBudgetedEntries(rankParticipants(aggregateChampionshipScopes(sources))),
+        }),
+    );
+    aggregatesWritten += 1;
   }
 
   // ─── 8. Statistics por usuário (com positionHistory) ───────────────────────
@@ -757,6 +973,8 @@ export async function recalcRankings(db: Firestore): Promise<RecalcSummary> {
     participants: approved.length,
     finishedMatches: finished.length,
     statisticsUpdated: approved.length,
+    championshipsProcessed,
+    aggregatesWritten,
     deltas,
   };
 }

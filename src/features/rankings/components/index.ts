@@ -10,6 +10,7 @@ export {
   type RankingErrorStateProps,
 } from "./RankingErrorState";
 export { GeneralRanking } from "./GeneralRanking";
+export { RankingView, type RankingViewQuery } from "./RankingView";
 export { PhaseRanking } from "./PhaseRanking";
 export { MyRanking } from "./MyRanking";
 export { PoolStatsScreen } from "./PoolStatsScreen";

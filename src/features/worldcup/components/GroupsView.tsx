@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 
+import { CupOnlyNotice, useIsCupActive } from "@/features/championships";
 import { useGroups } from "@/features/worldcup/hooks/useGroups";
 
 import { GroupSelector } from "./GroupSelector";
@@ -20,14 +21,34 @@ import { WorldcupErrorState } from "./WorldcupErrorState";
 import { WorldcupSkeleton } from "./WorldcupSkeleton";
 
 // ---------------------------------------------------------------------------
+// Gate cup/league (TASK-10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tela de grupos. Liga de pontos corridos não tem fase de grupos FIFA → aviso
+ * cup-only ANTES de disparar `useGroups` (guard-before-query: evita fetch e flash
+ * de skeleton/erro). O corpo real vive em `GroupsViewContent`, montado só p/ copa
+ * — mantém as regras de hooks intactas (nenhum hook chamado condicionalmente).
+ */
+export function GroupsView() {
+  const isCup = useIsCupActive();
+  if (!isCup) {
+    return (
+      <CupOnlyNotice message="Fase de grupos disponível apenas para copas e torneios." />
+    );
+  }
+  return <GroupsViewContent />;
+}
+
+// ---------------------------------------------------------------------------
 // Componente
 // ---------------------------------------------------------------------------
 
 /**
- * Tela de grupos: seletor de grupo + tabela de classificação + legenda.
+ * Corpo da tela de grupos: seletor de grupo + tabela de classificação + legenda.
  * Trata todos os estados de ciclo de vida da query (pending/error/empty/ok).
  */
-export function GroupsView() {
+function GroupsViewContent() {
   const { data, isPending, isError, refetch } = useGroups();
   const [selected, setSelected] = useState("A");
 

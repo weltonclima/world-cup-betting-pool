@@ -75,6 +75,7 @@ function ctx(id: string): PutParams[1] {
 function effMatch(id: string, over: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "BRA",
     awayTeamId: "ARG",
     kickoffAt: "2026-06-11T12:00:00Z",

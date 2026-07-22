@@ -24,6 +24,13 @@ vi.mock("@/features/worldcup/hooks/useGroups", () => ({
   useGroups: () => mockUseGroups(),
 }));
 
+// Gate de tipo (TASK-10): liga não exibe fase de grupos FIFA.
+const { isCupMock } = vi.hoisted(() => ({ isCupMock: vi.fn(() => true) }));
+vi.mock("@/features/championships", () => ({
+  useIsCupActive: () => isCupMock(),
+  CupOnlyNotice: ({ message }: { message: string }) => <div>{message}</div>,
+}));
+
 // ---------------------------------------------------------------------------
 // Dados de fixture
 // ---------------------------------------------------------------------------
@@ -89,6 +96,33 @@ const GROUPS_RESPONSE: GroupsResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isCupMock.mockReturnValue(true);
+});
+
+// ---------------------------------------------------------------------------
+// Gate cup/league (TASK-10)
+// ---------------------------------------------------------------------------
+
+describe("GroupsView — gate cup/league (TASK-10)", () => {
+  it("G1: liga ativa → aviso cup-only, sem consultar useGroups", () => {
+    isCupMock.mockReturnValue(false);
+    render(<GroupsView />);
+    expect(
+      screen.getByText("Fase de grupos disponível apenas para copas e torneios."),
+    ).toBeTruthy();
+    expect(mockUseGroups).not.toHaveBeenCalled();
+  });
+
+  it("G2: copa ativa → fluxo normal (query consultada)", () => {
+    mockUseGroups.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: undefined,
+      refetch: vi.fn(),
+    });
+    render(<GroupsView />);
+    expect(mockUseGroups).toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

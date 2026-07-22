@@ -20,6 +20,7 @@ import { EditMatchDialog } from "./EditMatchDialog";
 
 const STAGE_LABELS: Record<AdminMatchView["stage"], string> = {
   grupos: "Fase de Grupos",
+  liga: "Liga",
   "dezesseis-avos": "16-avos",
   oitavas: "Oitavas",
   quartas: "Quartas",

@@ -3,6 +3,7 @@ import {
   confirmPasswordReset,
   createUserWithEmailAndPassword,
   deleteUser,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
@@ -27,6 +28,7 @@ vi.mock("firebase/auth", () => ({
   signInWithEmailAndPassword: vi.fn(),
   createUserWithEmailAndPassword: vi.fn(),
   deleteUser: vi.fn(),
+  sendEmailVerification: vi.fn(() => Promise.resolve()),
   signOut: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
   verifyPasswordResetCode: vi.fn(),
@@ -75,6 +77,7 @@ const deleteUserMock = vi.mocked(deleteUser);
 const signOutMock = vi.mocked(firebaseSignOut);
 const docMock = vi.mocked(doc);
 const setDocMock = vi.mocked(setDoc);
+const sendEmailVerificationMock = vi.mocked(sendEmailVerification);
 const sendResetMock = vi.mocked(sendPasswordResetEmail);
 const verifyCodeMock = vi.mocked(verifyPasswordResetCode);
 const confirmResetMock = vi.mocked(confirmPasswordReset);
@@ -104,6 +107,8 @@ beforeEach(() => {
   docMock.mockReset();
   setDocMock.mockReset();
   sendResetMock.mockReset();
+  sendEmailVerificationMock.mockReset();
+  sendEmailVerificationMock.mockResolvedValue(undefined);
   verifyCodeMock.mockReset();
   confirmResetMock.mockReset();
   docMock.mockReturnValue({} as ReturnType<typeof doc>);
@@ -235,6 +240,32 @@ describe("signUp", () => {
 
     // Sucesso: rollback NÃO chamado.
     expect(deleteUserMock).not.toHaveBeenCalled();
+  });
+
+  it("dispara o e-mail de verificação após gravar o perfil (TASK-18)", async () => {
+    createUserMock.mockResolvedValue(fakeCredential);
+    setDocMock.mockResolvedValue(undefined);
+
+    await signUp(validInput);
+
+    expect(sendEmailVerificationMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailVerificationMock).toHaveBeenCalledWith(fakeUser);
+  });
+
+  it("falha no envio da verificação NÃO quebra o cadastro (best-effort, TASK-18)", async () => {
+    createUserMock.mockResolvedValue(fakeCredential);
+    setDocMock.mockResolvedValue(undefined);
+    sendEmailVerificationMock.mockRejectedValue(new Error("smtp down"));
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    // Não lança: cadastro segue válido mesmo com o e-mail falhando.
+    await expect(signUp(validInput)).resolves.toBeUndefined();
+
+    expect(setDocMock).toHaveBeenCalledTimes(1);
+    expect(deleteUserMock).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
   it("faz rollback (deleteUser) e relança o erro quando setDoc falha", async () => {

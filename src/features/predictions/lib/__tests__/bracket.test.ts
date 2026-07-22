@@ -29,6 +29,7 @@ function makeKnockoutMatch(
 ): MatchWithId {
   return {
     id: `m${num}`,
+    championshipId: "fifa.world",
     homeTeamId: team1,
     awayTeamId: team2,
     kickoffAt: "2026-06-28T18:00:00+00:00",

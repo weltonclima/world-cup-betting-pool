@@ -705,8 +705,8 @@ describe("recalc — agregado eliminatorias (TASK-02)", () => {
   const entriesOf = (payload: unknown) =>
     (payload as { entries: Array<Record<string, unknown>> } | undefined)?.entries;
 
-  it("RECALC_VERSION bumpado para 4 (shape mudou)", () => {
-    expect(CURRENT_VERSION).toBe(4);
+  it("RECALC_VERSION bumpado para 6 (shape mudou — geral agregado por pool, TASK-12)", () => {
+    expect(CURRENT_VERSION).toBe(6);
   });
 
   it("pontos de dezesseis-avos APARECEM no agregado eliminatorias (D2)", async () => {

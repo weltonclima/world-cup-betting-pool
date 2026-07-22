@@ -10,6 +10,10 @@
  * - T3: idempotência/reentrância → no-op em reexecuções com flag true.
  * - T4: updatedAt gravado é uma ISO string válida.
  * - T5: a promoção usa merge-set (tolera doc ausente; nunca chama update).
+ * - G1..G4: guarda anti-clobber (multi-championship TASK-16) — quando o doc
+ *   `users/{uid}` já carrega papel canônico privilegiado (group_admin /
+ *   super_admin / legado admin), o trigger faz no-op e NÃO marca a flag, para
+ *   não rebaixar o criador auto-serviço. Papel participante segue promovendo.
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -48,7 +52,15 @@ function makeFakeDb(): { db: Firestore; refs: Map<string, FakeRef> } {
  * Constrói uma Transaction fake. `bootstrapData` define o estado da flag.
  * Espiona get/set/update.
  */
-function makeFakeTx(bootstrapData: Record<string, unknown> | undefined): {
+function makeFakeTx(
+  bootstrapData: Record<string, unknown> | undefined,
+  /**
+   * Estado do doc `users/{uid}` visto pela transação. `undefined` = doc ausente
+   * (corrida com rollback / usuário comum sem papel ainda). Um objeto com `role`
+   * simula um doc já gravado (ex.: criador auto-serviço já `group_admin`).
+   */
+  userData?: Record<string, unknown> | undefined,
+): {
   tx: Transaction;
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
@@ -59,6 +71,12 @@ function makeFakeTx(bootstrapData: Record<string, unknown> | undefined): {
       return Promise.resolve({
         exists: bootstrapData !== undefined,
         data: () => bootstrapData,
+      });
+    }
+    if (ref.path.startsWith("users/")) {
+      return Promise.resolve({
+        exists: userData !== undefined,
+        data: () => userData,
       });
     }
     return Promise.resolve({ exists: false, data: () => undefined });
@@ -93,7 +111,8 @@ function findSetCall(
 describe("promoteFirstAdminTx", () => {
   it("T1: primeiro usuário é promovido a admin/approved e marca a flag", async () => {
     const { db } = makeFakeDb();
-    const { tx, set, update } = makeFakeTx(undefined); // bootstrap inexistente
+    // bootstrap inexistente + usuário recém-criado (participante).
+    const { tx, set, update } = makeFakeTx(undefined, { role: "user" });
 
     const result = await promoteFirstAdminTx(tx, db, USER_UID);
 
@@ -145,7 +164,7 @@ describe("promoteFirstAdminTx", () => {
 
   it("T4: updatedAt gravado é uma ISO string válida", async () => {
     const { db } = makeFakeDb();
-    const { tx, set } = makeFakeTx(undefined);
+    const { tx, set } = makeFakeTx(undefined, { role: "user" });
 
     await promoteFirstAdminTx(tx, db, USER_UID);
 
@@ -158,13 +177,11 @@ describe("promoteFirstAdminTx", () => {
     expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
-  it("T5: promoção usa merge-set (tolera users/{uid} ausente — sem update, sem throw)", async () => {
+  it("T5: promoção de usuário presente usa merge-set (nunca update, sem throw)", async () => {
     const { db } = makeFakeDb();
-    // tx.get só conhece o bootstrap; users/{uid} retorna exists:false (doc ausente),
-    // simulando a corrida com o rollback (user.delete) do TASK-06 ou um retry.
-    const { tx, set, update } = makeFakeTx(undefined);
+    // Usuário presente com papel participante → caminho de promoção normal.
+    const { tx, set, update } = makeFakeTx(undefined, { role: "user" });
 
-    // Não deve lançar mesmo que o doc do usuário não exista.
     await expect(promoteFirstAdminTx(tx, db, USER_UID)).resolves.toEqual({
       promoted: true,
     });
@@ -173,5 +190,59 @@ describe("promoteFirstAdminTx", () => {
     expect(update).not.toHaveBeenCalled();
     const [, , userOpts] = findSetCall(set, USER_PATH);
     expect(userOpts).toEqual({ merge: true });
+  });
+
+  // ── Corrida com o rollback do onboarding (TASK-16, H1) ─────────────────────
+  // O trigger onCreate dispara ao criar `users/{uid}`, mas roda desacoplado da
+  // rota. Se a rota falhar DEPOIS (invite/claims) e seu rollback apagar o doc,
+  // a transação pode ler `users/{uid}` já ausente. Nesse caso NÃO se pode
+  // "ressuscitar" o doc como admin/approved via merge-set NEM consumir a flag de
+  // bootstrap (senão um fantasma privilegiado nasce e o bootstrap se perde).
+  it("H1: users/{uid} ausente (corrida com rollback) → no-op, sem write, flag intacta", async () => {
+    const { db } = makeFakeDb();
+    // bootstrap livre + doc do usuário ausente (userData undefined → exists:false).
+    const { tx, set, update } = makeFakeTx(undefined, undefined);
+
+    const result = await promoteFirstAdminTx(tx, db, USER_UID);
+
+    expect(result.promoted).toBe(false);
+    // Nada é escrito: nem ressuscita o usuário, nem marca firstAdminAssigned.
+    expect(set).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  // ── Guarda anti-clobber do onboarding auto-serviço (TASK-16) ───────────────
+  // Se o criador de grupo for o PRIMEIRO usuário do sistema (bootstrap livre), o
+  // trigger onCreate NÃO pode rebaixar seu papel já privilegiado para admin. A
+  // guarda lê o doc e faz no-op, deixando a flag intacta (um participante legítimo
+  // posterior ainda pode bootstrapar o primeiro admin).
+  it.each([
+    ["group_admin", "group_admin"],
+    ["super_admin", "super_admin"],
+    ["admin (legado)", "admin"],
+  ])(
+    "G: usuário já %s (bootstrap livre) → no-op, sem promover nem marcar flag",
+    async (_label, role) => {
+      const { db } = makeFakeDb();
+      const { tx, set, update } = makeFakeTx(undefined, { role });
+
+      const result = await promoteFirstAdminTx(tx, db, USER_UID);
+
+      expect(result.promoted).toBe(false);
+      // Nem o usuário é clobbado, nem a flag de bootstrap é consumida.
+      expect(set).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("G4: usuário participante (role user) com bootstrap livre → ainda promove (regressão)", async () => {
+    const { db } = makeFakeDb();
+    const { tx, set } = makeFakeTx(undefined, { role: "user" });
+
+    const result = await promoteFirstAdminTx(tx, db, USER_UID);
+
+    expect(result.promoted).toBe(true);
+    const [, userData] = findSetCall(set, USER_PATH);
+    expect(userData).toMatchObject({ role: "admin", status: "approved" });
   });
 });

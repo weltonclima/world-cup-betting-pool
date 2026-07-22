@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { nonEmptyString } from "@/schemas/shared";
+import { isoDateTime, nonEmptyString } from "@/schemas/shared";
 
 // Coleção/domínio `championship` — campeonato de futebol servido pela ESPN.
 // Fundação do épico multi-championship-launch (TASK-02). Slug inglês/estável para
@@ -39,5 +39,39 @@ export const championshipSchema = z
     // `true` APENAS para `fifa.world` — sinaliza à TASK-03 que este campeonato
     // emite matchId legado (sem namespace). Ausente/false nos demais.
     legacyMatchId: z.boolean().optional(),
+    // Janela real da temporada (`YYYYMMDD`), TASK-05 / fix WR-02. Para temporada
+    // europeia partida (ago–mai) que atravessa DOIS anos-calendário, `season` YYYY
+    // não basta. Quando presentes, `deriveRanges` deriva ranges MENSAIS dessa
+    // janela em vez de jan–dez. Ausentes → comportamento por `season` (jan–dez).
+    seasonStart: z.string().regex(/^\d{8}$/).optional(),
+    seasonEnd: z.string().regex(/^\d{8}$/).optional(),
+  })
+  .strict();
+
+// Estado dinâmico de campeonato (multi-championship-launch TASK-13). Doc
+// `championships/{id}` gravado SÓ pelo Admin SDK (pipeline de arquivamento) — é o
+// override de runtime que sobrepõe o `status` estático/frozen do catálogo. O
+// catálogo segue autoritativo para metadados imutáveis (`type`, `espnSlug`…) e
+// como default de `status` quando não há doc. `.strict()`.
+export const championshipStateSchema = z
+  .object({
+    status: championshipStatusSchema, // status observável em runtime
+    archivedAt: isoDateTime, // carimbo do flip → archived
+    finishedSignature: nonEmptyString, // computeFinishedSignature(matches) no arquivamento
+  })
+  .strict();
+
+// Projeção PÚBLICA do catálogo servida por `GET /api/championships` (TASK-06) e
+// consumida no cliente (TASK-08). Só os campos que a UI precisa — NÃO inclui
+// `espnSlug`/`needsPagination`/`legacyMatchId`/janela de temporada (internos de
+// fetch/compat/provedor). O cliente valida cada item contra este schema (nunca
+// `as`). `.strict()` rejeita campos extras inesperados no contrato.
+export const championshipPublicSchema = z
+  .object({
+    id: nonEmptyString,
+    name: nonEmptyString,
+    season: nonEmptyString,
+    type: championshipTypeSchema,
+    status: championshipStatusSchema,
   })
   .strict();

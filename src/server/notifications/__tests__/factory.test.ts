@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import { moderationNotification } from "@/features/admin/lib/notificationFactory";
 import {
+  notifyJoinRequest,
   notifyModeration,
   notifyRankingUp,
   notifyScoreHit,
@@ -110,5 +111,38 @@ describe("notifyModeration (paridade com moderationNotification legado)", () => 
     expect(
       notifyModeration({ uid: "u1", from: "approved", to: "approved" }),
     ).toBeNull();
+  });
+});
+
+describe("notifyJoinRequest (pedido de entrada → admin do pool)", () => {
+  const base = {
+    adminUid: "admin-1",
+    applicantName: "João",
+    poolName: "Bolão dos Parças",
+    groupId: "pool-1",
+    applicantUid: "user-9",
+  };
+
+  it("type system, alvo = admin, id determinístico por (grupo, candidato)", () => {
+    const n = notifyJoinRequest(base);
+    expect(n.type).toBe("system");
+    expect(n.userId).toBe("admin-1");
+    expect(n.id).toBe("system-joinreq-pool-1-user-9");
+    expect(n.title).toBe("Novo pedido de entrada");
+    expect(n.message).toBe("João pediu para entrar no bolão Bolão dos Parças.");
+  });
+
+  it("nome vazio → mensagem genérica (fallback)", () => {
+    const n = notifyJoinRequest({ ...base, applicantName: "" });
+    expect(n.message).toBe(
+      "Um novo participante pediu para entrar no bolão Bolão dos Parças.",
+    );
+  });
+
+  it("nome só de espaços → fallback genérico", () => {
+    const n = notifyJoinRequest({ ...base, applicantName: "   " });
+    expect(n.message).toBe(
+      "Um novo participante pediu para entrar no bolão Bolão dos Parças.",
+    );
   });
 });

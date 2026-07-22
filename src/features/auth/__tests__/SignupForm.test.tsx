@@ -229,4 +229,41 @@ describe("SignupForm", () => {
       });
     });
   });
+
+  // TASK-18 — a cópia do toast de sucesso é condicional ao fluxo:
+  // convite → moderado pelo admin; cadastro comum → link de verificação.
+  describe("cópia do toast de sucesso (TASK-18)", () => {
+    it("cadastro comum: instrui a verificação de e-mail", async () => {
+      render(<SignupForm />);
+
+      fillTextFields();
+      await waitFor(() => expect(submitButton().disabled).toBe(false));
+      fireEvent.click(submitButton());
+
+      await waitFor(() => {
+        expect(toastSuccessMock).toHaveBeenCalledWith(
+          "Conta criada! Enviamos um link de verificação para seu e-mail.",
+        );
+      });
+    });
+
+    it("fluxo de convite: instrui a aprovação do administrador", async () => {
+      render(
+        <SignupForm
+          presetGroup={{ id: "pool-123", name: "Galera do Bar" }}
+          inviteCode="NKD4RD"
+        />,
+      );
+
+      fillTextFields();
+      await waitFor(() => expect(submitButton().disabled).toBe(false));
+      fireEvent.click(submitButton());
+
+      await waitFor(() => {
+        expect(toastSuccessMock).toHaveBeenCalledWith(
+          "Conta criada! Aguarde a aprovação do administrador.",
+        );
+      });
+    });
+  });
 });

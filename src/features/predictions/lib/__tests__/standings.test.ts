@@ -33,6 +33,7 @@ function makeGroupMatch(
 ): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId,
     awayTeamId,
     kickoffAt: "2026-06-20T18:00:00.000Z",
@@ -579,6 +580,7 @@ describe("deriveWinnerFromPrediction", () => {
   it("delega corretamente para deriveWinner com homeTeamId/awayTeamId da partida", () => {
     const match: MatchWithId = {
       id: "m01",
+      championshipId: "fifa.world",
       homeTeamId: "bra",
       awayTeamId: "arg",
       kickoffAt: "2026-06-20T18:00:00.000Z",
@@ -607,6 +609,7 @@ describe("deriveWinnerFromPrediction", () => {
   it("empate via sobrecarga → isDraw = true", () => {
     const match: MatchWithId = {
       id: "m02",
+      championshipId: "fifa.world",
       homeTeamId: "fra",
       awayTeamId: "ger",
       kickoffAt: "2026-06-21T18:00:00.000Z",

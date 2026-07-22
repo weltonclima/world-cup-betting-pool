@@ -81,6 +81,14 @@
       ]
     },
     {
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "championshipId", "order": "ASCENDING" },
+        { "fieldPath": "kickoffAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sync_logs",
       "queryScope": "COLLECTION",
       "fields": [

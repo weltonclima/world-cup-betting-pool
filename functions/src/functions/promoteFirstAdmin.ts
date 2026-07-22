@@ -28,6 +28,14 @@ import { syncRoleClaim } from "./syncRoleClaim";
 /** Caminho do doc de flag que marca se o primeiro admin já foi atribuído. */
 const BOOTSTRAP_DOC_PATH = "system_settings/bootstrap";
 
+/**
+ * Papéis já privilegiados que o bootstrap NÃO pode rebaixar (multi-championship
+ * TASK-16). Se o primeiro usuário do sistema for um criador auto-serviço (que já
+ * nasce `group_admin` via a rota Admin SDK), este trigger não deve clobbar seu
+ * papel para `admin`. Cobre também `super_admin` (seed manual) e o legado `admin`.
+ */
+const PRIVILEGED_ROLES = new Set(["group_admin", "super_admin", "admin"]);
+
 /** Resultado da decisão transacional. */
 export interface PromotionResult {
   /** `true` se ESTE usuário foi promovido a admin nesta execução. */
@@ -42,11 +50,12 @@ export interface PromotionResult {
  *   `tx.set(..., { merge: true })`.
  * - Caso contrário, no-op.
  *
- * Robustez (B1 — corrida com TASK-06): a promoção usa `tx.set(..., { merge: true })`
- * em vez de `tx.update(...)`. O `Transaction.update()` do Admin SDK lança NOT_FOUND
- * se o doc `users/{uid}` tiver sido removido entre o evento de criação e a transação
- * (ex.: rollback `user.delete()` do TASK-06 em corrida, ou um retry do Functions),
- * gerando ruído de erro/retry. O `set` com merge tolera doc ausente sem lançar.
+ * Robustez (B1 — corrida com TASK-06/TASK-16): se `users/{uid}` já não existe na
+ * transação (rollback `user.delete()` em corrida, ou retry do Functions), a função
+ * faz no-op ANTES de qualquer escrita — não usa `tx.update()` (que lançaria
+ * NOT_FOUND) nem `tx.set(merge)` (que RESSUSCITARIA o doc como admin, criando um
+ * fantasma privilegiado e consumindo indevidamente a flag de bootstrap — H1).
+ * A promoção do caminho feliz usa `tx.set(..., { merge: true })`.
  *
  * @param tx - Transação Firestore ativa.
  * @param db - Instância do Firestore (para resolver refs).
@@ -65,7 +74,26 @@ export async function promoteFirstAdminTx(
     return { promoted: false };
   }
 
+  // Guarda anti-clobber (TASK-16): se o doc do usuário já carrega papel canônico
+  // privilegiado, NÃO promove e NÃO consome a flag de bootstrap. Um participante
+  // legítimo posterior ainda poderá bootstrapar o primeiro admin.
   const userRef = db.doc(`users/${uid}`);
+  const userSnap = await tx.get(userRef);
+
+  // Corrida com o rollback do onboarding (TASK-16 / H1): se o doc já foi apagado
+  // entre o evento de criação e esta transação, NÃO ressuscita o usuário como
+  // admin (`set(merge)` recriaria um fantasma privilegiado) nem consome a flag de
+  // bootstrap. No-op deixa o primeiro admin para um participante legítimo futuro.
+  if (!userSnap.exists) {
+    return { promoted: false };
+  }
+
+  // Guarda anti-clobber (TASK-16): papel canônico já privilegiado → no-op.
+  const currentRole = userSnap.data()?.["role"];
+  if (typeof currentRole === "string" && PRIVILEGED_ROLES.has(currentRole)) {
+    return { promoted: false };
+  }
+
   tx.set(bootstrapRef, { firstAdminAssigned: true }, { merge: true });
   tx.set(
     userRef,

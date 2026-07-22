@@ -115,8 +115,8 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, tdd, implement, test, review
 - Notes: Ponto de convergência da fundação; a partir daqui um campeonato-piloto pode ir end-to-end. **WR-02 da review TASK-04 (BLOQUEADOR ao ligar em prod):** `deriveRanges` usa janela jan–dez do ano da `season`; temporada europeia ago–mai atravessa DOIS anos-calendário → adicionar `seasonStart`/`seasonEnd` opcionais ao catálogo (schema TASK-02) e derivar a janela deles ANTES de rotear liga de temporada partida em produção. `deriveRanges` já lança em `season` não-`YYYY` (ex.: "2025-26") como salvaguarda. INCORPORA (movido da TASK-04): mapper COMPLETO liga→MatchWithId — evoluir `stageSchema` p/ ligas (sem fase Copa; ex.: stage `liga` + `round` = rodada) e usar `matchBaseId` (event.id) da TASK-04. Persistência de dado de jogo SÓ no arquivamento (TASK-13); ao vivo é 100% ESPN.
 
 ### TASK-06 – Rotas de partidas escopadas por campeonato
@@ -135,9 +135,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/medium
-- Status: pending
-- Phases done: (none)
-- Notes: Manter compat: sem `?championship=` → default `fifa.world` (não quebra clientes atuais).
+- Status: done
+- Phases done: spec, implement, test, review
+- Notes: Manter compat: sem `?championship=` → default `fifa.world` (não quebra clientes atuais). Review: PASS (gsd adversarial). Fixes aplicados: M1 (DEFAULT_CHAMPIONSHIP_ID único no catálogo, matchSource+championshipParam importam), L4 (espnSlug removido da projeção pública). Follow-ups abertos: **L2 — bracket gate é só cup/league; cups de temporada longa (needsPagination+cup: uefa.champions, libertadores, eng.fa) alcançam deriveBracket WC-shaped → território da TASK-10 (gate por tipo/derivations); mitigado por rollout flag (default só Copa habilitada).** L3 (params fora do try em matches/[id] — inalcançável, não corrigido).
 
 ### TASK-07 – Config de campeonatos no pool + API de settings
 - Type: application
@@ -155,9 +155,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/high
-- Status: pending
-- Phases done: (none)
-- Notes: Segue padrão de flags aditivas já consolidado (`splitPhaseRanking`, `allowInvites`). Teto de campeonatos/pool a definir na spec.
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Notes: Aditivo/retrocompatível. Teto `MAX_ENABLED_CHAMPIONSHIPS=10`, piso 1. Files: `schemas/pools.ts` (2 campos + `rankingModeSchema` + constantes), `types/pools.ts` (`RankingMode`), `lib/poolChampionships.ts` (novo — helpers), `api/group/settings/route.ts` (PATCH + enforcement pré-update). 104 testes verdes, tsc+eslint limpos. Review: **approved**. GSD adversarial sem blockers; WR-01 (leitura filtra catálogo — id retirado não escapa a jusante) e IN-01 (retorno é cópia, sem aliasing) aplicados + testados. Q1 teto=10 (ajustável); Q2 rules de `pools` update validam por role/ownership, sem allowlist de campo → nada a mudar.
 
 ### TASK-08 – Dashboard do grupo: seção Campeonatos
 - Type: application
@@ -175,8 +175,8 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, ui-spec, implement, test, review, ui-review
 - Notes: Frontend → aciona /ui-spec + /patterns:nextjs + /ui-review.
 
 ### TASK-09 – Seletor de campeonato + segmentação de jogos/palpites
@@ -195,8 +195,8 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, ui-spec, implement, test, review, ui-review
 - Notes: Frontend → /ui-spec + /patterns:nextjs + /ui-review. Cuidar de não regredir a UX atual de campeonato único. **As agregações da home (`useHomeDashboard`: jogos abertos, donut raio-x, percentil) NÃO são só filtro** — precisam ganhar a dimensão campeonato de forma explícita na spec, não como efeito colateral do seletor (alerta do plan-checker).
 
 ### TASK-10 – Bracket/derivations condicionados ao tipo (cup vs league)
@@ -215,8 +215,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, ui-spec, tdd, implement, test, review, ui-review
+- Status-detail: concluída — gate cup/league em CompetitionTabs/BracketView/GroupsView/best-thirds + rota worldcup/groups. Review approved (3854/3854, tsc 0, eslint 0); ui-review approved.
 - Notes: Split do checker — standings de liga saiu para TASK-20. Aqui fica só o gate de tipo.
 
 ### TASK-11 – Núcleo de scoring/recalc escopado por campeonato
@@ -235,9 +236,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Split do checker (era 8 SP). Não regredir escopos legados da Copa (`pool-{id}-geral`). Depende de TASK-10 pela forma do escopo cup-vs-league.
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Notes: Split do checker (era 8 SP). Não regredir escopos legados da Copa (`pool-{id}-geral`). Depende de TASK-10 pela forma do escopo cup-vs-league. REVIEW achou CR-01 (gsd): cups não-legados geram matchId BARE (mapper da Copa) → colidem com a Copa; scoring agora GATED a `type: "league"` (único path namespaced) — cups ficam fora até ids namespaced (foundation). Follow-ups abertos: MR-02 (score_state pode estourar 1MB com N ligas → sharding), LR-02 (notif de liga mostra id numérico do clube). RECALC_VERSION 4→5.
 
 ### TASK-12 – Ranking geral agregado (modo geral vs por-campeonato)
 - Type: domain
@@ -255,9 +256,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Reusa precedente `splitPhaseRanking` (abas). Frontend leve de exibição pode ser incluído.
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Notes: Reusa precedente `splitPhaseRanking` (abas). Frontend leve de exibição pode ser incluído. TASK-21 review (gsd MEDIUM-1): os parsers client em `src/services/rankings.ts` (`getRankingByScope`/`getPoolRanking`/`getPoolRankingByScope`) hard-codam `rankingSchema`/`poolRankingResponseSchema` (`.strict()`+enum bare) → NÃO parseiam a resposta por campeonato (scope namespaced + `championshipId`). Esta task DEVE adicionar branch de parse championship-aware (usar `championshipRankingSchema`/`ChampionshipRanking`) + response schema do pool antes de ligar `?championship` à UI. LOW-2: rota pool anexa flags Copa (`splitPhaseRanking`/`ignoreOvertimeGoals`/`primaryColor*`) na resposta escopada — definir contrato limpo aqui.
 
 ### TASK-13 – Pipeline de arquivamento (snapshot → Firestore)
 - Type: persistence
@@ -275,9 +276,11 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: opus/high
   - test: sonnet/medium
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Definir gatilho de "finalizado" (gap do PRD) na spec. Volume de escrita — batch em chunks de 500.
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Review: approved with adjustments (opus/high + gsd-code-reviewer). CRÍTICO CR-01 CORRIGIDO+regressão: re-arquivamento após o sweep apagar `rankings/{cid}-geral`/`pool-*` regravava `history/*` como `[]` (perda de dados) → freeze agora usa fonte-ao-vivo-se-não-vazia SENÃO preserva o `history/*` congelado. Corrigidos: LR-01 (log de participante omitido), LR-02 (`getChampionshipStatus` degrada em erro de leitura), LR-03 (audit em try/catch próprio — não vira 500 após commit). Follow-ups NÃO-bloqueantes: MR-01 freeze batch não-chunkado estoura teto 500 se >~498 bolões habilitam o campeonato (escala limitada; chunk quebraria atomicidade); MR-02 `statistics/{uid}` é agregado global cross-campeonato (segue a spec §7.2 — revisar quando houver stats por-campeonato / TASK-15); HR-01 arquivar antes do recalc congela estado atual (pré-condição operacional: arquivar após scoring assentar; CR-01-fix garante que nunca DESTRÓI snapshot bom). Suíte 4014/4014, tsc 0, eslint 0.
+- Decisions (spec TASK-13): **1-A** status dinâmico via doc Firestore `championships/{id}` + resolver async (`getChampionshipStatus`/`loadChampionshipStatuses`) sobre default estático do catálogo; `getChampionship` segue síncrono/imutável. **2-A** freeze = ranking pool + global-do-campeonato + recorte de statistics em `history/{championshipId}__{scopeKey}`, snapshot-ANTES-do-flip via WriteBatch atômico (freeze+status juntos; schedule chunkado antes). Gates de recalc + score-route passam a resolver status dinâmico p/ blindar re-scoring. Rota `POST /api/admin/championships/[id]/archive`. Spec: ai/spec/task-multi-championship-launch-13.md.
+- Notes: Definir gatilho de "finalizado" (gap do PRD) na spec. Volume de escrita — batch em chunks de 500. HAZARD carregado da TASK-21 (gsd MEDIUM-2, ver memória `archived-ranking-cleanup-hazard`): o gate "ativo" da TASK-21 tira liga `archived` do `championshipUnion`, e o cleanup do recalc (`ownedByLivePool`/`isStaleChampionshipGlobal`) APAGA docs fora da união. Ao congelar o snapshot: OU gravar em coleção/doc separado que o cleanup nunca varre, OU proteger docs de campeonato cataloged-but-archived no cleanup. Decidir ANTES do freeze — senão o próximo `ensureRankingsFresh` apaga o ranking congelado.
 
 ### TASK-14 – Precedência de leitura para campeonatos arquivados (banco-first)
 - Type: domain
@@ -295,8 +298,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Review: approved-with-adjustments (opus/high + gsd-code-reviewer adversarial). Branch por status em `getEffectiveMatches`: LIGA não-legada `archived`+snapshot → banco-first (ESPN skip, ordenado por kickoffAt); sem snapshot → erro claro; CUP não-legado e legado `fifa.world` → sempre ESPN+overlay. **H1 CORRIGIDO** (gsd): branch original só gateava por `legacyMatchId`, mas cups carimbam `championshipId:"fifa.world"`+id BARE (memória `cup-matchid-not-namespaced`) → `readPersistedMatches(cupId)` filtraria tudo → falso-throw permanente + colisão com Copa; fixture de teste (uefa.euro cup) mascarava = false-green. FIX: gate `type === "league"` (mesma precedência do scoring gated-a-league da TASK-11); cups arquivados seguem ESPN até namespacing de cup (foundation). **M4 CORRIGIDO**: snapshot ordenado por `kickoffAt` (doc-id namespaced é lexicográfico ≠ cronológico). Aceitos/documentados: M2/M3 (assimetria degrade-safe de `getChampionshipStatus` — contrato do épico; apagão Firestore degrada liga arquivada p/ ESPN best-effort, route cobre via stale), L1 (full-collection scan sem where — perf fora do v1), L2 (recalc de cup archived não estoura — resolvido pelo gate de tipo). Compat Copa blindada: A7 (legado não lê status) + T1–T8 verdes. Suíte 4023/4023, tsc 0, eslint 0.
 
 ### TASK-15 – Seção Histórico (telas de campeonatos antigos)
 - Type: application
@@ -314,9 +318,10 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/high
-- Status: pending
-- Phases done: (none)
-- Notes: Frontend → /ui-spec + /patterns:nextjs + /ui-review.
+- Status: done
+- Phases done: spec, ui-spec, patterns:nextjs, implement, test, review, ui-review
+- Review: aprovado-com-ajustes. Corrigidos: gsd-H1 (detalhe /api/history/[id] não tinha gate de habilitação por pool → membro do pool A deep-linkava campeonato só do pool B e recebia snapshot __geral cross-pool; agora gate `getEnabledChampionships(pool).includes(id)` antes de status/history; groupId sempre da sessão) + guard-test H1; L1 (hasPoolSnapshot via safeParse, não existência crua); L2 (FrozenMatchList sinaliza erro de useTeams sem esconder placares); UI-review MEDIUM (h1 duplicado → h2 em HistoryLanding/HistoryDetail; layout já provê h1). RankingView extraído verificado byte-idêntico (sem regressão ranking ativo). Frozen não hidratado. Testes: 19 rota + 19 componente verdes (JSON), tsc 0. SEGMENTAÇÃO §3/§6.5/§10 RESOLVIDA (caminho A aprovado pelo usuário): helper puro `filterActiveChampionships(enabled, statuses)` em `poolChampionships.ts` + wire em `/api/group/championships` (carrega `loadChampionshipStatuses`, remove archived da área ativa). PROTEÇÃO ANTI-VAZIO: se filtrar zerar (pool Copa-only legado, `fifa.world` archived-default), devolve o conjunto original → seletor/jogos/palpites nunca ficam vazios; pool Copa-only segue servindo Copa até optar por campeonato novo (TASK-16). Fluído por `ActiveChampionshipProvider` (fonte única) → cobre seletor+jogos+palpites+ranking ativo. Testes §9: 5 unit de `filterActiveChampionships` + 2 de rota atualizados (segmenta archived / anti-vazio). Suíte COMPLETA 4066/4066, tsc 0, eslint 0.
+- Notes: Frontend → /ui-spec + /patterns:nextjs + /ui-review. Rota final = /rankings/historico[/id] (sub-seção Ranking, não /historico standalone — ruling bottom-nav-limit). Implement: 19 novos + 4 modificados; RankingView extraído p/ `rankings/components/RankingView.tsx` (reuso sem regressão); rotas /api/history + /api/history/[id] (auth→groupId sessão, banco-first, sem hydrate); tsc 0, eslint 0.
 
 ### TASK-16 – Cadastro auto-serviço → cria grupo → group_admin ativo
 - Type: application
@@ -334,9 +339,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: opus/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Atravessa 4 camadas de auth. Criador auto-aprovado; convidados NÃO (TASK-17). Rules de `pools` create hoje `if false` — só via Admin SDK.
+- Status: done
+- Phases done: spec, ui-spec, patterns:nextjs, tdd, implement, test, review, ui-review
+- Notes: Atravessa 4 camadas de auth. Criador auto-aprovado; convidados NÃO (TASK-17). Rules de `pools` create hoje `if false` — só via Admin SDK. SPEC: rota net-new `POST /api/signup/create-group` (Admin SDK, idToken-auth p/ user novo); guarda em `promoteFirstAdmin` (no-op se role já canônico privilegiado — evita clobber); claims `{role:group_admin, groupId}` gravados na rota (1ª gravação real de groupId no token — desbloqueia Rule de invites); sem mudança em rules/middleware; is_frontend: tela "Criar grupo". Open Q: Q1 default Copa, Q2 client cria Auth+idToken, Q3 super_admin seed manual.
 
 ### TASK-17 – Moderação de convidados pelo group_admin
 - Type: application
@@ -354,9 +359,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: sonnet/high
-- Status: pending
-- Phases done: (none)
-- Notes: Grande parte já existe (fluxo de aprovação group_admin). Foco: garantir convidado nasce `pending` e admin é notificado.
+- Status: done
+- Phases done: spec, ui-spec, patterns:nextjs, tdd, implement, test, review, ui-review
+- Notes: Grande parte já existe (fluxo de aprovação group_admin). Foco: garantir convidado nasce `pending` e admin é notificado. SPEC: convidado JÁ nasce `pending` (services/auth signUp) → task foca notificação ao admin no `redeem` (factory `notifyJoinRequest` type:system, id determinístico `system-joinreq-{groupId}-{uid}`, best-effort pós-redemption-nova) + copy de aprovação na landing `/invite/[code]`. is_frontend:true (copy enxuta). REVIEW: aprovado (gsd + manual, 0 crit/high). Limitação conhecida (follow-up TASK-18/19): id determinístico `system-joinreq-{groupId}-{uid}` suprime re-notificação após reject(→blocked)+re-convite do MESMO user; só dispara com guard de redemption p/ user blocked (fora de escopo TASK-17). Redeem não checa pool `status:blocked` (gap pré-existente TASK-04/16).
 
 ### TASK-18 – Anti-abuso do cadastro público
 - Type: integration
@@ -374,9 +379,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: opus/high
   - test: sonnet/medium
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Requisito de release, não opcional. Escopo mínimo viável decidido na spec (email verification é o piso).
+- Status: done
+- Phases done: spec, ui-spec, patterns:nextjs, tdd, implement, test, review, ui-review
+- Notes: Requisito de release, não opcional. Escopo mínimo viável decidido na spec (email verification é o piso). TDD aplicado (override do `tdd: N/A` — lógica de autorização/gating é regressão-sensível): RED→GREEN em create-group gate + activate-pool. Review: gsd-code-reviewer achou 1 blocker (BR2 409 "Você já possui um grupo." mal-classificado como slug-taken no client) → corrigido em `onboarding.ts` + teste de regressão. Residuais documentados: loop de promoção não-atômico (mascarado por BR2 ≤1 pool; follow-up WriteBatch), roteamento de erro por substring (mitigado; follow-up kind machine-readable), sem "reenviar e-mail" (spec Q2 fora do MVP). 111 files / 343 tests green, tsc exit 0. SPEC: piso = email verification; pool de conta não-verificada nasce `status:pending` (já fora da busca), limite 1 pool/conta (409), nova rota `POST /api/signup/activate-pool` promove pending→active pós-verificação (botão "Já verifiquei"). IP rate-limit/CAPTCHA/App Check = follow-up documentado (sem infra). is_frontend:true.
 
 ### TASK-19 – Validação E2E + release readiness
 - Type: test
@@ -394,8 +399,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/medium
   - test: sonnet/medium
   - review: sonnet/medium
-- Status: pending
-- Phases done: (none)
+- Status: done
+- Phases done: spec, implement, test, review
+- Notes: TDD skipped (validação/observabilidade, sem regra de negócio nova — plan já marcava tdd:N/A; asserções no /test). Gap E2E encontrado e corrigido: `POST /api/predictions/score` não retornava `championshipsProcessed` apesar do contrato documentado em `score-cron.yml`. Campo aditivo = 1 (Copa) + ligas ativas com fetch OK; presente nas duas saídas 200. gsd-code-reviewer pegou BLOCKER real: 2 testes pré-existentes (`route.test.ts`, `route.notifications.test.ts`) faziam strict-`toEqual` da forma antiga → quebraram; corrigidos. Também: comentário stale do cron YAML atualizado, spread duplicado `[...leagueIds]` materializado 1×. Gate final: lint exit 0, vitest 4124/4124 (1280 files), next build exit 0, tsc --noEmit exit 0. Checklist formal de rollout fica no Stage 5 /release.
 
 ### TASK-20 – Tabela de classificação de liga (pontos corridos)
 - Type: domain
@@ -413,9 +419,10 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/high
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Bloqueador do plan-checker — sem isto, ligas ficam sem tela de resultados. Frontend → /ui-spec + /patterns:nextjs + /ui-review.
+- Status: done
+- Phases done: spec, ui-spec, tdd, implement, test, review, ui-review
+- Status-detail: concluída — domínio computeLeagueStandings (TDD 8 casos), rota api/leagues/standings (gate league-only + cache read-through + resiliência stale por-fetch), extractLeagueTeamDisplay (ESPN), frontend LeagueTableView/LeagueStandingsTable/aba Classificação/StandingsLegend. Review approved-with-adjustments: H-1 (logo ESPN inválido quebrava z.url na rota) corrigido via sanitizeCrestUrl TDD; M-1/M-2 (compute+parse fora do try do fetch) corrigidos; ui-review L-A (caption sr-only sem campeonato) corrigido. Suíte 3987+ verde, tsc 0, eslint 0.
+- Notes: Bloqueador do plan-checker — sem isto, ligas ficam sem tela de resultados. Frontend → /ui-spec + /patterns:nextjs + /ui-review. SPEC: display de clube NÃO vem de registry (clubes fora do TEAM_REGISTRY) → extrair name/crest dos competidores ESPN (add `logo` ao espnTeamSchema); tabela única pts→saldo→gols-pró→nome (sem H2H); reusa cache worldcup (chave `standings:{id}`); gate `type==="league"`; aba "Classificação" liga-only.
 
 ### TASK-21 – Exposição de ranking por campeonato + cron sweep
 - Type: api
@@ -433,9 +440,9 @@ O épico transforma o produto de torneio único (Copa 2026) em plataforma multi-
   - implement: sonnet/high
   - test: sonnet/medium
   - review: opus/high
-- Status: pending
-- Phases done: (none)
-- Notes: Split do checker (extraído da TASK-11). TASK-12 (geral agregado) depende deste.
+- Status: done
+- Phases done: spec, tdd, implement, test, review
+- Notes: Split do checker (extraído da TASK-11). TASK-12 (geral agregado) depende deste. SPEC achou gap real: `rankingSchema` (`.strict()` + enum bare) NÃO parseia os docs `{id}-geral` da recalc §7.5 (scope namespaced + campo `championshipId`) → precisa `championshipRankingSchema` dedicado. Gate "ativo" = `status !== "archived"`. Cup escopável → `null` (não 400). REVIEW (opus + gsd adversarial): approved with adjustments. Invariantes core verificadas (compat byte-idêntica, sem vazamento multi-tenant, sem injeção no doc-id, gate correto/não-invertido). 4 achados, TODOS follow-up fora do escopo desta task: MEDIUM-1 (parsers client não championship-aware → TASK-12), MEDIUM-2 (cleanup apaga docs de liga archived → TASK-13, memória `archived-ranking-cleanup-hazard`), LOW-1 (helper não valida `scope` internamente — defense-in-depth; callers já validam), LOW-2 (flags Copa na resposta escopada → TASK-12). Verificação: tsc=0, vitest 3897/3897, eslint clean.
 
 ## 4. Dependency map
 

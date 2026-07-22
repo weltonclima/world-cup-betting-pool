@@ -19,3 +19,7 @@ export { WorldcupErrorState } from "./WorldcupErrorState";
 export { BracketView } from "./BracketView";
 export { PhaseSection } from "./PhaseSection";
 export { KnockoutMatchCard } from "./KnockoutMatchCard";
+
+// TASK-20: tela Classificação de liga (pontos corridos)
+export { LeagueTableView } from "./LeagueTableView";
+export { LeagueStandingsTable } from "./LeagueStandingsTable";

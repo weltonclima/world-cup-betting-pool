@@ -10,11 +10,13 @@ import {
   serializePoolThemeCookie,
 } from "@/features/groupAdmin/lib/poolTheme";
 import { recalcRankingsBestEffort } from "@/server/rankings/recalc";
+import { validateEnabledChampionships } from "@/lib/poolChampionships";
 import {
   hexColorSchema,
   MAX_POOL_LOGO_BASE64_LENGTH,
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolSchema,
+  rankingModeSchema,
 } from "@/schemas";
 
 export const runtime = "nodejs";
@@ -46,6 +48,11 @@ const settingsSchema = z
     predictionsLocked: z.boolean().optional(),
     splitPhaseRanking: z.boolean().optional(),
     ignoreOvertimeGoals: z.boolean().optional(),
+    // Multi-championship (TASK-07). O schema garante só a FORMA (array de strings /
+    // enum); o enforcement de domínio (ids ∈ catálogo, piso/teto, duplicados) é
+    // feito depois do parse, ANTES do update (ver validateEnabledChampionships).
+    enabledChampionships: z.array(z.string()).optional(),
+    rankingMode: rankingModeSchema.optional(),
   })
   .strict();
 
@@ -93,6 +100,16 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Dados inválidos." }, { status: 422 });
   }
 
+  // Enforcement de domínio de `enabledChampionships` (TASK-07): valida contra o
+  // catálogo curado ANTES de qualquer escrita — nada inválido é persistido. Mesmo
+  // status/corpo do 422 estrutural (não vaza a razão específica).
+  if (
+    parsed.data.enabledChampionships !== undefined &&
+    !validateEnabledChampionships(parsed.data.enabledChampionships).ok
+  ) {
+    return NextResponse.json({ error: "Dados inválidos." }, { status: 422 });
+  }
+
   const updatedAt = new Date().toISOString();
   const patch: Record<string, unknown> = { updatedAt };
   const {
@@ -107,6 +124,8 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     predictionsLocked,
     splitPhaseRanking,
     ignoreOvertimeGoals,
+    enabledChampionships,
+    rankingMode,
   } = parsed.data;
   if (name !== undefined) patch["name"] = name;
   if (description !== undefined) patch["description"] = description;
@@ -129,6 +148,8 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (predictionsLocked !== undefined) patch["predictionsLocked"] = predictionsLocked;
   if (splitPhaseRanking !== undefined) patch["splitPhaseRanking"] = splitPhaseRanking;
   if (ignoreOvertimeGoals !== undefined) patch["ignoreOvertimeGoals"] = ignoreOvertimeGoals;
+  if (enabledChampionships !== undefined) patch["enabledChampionships"] = enabledChampionships;
+  if (rankingMode !== undefined) patch["rankingMode"] = rankingMode;
 
   const db = getAdminFirestore();
   const poolRef = db.collection("pools").doc(groupId);

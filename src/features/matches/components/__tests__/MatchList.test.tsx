@@ -58,6 +58,7 @@ const mockUseMatchesList = vi.mocked(useMatchesList);
 function makeItem(overrides: Partial<MatchListItem> = {}): MatchListItem {
   return {
     id: "match-001",
+    championshipId: "fifa.world",
     kickoffAt: "2026-06-14T16:00:00Z",
     stage: "grupos",
     round: 1,

@@ -26,7 +26,12 @@ vi.mock("server-only", () => ({}));
 import { GET } from "@/app/api/rankings/pool/[scope]/route";
 
 const ctx = (scope: string) => ({ params: Promise.resolve({ scope }) });
-const req = () => new Request("http://localhost/api/rankings/pool/grupos");
+const req = (championship?: string) =>
+  new Request(
+    `http://localhost/api/rankings/pool/grupos${
+      championship ? `?championship=${championship}` : ""
+    }`,
+  );
 
 function rankingDoc(overrides: Record<string, unknown> = {}) {
   return {
@@ -145,5 +150,50 @@ describe("GET /api/rankings/pool/{scope}", () => {
     const res = await GET(req(), ctx("grupos"));
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
+  });
+
+  // ── TASK-21: ?championship ────────────────────────────────────────────────
+  it("?championship={liga} + geral → lê pool-{groupId}-{id}-geral (schema dedicado)", async () => {
+    approved();
+    const champDoc = {
+      scope: "bra.1-2026-geral",
+      championshipId: "bra.1-2026",
+      updatedAt: "2026-06-01T02:00:00.000Z",
+      entries: [
+        { uid: "u1", nickname: "ana", name: "Ana", position: 1, points: 10, wrong: 2, accuracy: 83 },
+      ],
+    };
+    const captured: Array<string | undefined> = [];
+    const scopeDoc = vi.fn((id?: string) => {
+      captured.push(id);
+      return { id, get: vi.fn().mockResolvedValue({ exists: true, data: () => champDoc }) };
+    });
+    getFirestoreMock.mockReturnValue({
+      collection: vi.fn((name: string) => ({
+        doc:
+          name === "users"
+            ? vi.fn(() => ({ get: vi.fn().mockResolvedValue({ exists: true, data: () => ({ groupId: "p9" }) }) }))
+            : scopeDoc,
+      })),
+      getAll: vi.fn(async (...refs: unknown[]) => refs.map(() => ({ exists: false, data: () => undefined }))),
+    });
+    const res = await GET(req("bra.1-2026"), ctx("geral"));
+    expect(res.status).toBe(200);
+    expect(captured).toContain("pool-p9-bra.1-2026-geral");
+    const body = await res.json();
+    expect(body.championshipId).toBe("bra.1-2026");
+  });
+
+  it("?championship={liga} + fase → 400 (liga só tem geral)", async () => {
+    approved();
+    mockDb({ groupId: "p1" });
+    const res = await GET(req("bra.1-2026"), ctx("grupos"));
+    expect(res.status).toBe(400);
+  });
+
+  it("?championship=desconhecido → 400", async () => {
+    approved();
+    const res = await GET(req("nao.existe-2026"), ctx("geral"));
+    expect(res.status).toBe(400);
   });
 });

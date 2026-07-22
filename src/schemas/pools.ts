@@ -26,6 +26,19 @@ export const MAX_POOL_LOGO_BASE64_LENGTH = 300_000;
 export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 export const hexColorSchema = z.string().regex(HEX_COLOR_REGEX, "Cor inválida.");
 
+// Modo de ranking do pool (multi-championship TASK-07): `geral` = ranking único
+// somando todos os campeonatos habilitados · `por-campeonato` = ranking separado
+// por campeonato. Fonte única do enum — reusada no schema, na rota e nos helpers.
+export const rankingModeSchema = z.enum(["geral", "por-campeonato"]);
+
+// Default de leitura do modo de ranking (nunca `.default()` no schema — ver abaixo).
+export const DEFAULT_RANKING_MODE = "geral" as const;
+
+// Teto de campeonatos habilitados por pool (multi-championship TASK-07). Evita que
+// um pool habilite dezenas de campeonatos e estoure o custo de recalc/fan-out
+// (TASK-11). Piso é 1 (nunca deixar o grupo sem nenhum campeonato).
+export const MAX_ENABLED_CHAMPIONSHIPS = 10;
+
 export const poolSchema = z
   .object({
     id: nonEmptyString, // = id do doc
@@ -67,6 +80,15 @@ export const poolSchema = z
     // placar do tempo normal (90min), ignorando gols da prorrogação. Efeito na
     // pontuação é aplicado na TASK-03 (aqui só persiste a flag).
     ignoreOvertimeGoals: z.boolean().optional(),
+    // NET-NEW multi-championship (TASK-07) — aditivos optional. Defaults NA LEITURA
+    // (sem `.default()` no schema, para não reescrever docs legados):
+    // `enabledChampionships` ausente/vazio = só Copa (`[DEFAULT_CHAMPIONSHIP_ID]`);
+    // `rankingMode` ausente = `"geral"`. Ver `@/lib/poolChampionships`. A validação
+    // de domínio (ids ∈ catálogo, piso/teto, duplicados) é enforçada no PATCH de
+    // settings, não aqui (o schema só garante a FORMA). Consumo em scoring/ranking
+    // é a TASK-11/12.
+    enabledChampionships: z.array(z.string()).optional(),
+    rankingMode: rankingModeSchema.optional(),
   })
   .strict();
 

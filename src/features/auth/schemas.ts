@@ -53,6 +53,28 @@ export const signupFormSchema = z
     path: ["confirmPassword"],
   });
 
+// Criar grupo (onboarding auto-serviço, multi-championship TASK-16). Reusa os
+// mesmos campos do cadastro comum + `groupName` (o slug é DERIVADO no client só
+// para preview; a autoridade do slug é server-side, `poolSlugSchema` na rota).
+// `confirmPassword` é validação exclusiva do frontend (não vai ao servidor).
+export const createGroupFormSchema = z
+  .object({
+    name: z.string().trim().min(1, { message: "Informe seu nome completo." }),
+    nickname: z.string().trim().min(1, { message: "Informe seu apelido." }),
+    email: emailField,
+    groupName: z
+      .string()
+      .trim()
+      .min(1, { message: "Informe o nome do grupo." })
+      .max(60, { message: "O nome do grupo é muito longo." }),
+    password: passwordField,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas não coincidem.",
+    path: ["confirmPassword"],
+  });
+
 // Recuperação de senha — Tela 02 (informar e-mail). Reusa `emailField`.
 export const forgotPasswordSchema = z.object({
   email: emailField,
@@ -83,5 +105,6 @@ export const resetPasswordSchema = z
 
 export type LoginFormValues = z.infer<typeof loginFormSchema>;
 export type SignupFormValues = z.infer<typeof signupFormSchema>;
+export type CreateGroupFormValues = z.infer<typeof createGroupFormSchema>;
 export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;

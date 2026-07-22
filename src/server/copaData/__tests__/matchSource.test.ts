@@ -21,12 +21,19 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getFirestoreMock, fetchScheduleMock, mapEspnEventsToMatchesMock } =
-  vi.hoisted(() => ({
-    getFirestoreMock: vi.fn(),
-    fetchScheduleMock: vi.fn(),
-    mapEspnEventsToMatchesMock: vi.fn(),
-  }));
+const {
+  getFirestoreMock,
+  fetchScheduleMock,
+  mapEspnEventsToMatchesMock,
+  mapEspnEventsToLeagueMatchesMock,
+  getChampionshipStatusMock,
+} = vi.hoisted(() => ({
+  getFirestoreMock: vi.fn(),
+  fetchScheduleMock: vi.fn(),
+  mapEspnEventsToMatchesMock: vi.fn(),
+  mapEspnEventsToLeagueMatchesMock: vi.fn(),
+  getChampionshipStatusMock: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/copaData", () => ({
@@ -34,6 +41,10 @@ vi.mock("@/server/copaData", () => ({
     fetchSchedule = fetchScheduleMock;
   },
   mapEspnEventsToMatches: mapEspnEventsToMatchesMock,
+  mapEspnEventsToLeagueMatches: mapEspnEventsToLeagueMatchesMock,
+}));
+vi.mock("@/server/copaData/championshipState", () => ({
+  getChampionshipStatus: getChampionshipStatusMock,
 }));
 vi.mock("@/server/firebaseAdmin", () => ({ getAdminFirestore: getFirestoreMock }));
 
@@ -43,6 +54,7 @@ import type { MatchWithId } from "@/types/matches";
 function baseMatch(id: string, over: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "BRA",
     awayTeamId: "ARG",
     kickoffAt: "2026-06-11T12:00:00Z",
@@ -80,6 +92,9 @@ beforeEach(() => {
   // Default: ESPN ok com 1 evento mapeado.
   fetchScheduleMock.mockResolvedValue([{ id: "e1" }]);
   mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1")]);
+  mapEspnEventsToLeagueMatchesMock.mockReturnValue([baseMatch("m1")]);
+  // Default de status: não-arquivado (caminho ESPN). Testes archived sobrescrevem.
+  getChampionshipStatusMock.mockResolvedValue("upcoming");
 });
 
 describe("getEffectiveMatches — ESPN como fonte única (TASK-05)", () => {
@@ -200,5 +215,163 @@ describe("getEffectiveMatches — ESPN como fonte única (TASK-05)", () => {
     const result = await getEffectiveMatches();
 
     expect(result[0]!.status).toBe("scheduled");
+  });
+});
+
+/**
+ * TASK-14 — precedência de leitura banco-first para campeonatos ARQUIVADOS.
+ *
+ * Regra: `getEffectiveMatches` ramifica por status resolvido em runtime
+ * (`getChampionshipStatus`). Só LIGA (`type: "league"`) não-legada `archived` COM
+ * snapshot é servida 100% do DB (`matches/{id}`), ESPN ignorada, SEM filtro
+ * manual-only (o snapshot É o schedule completo) e ORDENADA por kickoffAt. Sem
+ * snapshot → erro claro. CUP não-legado arquivado NÃO vai DB-first (mapper de cup
+ * não carimba championshipId/ids namespaced → snapshot mistaggeado; segue ESPN até
+ * o namespacing de cup). LEGADO (`fifa.world`) também NUNCA vai DB-first (compat).
+ *
+ * Fixtures: `bra.1-2026` = liga não-legada; `uefa.euro-2026` = cup não-legado;
+ * `fifa.world` = legado.
+ */
+const NONLEGACY_LEAGUE = "bra.1-2026";
+const NONLEGACY_CUP = "uefa.euro-2026";
+
+/** Doc persistido completo de uma liga (schedule congelado). */
+function champDoc(
+  id: string,
+  championshipId: string,
+  over: Record<string, unknown> = {},
+) {
+  return persistedDoc(id, {
+    championshipId,
+    homeTeamId: "ITA",
+    awayTeamId: "GER",
+    kickoffAt: "2026-06-15T18:00:00Z",
+    stage: "grupos",
+    status: "finished",
+    homeScore: 2,
+    awayScore: 1,
+    ...over,
+  });
+}
+
+describe("getEffectiveMatches — banco-first para arquivados (TASK-14)", () => {
+  it("A1: liga archived + snapshot → serve do DB (ordenado por kickoffAt), ESPN NÃO chamada", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    // ESPN retornaria isto — não deve aparecer no resultado.
+    mapEspnEventsToLeagueMatchesMock.mockReturnValue([baseMatch("espnOnly")]);
+    // Inserção fora de ordem cronológica: db-late antes de db-early.
+    mockPersisted([
+      champDoc("db-late", NONLEGACY_LEAGUE, { kickoffAt: "2026-08-01T18:00:00Z" }),
+      champDoc("db-early", NONLEGACY_LEAGUE, { kickoffAt: "2026-05-01T18:00:00Z" }),
+    ]);
+
+    const result = await getEffectiveMatches(NONLEGACY_LEAGUE);
+
+    // Ordenado por kickoffAt, não por ordem de doc-id/inserção.
+    expect(result.map((m) => m.id)).toEqual(["db-early", "db-late"]);
+    expect(result.some((m) => m.id === "espnOnly")).toBe(false);
+    expect(fetchScheduleMock).not.toHaveBeenCalled();
+  });
+
+  it("A2: liga archived → devolve docs SEM isManualOverride (schedule completo, não overlay)", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    mockPersisted([
+      champDoc("db1", NONLEGACY_LEAGUE /* sem isManualOverride */),
+      champDoc("db2", NONLEGACY_LEAGUE, { isManualOverride: false }),
+    ]);
+
+    const result = await getEffectiveMatches(NONLEGACY_LEAGUE);
+
+    expect(result.map((m) => m.id).sort()).toEqual(["db1", "db2"]);
+  });
+
+  it("A3: liga archived filtra por championshipId (docs de outro campeonato não vazam)", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    mockPersisted([
+      champDoc("mine", NONLEGACY_LEAGUE),
+      champDoc("foreign", "eng.1-2026"),
+    ]);
+
+    const result = await getEffectiveMatches(NONLEGACY_LEAGUE);
+
+    expect(result.map((m) => m.id)).toEqual(["mine"]);
+  });
+
+  it("A4: liga archived SEM snapshot → erro claro", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    mockPersisted([]); // nenhum doc da liga
+
+    await expect(getEffectiveMatches(NONLEGACY_LEAGUE)).rejects.toThrow(
+      /arquivad|snapshot/i,
+    );
+    expect(fetchScheduleMock).not.toHaveBeenCalled();
+  });
+
+  it("A4b (gate de tipo): CUP não-legado archived NÃO vai DB-first → segue ESPN (não lança)", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("e1", { championshipId: NONLEGACY_CUP })]);
+    mockPersisted([]); // sem snapshot; NÃO deve lançar por causa do gate de tipo
+
+    const result = await getEffectiveMatches(NONLEGACY_CUP);
+
+    // Cup usa o mapper Copa (ESPN), não o branch banco-first.
+    expect(fetchScheduleMock).toHaveBeenCalledTimes(1);
+    expect(result.map((m) => m.id)).toEqual(["e1"]);
+  });
+
+  it("A5 (compat): legado fifa.world archived + snapshot → segue ESPN+overlay, NÃO vai DB-first", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1"), baseMatch("m2")]);
+    mockPersisted([
+      persistedDoc("m1", {
+        championshipId: "fifa.world",
+        homeTeamId: "BRA",
+        awayTeamId: "ARG",
+        kickoffAt: "2026-06-11T12:00:00Z",
+        stage: "grupos",
+        status: "finished",
+        homeScore: 3,
+        awayScore: 1,
+        isManualOverride: true,
+      }),
+    ]);
+
+    const result = await getEffectiveMatches("fifa.world");
+
+    // ESPN foi usada (base) e o override venceu — comportamento legado intacto.
+    expect(fetchScheduleMock).toHaveBeenCalledTimes(1);
+    expect(result.find((m) => m.id === "m1")!.homeScore).toBe(3);
+    expect(result.find((m) => m.id === "m2")!.status).toBe("scheduled");
+  });
+
+  it("A6: liga NÃO-arquivada (upcoming) → caminho ESPN+overlay", async () => {
+    getChampionshipStatusMock.mockResolvedValue("upcoming");
+    mapEspnEventsToLeagueMatchesMock.mockReturnValue([
+      baseMatch("e1", { championshipId: NONLEGACY_LEAGUE }),
+    ]);
+    mockPersisted([]);
+
+    const result = await getEffectiveMatches(NONLEGACY_LEAGUE);
+
+    expect(fetchScheduleMock).toHaveBeenCalledTimes(1);
+    expect(result.map((m) => m.id)).toEqual(["e1"]);
+  });
+
+  it("A7 (curto-circuito): legado NÃO resolve status em runtime (sem leitura extra)", async () => {
+    mapEspnEventsToMatchesMock.mockReturnValue([baseMatch("m1")]);
+    mockPersisted([]);
+
+    await getEffectiveMatches("fifa.world");
+
+    // Compat: o caminho legado nunca consulta `getChampionshipStatus`.
+    expect(getChampionshipStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("A8: liga archived + leitura de 'matches' falha → erro propaga (sem fabricar da ESPN)", async () => {
+    getChampionshipStatusMock.mockResolvedValue("archived");
+    mockFirestoreDown();
+
+    await expect(getEffectiveMatches(NONLEGACY_LEAGUE)).rejects.toThrow("firestore down");
+    expect(fetchScheduleMock).not.toHaveBeenCalled();
   });
 });

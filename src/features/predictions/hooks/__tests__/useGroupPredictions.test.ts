@@ -95,6 +95,7 @@ function makeQueryResult<T>(
 function makeMatch(id: string, overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     kickoffAt: "2099-06-14T16:00:00Z", // futuro por padrão → não bloqueado
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",

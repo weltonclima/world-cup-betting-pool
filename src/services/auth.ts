@@ -4,6 +4,7 @@ import {
   deleteUser,
   EmailAuthProvider,
   reauthenticateWithCredential,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithCustomToken,
   signInWithEmailAndPassword,
@@ -277,6 +278,19 @@ export async function signUp({
       );
     }
     throw error;
+  }
+
+  // Anti-abuso (TASK-18): dispara o e-mail de verificação após o perfil existir.
+  // Best-effort — falha de envio NÃO desfaz o cadastro (conta e perfil já valem);
+  // só é logada. A verificação destrava a descoberta pública de pools criados
+  // por esta conta (ver `create-group`/`activate-pool`).
+  try {
+    await sendEmailVerification(user);
+  } catch (verifyError) {
+    console.error(
+      "Falha ao enviar e-mail de verificação (cadastro segue válido):",
+      verifyError,
+    );
   }
 }
 

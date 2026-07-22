@@ -51,6 +51,7 @@ const mockedUsePredictions = vi.mocked(usePredictions);
 
 const matchFixture: MatchListItem = {
   id: "match-001",
+  championshipId: "fifa.world",
   kickoffAt: "2026-06-14T16:00:00Z",
   stage: "grupos",
   round: 1,

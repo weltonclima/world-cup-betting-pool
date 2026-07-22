@@ -15,12 +15,18 @@ import { CompetitionTabs } from "@/features/worldcup/components/CompetitionTabs"
 // Mock de next/navigation
 // ---------------------------------------------------------------------------
 
-const { pathnameState } = vi.hoisted(() => ({
+const { pathnameState, isCupMock } = vi.hoisted(() => ({
   pathnameState: { value: "/matches" },
+  isCupMock: vi.fn(() => true),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathnameState.value,
+}));
+
+// Gate de tipo (TASK-10): CompetitionTabs oculta Grupos/Eliminatórias p/ liga.
+vi.mock("@/features/championships", () => ({
+  useIsCupActive: () => isCupMock(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -29,6 +35,7 @@ vi.mock("next/navigation", () => ({
 
 beforeEach(() => {
   pathnameState.value = "/matches";
+  isCupMock.mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -150,6 +157,75 @@ describe("CompetitionTabs — rotas de detalhe (null)", () => {
 
 describe("CompetitionTabs — elemento <nav> e semântica", () => {
   it("T12: renderiza <nav> com aria-label='Seções de Jogos'", () => {
+    render(<CompetitionTabs />);
+    expect(
+      screen.getByRole("navigation", { name: "Seções de Jogos" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("CompetitionTabs — gate cup/league (TASK-10)", () => {
+  it("T13: liga ativa → mostra só 'Partidas' (Grupos/Eliminatórias ausentes)", () => {
+    isCupMock.mockReturnValue(false);
+    render(<CompetitionTabs />);
+    expect(screen.getByRole("link", { name: "Partidas" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Grupos" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Eliminatórias" })).toBeNull();
+  });
+
+  it("T14: copa ativa → mantém as 3 abas (sem regressão)", () => {
+    isCupMock.mockReturnValue(true);
+    render(<CompetitionTabs />);
+    expect(screen.getByRole("link", { name: "Partidas" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Grupos" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Eliminatórias" })).toBeTruthy();
+  });
+
+  it("T15: liga ativa → <nav> ainda presente (só com Partidas)", () => {
+    isCupMock.mockReturnValue(false);
+    render(<CompetitionTabs />);
+    expect(
+      screen.getByRole("navigation", { name: "Seções de Jogos" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("CompetitionTabs — aba Classificação league-only (TASK-20)", () => {
+  it("T16: liga ativa → mostra 'Classificação' (Grupos/Eliminatórias ausentes)", () => {
+    isCupMock.mockReturnValue(false);
+    render(<CompetitionTabs />);
+    expect(screen.getByRole("link", { name: "Classificação" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Partidas" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Grupos" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Eliminatórias" })).toBeNull();
+  });
+
+  it("T17: copa ativa → 'Classificação' ausente (gate invertido)", () => {
+    isCupMock.mockReturnValue(true);
+    render(<CompetitionTabs />);
+    expect(screen.queryByRole("link", { name: "Classificação" })).toBeNull();
+  });
+
+  it("T18: href de 'Classificação' aponta para /matches/classificacao", () => {
+    isCupMock.mockReturnValue(false);
+    render(<CompetitionTabs />);
+    expect(
+      screen.getByRole("link", { name: "Classificação" }).getAttribute("href"),
+    ).toBe("/matches/classificacao");
+  });
+
+  it("T19: 'Classificação' tem aria-current='page' em /matches/classificacao", () => {
+    isCupMock.mockReturnValue(false);
+    pathnameState.value = "/matches/classificacao";
+    render(<CompetitionTabs />);
+    expect(
+      screen.getByRole("link", { name: "Classificação" }).getAttribute("aria-current"),
+    ).toBe("page");
+  });
+
+  it("T20: exibe abas na rota /matches/classificacao (não retorna null)", () => {
+    isCupMock.mockReturnValue(false);
+    pathnameState.value = "/matches/classificacao";
     render(<CompetitionTabs />);
     expect(
       screen.getByRole("navigation", { name: "Seções de Jogos" }),

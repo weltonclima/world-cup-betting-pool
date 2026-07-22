@@ -13,11 +13,17 @@
 import { after, NextResponse } from "next/server";
 
 import { copaDataErrorResponse } from "@/app/api/_lib/copaDataError";
+import {
+  resolveChampionshipFromRequest,
+  UnknownChampionshipError,
+  unknownChampionshipResponse,
+} from "@/app/api/_lib/championshipParam";
 import { fetchAllTeams } from "@/server/copaData";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import { isFresh, readSnapshot, writeSnapshot } from "@/server/worldcup/cache";
 import { computeGroupStandings } from "@/server/worldcup/standings";
 import { groupsResponseSchema } from "@/schemas/worldcup";
+import type { Championship } from "@/types/championships";
 
 // Força modo dinâmico — sem ISR; cache gerenciado pelo helper Firestore.
 export const dynamic = "force-dynamic";
@@ -36,8 +42,27 @@ function cacheControl(hasLive: boolean): Record<string, string> {
   return { "Cache-Control": "s-maxage=86400, stale-while-revalidate=60" };
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
   const now = Date.now();
+
+  // Gate cup/league (TASK-10): ligas de pontos corridos não têm fase de grupos
+  // FIFA — rejeita antes de qualquer leitura de snapshot ou fetch. `?championship=`
+  // ausente → default Copa (compat byte-a-byte). Id fora do catálogo → 400.
+  let championship: Championship;
+  try {
+    championship = resolveChampionshipFromRequest(request);
+  } catch (err) {
+    if (err instanceof UnknownChampionshipError) {
+      return unknownChampionshipResponse();
+    }
+    throw err;
+  }
+  if (championship.type !== "cup") {
+    return NextResponse.json(
+      { error: "Fase de grupos indisponível para campeonatos de liga." },
+      { status: 400 },
+    );
+  }
 
   // 1. Tenta usar snapshot fresco do Firestore.
   const snap = await readSnapshot("groups");

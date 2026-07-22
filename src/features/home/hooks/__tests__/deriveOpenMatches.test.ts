@@ -24,6 +24,7 @@ function isoFromNow(minutes: number): string {
 function makeItem(overrides: Partial<MatchListItem> = {}): MatchListItem {
   return {
     id: "match-1",
+    championshipId: "fifa.world",
     kickoffAt: isoFromNow(120),
     stage: "grupos",
     round: 1,

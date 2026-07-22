@@ -14,6 +14,12 @@
 import { after, NextResponse } from "next/server";
 
 import { copaDataErrorResponse } from "@/app/api/_lib/copaDataError";
+import {
+  DEFAULT_CHAMPIONSHIP_ID,
+  resolveChampionshipFromRequest,
+  UnknownChampionshipError,
+  unknownChampionshipResponse,
+} from "@/app/api/_lib/championshipParam";
 import { fetchAllTeams, fetchEspnBracketMap } from "@/server/copaData";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
 import {
@@ -24,6 +30,7 @@ import {
 } from "@/server/worldcup/cache";
 import { deriveBracket } from "@/server/worldcup/bracket";
 import { bracketResponseSchema } from "@/schemas/worldcup";
+import type { Championship } from "@/types/championships";
 import type { BracketResponse } from "@/types/worldcup";
 
 // Força modo dinâmico — sem ISR; cache gerenciado pelo helper Firestore.
@@ -88,11 +95,41 @@ function cacheControl(hasLive: boolean): Record<string, string> {
   return { "Cache-Control": "s-maxage=86400, stale-while-revalidate=60" };
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: Request): Promise<NextResponse> {
   const now = Date.now();
 
-  // 1. Tenta usar snapshot fresco do Firestore.
-  const snap = await readSnapshot("bracket");
+  // Escopo por campeonato (TASK-06). Ausente → default Copa (compat).
+  let championship: Championship;
+  try {
+    championship = resolveChampionshipFromRequest(request);
+  } catch (err) {
+    if (err instanceof UnknownChampionshipError) {
+      return unknownChampionshipResponse();
+    }
+    throw err;
+  }
+
+  // Gate cup/league: ligas de pontos corridos não têm chaveamento — rejeita antes
+  // de qualquer fetch. (Gate completo de derivations por tipo é a TASK-10; a
+  // tabela de liga é a TASK-20.)
+  if (championship.type !== "cup") {
+    return NextResponse.json(
+      { error: "Bracket indisponível para campeonatos de liga." },
+      { status: 400 },
+    );
+  }
+
+  // Snapshot escopado por campeonato: o bracket da Copa não pode ser servido para
+  // outro torneio nem vice-versa.
+  const bracketKey = `bracket:${championship.id}`;
+
+  // 1. Tenta usar snapshot fresco do Firestore. Fallback de leitura à chave legada
+  // "bracket" só para a Copa default — preserva o snapshot atual em produção no
+  // primeiro deploy (a regravação migra para a chave escopada; self-heal).
+  let snap = await readSnapshot<BracketResponse>(bracketKey);
+  if (snap === null && championship.id === DEFAULT_CHAMPIONSHIP_ID) {
+    snap = await readSnapshot<BracketResponse>("bracket");
+  }
 
   // Fix 1 (CR-01 + WR-04): valida o payload do snapshot antes de servir.
   // Snapshot corrompido é tratado como cache miss — cai no caminho de recomputo.
@@ -121,7 +158,7 @@ export async function GET(): Promise<NextResponse> {
     // fetchEspnBracketMap em paralelo: nunca lança (degrada para mapa vazio) e
     // compartilha o data cache de 60s da ESPN com getEffectiveMatches.
     const [matches, teams, bracketMap] = await Promise.all([
-      getEffectiveMatches(),
+      getEffectiveMatches(championship.id),
       fetchAllTeams(),
       fetchEspnBracketMap(),
     ]);
@@ -142,7 +179,7 @@ export async function GET(): Promise<NextResponse> {
 
     // Fix 3 (CR-02): desacopla escrita de cache do response usando after().
     // writeSnapshot engole seus próprios erros; after() garante execução pós-response.
-    after(() => writeSnapshot("bracket", payload, hasLive, now));
+    after(() => writeSnapshot(bracketKey, payload, hasLive, now));
 
     return NextResponse.json(payload, { headers: cacheControl(hasLive) });
   } catch (err) {

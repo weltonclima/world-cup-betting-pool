@@ -1,0 +1,56 @@
+# Cron de arquivamento automático (bugfix multi-championship: "temporada encerrada")
+#
+# Dispara POST /api/admin/championships/archive-finished na produção. A rota varre
+# os campeonatos habilitados em qualquer pool, detecta os 100% encerrados e chama
+# o pipeline de arquivamento (congela schedule + ranking/estatísticas em history/*
+# e grava status `archived` em championships/{id}). É o que move um campeonato
+# encerrado — inclusive a Copa legada — para o Histórico, SEM ação manual.
+#
+# Cadência diária (o encerramento de um campeonato não precisa de reação em
+# minutos; o scoring/recalc já roda a cada 30 min pelo score-cron). Idempotente:
+# um campeonato já arquivado no runtime é pulado.
+#
+# Configuração necessária (Settings do repositório):
+#   - secrets.GROUPS_ADMIN_SECRET → deve bater com process.env.GROUPS_ADMIN_SECRET do deploy.
+#   - vars.APP_BASE_URL           → (opcional) URL base de produção; usa o fallback se ausente.
+# NUNCA logar/commitar valores de secret.
+
+name: archive-cron
+
+on:
+  schedule:
+    # Uma vez por dia, 05:10 UTC (fora do horário de pico).
+    - cron: "10 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/admin/championships/archive-finished
+        env:
+          GROUPS_ADMIN_SECRET: ${{ secrets.GROUPS_ADMIN_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://bolaodosparcas.vercel.app' }}
+        run: |
+          if [ -z "${GROUPS_ADMIN_SECRET}" ]; then
+            echo "::error::GROUPS_ADMIN_SECRET não configurado nos secrets do repositório."
+            exit 1
+          fi
+
+          # --fail-with-body: status não-2xx vira erro de curl, mas ainda imprime o corpo.
+          # Secret vai só no header (nunca ecoado). `|| status=$?` evita abortar antes do log.
+          status=0
+          http_body=$(curl -sS --fail-with-body \
+            -X POST "${APP_BASE_URL}/api/admin/championships/archive-finished" \
+            -H "x-admin-secret: ${GROUPS_ADMIN_SECRET}") || status=$?
+
+          # Corpo é { archived, skippedAlreadyArchived, skippedNotFinished, errors } — não sensível.
+          echo "Resposta: ${http_body}"
+
+          if [ "${status}" -ne 0 ]; then
+            echo "::error::Falha ao chamar /api/admin/championships/archive-finished (curl exit ${status})."
+            exit "${status}"
+          fi

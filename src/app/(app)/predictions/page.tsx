@@ -19,6 +19,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMatches } from "@/features/matches/hooks";
 import { usePredictions } from "@/features/predictions/hooks";
 import {
+  SeasonEndedNotice,
+  useActiveChampionship,
+} from "@/features/championships";
+import {
   PredictionsHub,
   buildHubPhases,
   type HubPhaseInput,
@@ -53,6 +57,11 @@ const HUB_PHASES: ReadonlyArray<{ stage: Stage; title: string; href: string }> =
 export default function PredictionsHubPage() {
   const { firebaseUser } = useAuth();
   const uid = firebaseUser?.uid ?? null;
+
+  // Temporada encerrada (pool 100%-arquivado): o hub de palpites da Copa some —
+  // a Copa encerrada não recebe mais palpites; vive só no Histórico. `false` só
+  // após o load com conjunto vazio (nunca durante o load).
+  const { hasActiveChampionship } = useActiveChampionship();
 
   const matchesQuery = useMatches();
   const predictionsQuery = usePredictions(uid);
@@ -115,6 +124,14 @@ export default function PredictionsHubPage() {
     void matchesQuery.refetch();
     void predictionsQuery.refetch();
   };
+
+  if (!hasActiveChampionship) {
+    return (
+      <div className="palpites-theme mx-auto flex max-w-2xl flex-col pb-20 md:pb-4">
+        <SeasonEndedNotice subtitle="A temporada foi encerrada e não há mais palpites a preencher. Veja os resultados finais no Histórico." />
+      </div>
+    );
+  }
 
   return (
     <div className="palpites-theme mx-auto flex max-w-2xl flex-col pb-20 md:pb-4">

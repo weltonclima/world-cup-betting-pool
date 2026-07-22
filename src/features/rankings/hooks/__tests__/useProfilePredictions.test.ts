@@ -99,6 +99,7 @@ function makeTeam(id: string, name = `Seleção ${id}`): TeamWithId {
 function makeMatch(id: string, overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "t-home",
     awayTeamId: "t-away",
     kickoffAt: "2026-06-20T18:00:00.000Z",

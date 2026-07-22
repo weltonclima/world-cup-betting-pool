@@ -47,6 +47,7 @@ export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
 
 export const stageSchema = z.enum([
   "grupos",
+  "liga",           // fase única de pontos corridos (liga; TASK-05 multi-championship). `round` = matchday.
   "dezesseis-avos", // 16 avos de final — formato Copa 2026 (48 seleções); API-Football: "Round of 32"
   "oitavas",
   "quartas",

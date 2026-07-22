@@ -80,6 +80,22 @@ describe("GET /api/matches/[id]", () => {
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
   });
 
+  it("id namespaced com ':' percent-encoded no param → decodifica e ACHA (bugfix 404)", async () => {
+    // Next/Turbopack normaliza o ':' do id namespaced para `%3A` em `params.id`
+    // (e o cliente ainda encoda 1× no fetch → chega `%3A`). A rota compara com o id
+    // efetivo CRU (`bra.1-2026:...`); sem decodificar o param, dava 404.
+    const leagueMatch = { ...OVERRIDE_MATCH, id: "bra.1-2026:401841152" };
+    getEffectiveMatchesMock.mockResolvedValue([leagueMatch]);
+
+    const response = await GET(
+      new Request("http://x/api/matches/bra.1-2026%3A401841152?championship=bra.1-2026"),
+      ctx("bra.1-2026%3A401841152"),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { id: string };
+    expect(body.id).toBe("bra.1-2026:401841152");
+  });
+
   it("404 quando o id não existe na fonte efetiva", async () => {
     getEffectiveMatchesMock.mockResolvedValue([OVERRIDE_MATCH]);
 
@@ -106,5 +122,26 @@ describe("GET /api/matches/[id]", () => {
 
     const response = await GET(new Request("http://x/api/matches/m73"), ctx("m73"));
     expect(response.status).toBe(500);
+  });
+
+  // ── TASK-06: escopo por campeonato ──────────────────────────────────────────
+
+  it("passa o championship do query param para getEffectiveMatches", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([OVERRIDE_MATCH]);
+
+    await GET(
+      new Request("http://x/api/matches/m73?championship=fifa.world"),
+      ctx("m73"),
+    );
+    expect(getEffectiveMatchesMock).toHaveBeenCalledWith("fifa.world");
+  });
+
+  it("400 e NÃO chama a fonte quando championship está fora do catálogo", async () => {
+    const response = await GET(
+      new Request("http://x/api/matches/m73?championship=nao.existe"),
+      ctx("m73"),
+    );
+    expect(response.status).toBe(400);
+    expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
   });
 });

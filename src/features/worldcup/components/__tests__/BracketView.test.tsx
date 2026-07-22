@@ -25,6 +25,13 @@ vi.mock("@/features/worldcup/hooks/useBracket", () => ({
   useBracket: () => mockUseBracket(),
 }));
 
+// Gate de tipo (TASK-10): liga não exibe chaveamento.
+const { isCupMock } = vi.hoisted(() => ({ isCupMock: vi.fn(() => true) }));
+vi.mock("@/features/championships", () => ({
+  useIsCupActive: () => isCupMock(),
+  CupOnlyNotice: ({ message }: { message: string }) => <div>{message}</div>,
+}));
+
 // ConnectorLayer usa ResizeObserver (ausente no jsdom) — stub mínimo.
 class ResizeObserverStub {
   observe() {}
@@ -82,6 +89,40 @@ function mobile() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isCupMock.mockReturnValue(true);
+});
+
+// ---------------------------------------------------------------------------
+// Gate cup/league (TASK-10)
+// ---------------------------------------------------------------------------
+
+describe("BracketView — gate cup/league (TASK-10)", () => {
+  it("G1: liga ativa → aviso cup-only, sem consultar useBracket", () => {
+    isCupMock.mockReturnValue(false);
+    render(<BracketView />);
+    expect(
+      screen.getByText("Chaveamento disponível apenas para copas e torneios."),
+    ).toBeTruthy();
+    expect(mockUseBracket).not.toHaveBeenCalled();
+  });
+
+  it("G2: liga ativa → não renderiza skeleton nem erro (guard antes da query)", () => {
+    isCupMock.mockReturnValue(false);
+    render(<BracketView />);
+    expect(screen.queryByTestId("bracket-desktop")).toBeNull();
+    expect(screen.queryByTestId("bracket-mobile")).toBeNull();
+  });
+
+  it("G3: copa ativa → fluxo normal (query consultada)", () => {
+    mockUseBracket.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: undefined,
+      refetch: vi.fn(),
+    });
+    render(<BracketView />);
+    expect(mockUseBracket).toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ const awayTeam: ResolvedTeam = {
 
 const baseMatch: MatchWithId = {
   id: "match-001",
+  championshipId: "fifa.world",
   homeTeamId: "team-bra",
   awayTeamId: "team-fra",
   kickoffAt: "2026-06-14T16:00:00Z",

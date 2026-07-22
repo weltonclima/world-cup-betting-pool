@@ -246,6 +246,15 @@ export const CHAMPIONSHIP_CATALOG: readonly Championship[] = Object.freeze(
   RAW_CATALOG.map((entry) => Object.freeze(championshipSchema.parse(entry))),
 );
 
+/**
+ * Campeonato default (compat): Copa 2026 legado. Fonte ÚNICA da constante — o
+ * `matchSource` (default de `getEffectiveMatches`) e o `championshipParam`
+ * (default de `?championship=`) importam DAQUI. A garantia de compat byte-a-byte
+ * depende desses defaults serem o MESMO valor; centralizar aqui torna drift um
+ * erro único, não uma divergência silenciosa entre camadas.
+ */
+export const DEFAULT_CHAMPIONSHIP_ID = "fifa.world";
+
 const BY_ID = new Map<string, Championship>(
   CHAMPIONSHIP_CATALOG.map((c) => [c.id, c]),
 );

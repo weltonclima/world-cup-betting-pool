@@ -8,6 +8,7 @@ export {
 } from "./useModerateGroupUser";
 export { usePromoteGroupAdmin } from "./usePromoteGroupAdmin";
 export { useGroupSettings, useUpdateGroupSettings } from "./useGroupSettings";
+export { useChampionshipsCatalog } from "./useChampionshipsCatalog";
 export {
   useGroupInvites,
   useCreateInvite,

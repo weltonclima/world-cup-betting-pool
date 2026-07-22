@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { matchSchema } from "@/schemas";
+import { DEFAULT_CHAMPIONSHIP_ID } from "@/server/copaData/championshipCatalog";
 import type { MatchWithId } from "@/types";
 
 import { API_BASE, buildHttpError, parseWithId } from "./_apiClient";
@@ -40,14 +41,25 @@ function parseMatchWithId(input: unknown): MatchWithId {
 }
 
 /**
- * Lista TODAS as partidas da Copa via `GET /api/matches`.
+ * Lista TODAS as partidas de um campeonato via `GET /api/matches?championship=`.
+ *
+ * Multi-championship (TASK-09): recebe o campeonato ativo. O default
+ * (`DEFAULT_CHAMPIONSHIP_ID` = `fifa.world`) NÃO envia o query param — o servidor
+ * já resolve ausência para o mesmo default (compat byte-a-byte com a URL legada
+ * `/api/matches`, preservando os testes existentes).
  *
  * @throws Error em falha HTTP (status != 2xx), com status e detalhe do corpo.
  * @throws ZodError se a resposta não casar com o contrato esperado.
  * @returns Array de `MatchWithId` validado.
  */
-export async function listMatches(): Promise<MatchWithId[]> {
-  const res = await fetch(`${API_BASE}/matches`);
+export async function listMatches(
+  championshipId: string = DEFAULT_CHAMPIONSHIP_ID,
+): Promise<MatchWithId[]> {
+  const url =
+    championshipId === DEFAULT_CHAMPIONSHIP_ID
+      ? `${API_BASE}/matches`
+      : `${API_BASE}/matches?championship=${encodeURIComponent(championshipId)}`;
+  const res = await fetch(url);
   if (!res.ok) {
     throw await buildHttpError(res, "Falha ao carregar as partidas");
   }

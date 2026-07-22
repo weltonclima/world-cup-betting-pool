@@ -64,6 +64,7 @@ function mkMatch(
   const scored = status === "finished";
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId,
     awayTeamId,
     kickoffAt: "2026-07-01T20:00:00-03:00",

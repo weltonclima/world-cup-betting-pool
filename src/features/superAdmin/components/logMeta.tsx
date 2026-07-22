@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import {
+  Archive,
   Ban,
   CheckCircle2,
   Link as LinkIcon,
@@ -86,6 +87,12 @@ const LOG_META: Record<SystemLogType, LogMeta> = {
     icon: LinkIcon,
     title: "Convite gerado",
     className: "bg-info-bg text-info",
+  },
+  // multi-championship-launch — arquivamento de campeonato encerrado.
+  championship_archived: {
+    icon: Archive,
+    title: "Campeonato arquivado",
+    className: "bg-muted text-muted-foreground",
   },
   // PRD-12 (palpite manual lançado pelo admin de grupo)
   group_admin_manual_prediction: {

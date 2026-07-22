@@ -173,6 +173,7 @@ describe("shared › inferência de tipos", () => {
     >();
     expectTypeOf<Stage>().toEqualTypeOf<
       | "grupos"
+      | "liga"
       | "dezesseis-avos"
       | "oitavas"
       | "quartas"

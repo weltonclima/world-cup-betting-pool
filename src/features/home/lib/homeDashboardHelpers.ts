@@ -431,7 +431,9 @@ export function deriveNotices(
  * Regras de borda em ai/spec/task-home-revamp-01.md §6.
  */
 export function deriveHeroSummary(
-  ranking: Ranking | null | undefined,
+  // Só depende de `entries` — aceita qualquer doc de ranking (geral, fase ou o
+  // `PoolRanking` championship-aware da TASK-12, cujo `scope` é string livre).
+  ranking: Pick<Ranking, "entries"> | null | undefined,
   statistics: Statistics | null | undefined,
   poolStats: PoolStats | null | undefined,
   uid: string,

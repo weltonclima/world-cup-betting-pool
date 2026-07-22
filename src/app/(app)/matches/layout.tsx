@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ChampionshipSelector } from "@/features/championships";
 import { CompetitionTabs } from "@/features/worldcup/components";
 
 /**
@@ -17,6 +18,9 @@ import { CompetitionTabs } from "@/features/worldcup/components";
 export default function MatchesLayout({ children }: { children: ReactNode }) {
   return (
     <div className="matches-theme flex flex-col gap-4">
+      {/* Seletor de campeonato ativo (multi-championship TASK-09) — auto-oculta em
+          pools com ≤ 1 campeonato. Acima das abas Partidas/Grupos/Eliminatórias. */}
+      <ChampionshipSelector />
       <CompetitionTabs />
       <div>{children}</div>
     </div>

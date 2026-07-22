@@ -40,6 +40,10 @@ import { MatchListSkeleton } from "@/features/matches/components/MatchListSkelet
 import { MatchesEmptyState } from "@/features/matches/components/MatchesEmptyState";
 import { MatchesErrorState } from "@/features/matches/components/MatchesErrorState";
 import { MatchListHeader } from "@/features/matches/components/MatchListHeader";
+import {
+  SeasonEndedNotice,
+  useActiveChampionship,
+} from "@/features/championships";
 
 // ---------------------------------------------------------------------------
 // Funções puras co-localizadas (operação sobre MatchListItem[])
@@ -101,6 +105,10 @@ export function MatchList() {
 
   // View-model do compositor (TASK-02)
   const { groups, flatList, isLoading, isError, refetch } = useMatchesList();
+
+  // Temporada encerrada (pool 100%-arquivado): não há jogos ativos a listar — a
+  // Copa encerrada vive só no Histórico. `false` só após o load com conjunto vazio.
+  const { hasActiveChampionship } = useActiveChampionship();
 
   // ---------------------------------------------------------------------------
   // Tabs temporais (TASK-03)
@@ -216,6 +224,12 @@ export function MatchList() {
   // ---------------------------------------------------------------------------
   // Renderização
   // ---------------------------------------------------------------------------
+
+  if (!hasActiveChampionship) {
+    return (
+      <SeasonEndedNotice subtitle="Nenhum campeonato ativo — não há jogos para palpitar. Veja os resultados finais no Histórico." />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-20 md:pb-4">

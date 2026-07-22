@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 
+import { useActiveChampionship } from "@/features/championships";
 import { useAuth } from "@/hooks/useAuth";
 
 import { scorePrediction } from "@/features/predictions/lib";
@@ -64,6 +65,11 @@ export function useHomeDashboard(): HomeDashboardData {
   const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 
+  // Campeonato ativo (multi-championship TASK-09). O Hero/ranking permanece
+  // AGREGADO (não escopado) por decisão do spec; apenas a leitura de teams é
+  // alinhada à mesma key de `useMatchesList` para preservar o fetch único.
+  const { activeChampionshipId } = useActiveChampionship();
+
   // 2. Queries por recurso (sem cache override — herdam global 30min/24h)
   // Ranking FECHADO por pool (PRD-09): o card da Home mostra só o pool do usuário,
   // nunca o ranking global. Sem pool → query desabilitada (Hero sem posição).
@@ -87,7 +93,7 @@ export function useHomeDashboard(): HomeDashboardData {
   });
   const statisticsQuery = useStatistics(uid);
   const poolStatsQuery = usePoolStats();
-  const teamsQuery = useTeams();
+  const teamsQuery = useTeams(activeChampionshipId);
   const predictionsQuery = usePredictions(uid);
   const settingsQuery = useSystemSettings();
   // Lista de jogos enriquecida (TASK-02 home-revamp). Reusa useMatches/useTeams/

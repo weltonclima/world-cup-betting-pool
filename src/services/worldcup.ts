@@ -1,4 +1,6 @@
+import { leagueStandingsResponseSchema } from "@/schemas/leagues";
 import { groupsResponseSchema, bracketResponseSchema } from "@/schemas/worldcup";
+import type { LeagueStandingsResponse } from "@/types/leagues";
 import type { GroupsResponse, BracketResponse } from "@/types/worldcup";
 
 import { API_BASE, buildHttpError } from "./_apiClient";
@@ -47,4 +49,25 @@ export async function getBracket(): Promise<BracketResponse> {
     throw await buildHttpError(res, "Falha ao carregar o chaveamento");
   }
   return bracketResponseSchema.parse(await res.json());
+}
+
+/**
+ * Busca a tabela de classificação de uma liga via
+ * `GET /api/leagues/standings?championship={id}` (TASK-20).
+ *
+ * @param championshipId id do campeonato de liga ativo (encode do query param).
+ * @throws Error em falha HTTP (status != 2xx), com status e detalhe do corpo.
+ * @throws ZodError se a resposta não casar com `leagueStandingsResponseSchema`.
+ * @returns `LeagueStandingsResponse` validada com `{ table, hasLiveMatch }`.
+ */
+export async function getLeagueStandings(
+  championshipId: string,
+): Promise<LeagueStandingsResponse> {
+  const res = await fetch(
+    `${API_BASE}/leagues/standings?championship=${encodeURIComponent(championshipId)}`,
+  );
+  if (!res.ok) {
+    throw await buildHttpError(res, "Falha ao carregar a classificação da liga");
+  }
+  return leagueStandingsResponseSchema.parse(await res.json());
 }

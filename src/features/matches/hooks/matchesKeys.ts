@@ -22,10 +22,18 @@ import type { Stage } from "@/types";
 export const matchesKeys = {
   all: () => ["matches"] as const,
   lists: () => [...matchesKeys.all(), "list"] as const,
-  list: () => [...matchesKeys.lists()] as const,
+  // Multi-championship (TASK-09): a lista é FATIADA por campeonato ativo. Dobrar o
+  // id na chave isola o cache por campeonato (sem bleed ao trocar de seletor). O
+  // default (`fifa.world`) mantém uma chave estável para o comportamento legado.
+  list: (championshipId: string) =>
+    [...matchesKeys.lists(), championshipId] as const,
   details: () => [...matchesKeys.all(), "detail"] as const,
   detail: (id: string) => [...matchesKeys.details(), id] as const,
-  teams: () => [...matchesKeys.all(), "teams"] as const,
+  teamsAll: () => [...matchesKeys.all(), "teams"] as const,
+  // Teams também fatiado por campeonato (TASK-09): ligas terão registries próprios
+  // (foundation gap fora do escopo desta task — cliente já forward-compatible).
+  teams: (championshipId: string) =>
+    [...matchesKeys.teamsAll(), championshipId] as const,
   predictions: (uid: string) => [...matchesKeys.all(), "predictions", uid] as const,
   groups: () => [...matchesKeys.all(), "group"] as const,
   group: (groupId: string) => [...matchesKeys.groups(), groupId] as const,

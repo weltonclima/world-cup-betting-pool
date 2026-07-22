@@ -13,4 +13,7 @@ export const groupKeys = {
   invites: () => ["group", "invites"] as const,
   settings: () => ["group", "settings"] as const,
   predictions: () => ["group", "predictions"] as const,
+  // Catálogo público de campeonatos (TASK-08). Escopo global (estático, não
+  // depende do pool) — chave própria fora de `settings`/`dashboard`.
+  championshipsCatalog: () => ["championships", "catalog"] as const,
 } as const;

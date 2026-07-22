@@ -16,6 +16,7 @@ import { REVALIDATE, STALE_TIME, revalidateForMatch } from "../tiers";
 function makeMatch(overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id: "match-01",
+    championshipId: "fifa.world",
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",
     kickoffAt: "2026-06-15T18:00:00.000Z",

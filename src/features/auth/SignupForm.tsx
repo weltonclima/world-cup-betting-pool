@@ -84,7 +84,13 @@ export function SignupForm({ presetGroup, inviteCode }: SignupFormProps = {}) {
       });
       // Contabiliza o convite (best-effort): falha não desfaz o cadastro.
       if (inviteCode) await redeemInvite(inviteCode);
-      toast.success("Conta criada! Aguarde a aprovação do administrador.");
+      // Fluxo de convite → moderado pelo admin (TASK-17). Cadastro comum → nasce
+      // sem grupo e recebe e-mail de verificação (TASK-18).
+      toast.success(
+        presetGroup
+          ? "Conta criada! Aguarde a aprovação do administrador."
+          : "Conta criada! Enviamos um link de verificação para seu e-mail.",
+      );
     } catch (error) {
       toast.error(mapAuthError((error as { code?: string }).code ?? ""));
     }

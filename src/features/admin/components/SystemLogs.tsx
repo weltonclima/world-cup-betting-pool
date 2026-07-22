@@ -59,6 +59,8 @@ const SOURCE_LABEL: Record<SystemLogType, string> = {
   group_admin_manual_prediction: "Admin do grupo",
   // superadmin-invite-generator — convite gerado pelo super_admin.
   group_invite_created: "Super Admin",
+  // multi-championship-launch — arquivamento de campeonato encerrado.
+  championship_archived: "Sistema",
 };
 
 /** Tela — Logs do Sistema (PRD07-06). */

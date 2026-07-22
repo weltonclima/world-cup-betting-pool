@@ -3,6 +3,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { listMatches } from "@/services";
+import { DEFAULT_CHAMPIONSHIP_ID } from "@/server/copaData/championshipCatalog";
 import { STALE_TIME } from "@/server/cache/tiers";
 import type { MatchWithId } from "@/types";
 
@@ -25,10 +26,13 @@ import { matchesKeys } from "./matchesKeys";
  * minuto. Granularidade fina por status fica a cargo do `revalidate` server-side
  * de cada endpoint, não do `staleTime` desta lista agregada.
  */
-export function useMatches(): UseQueryResult<MatchWithId[]> {
+export function useMatches(
+  championshipId: string = DEFAULT_CHAMPIONSHIP_ID,
+): UseQueryResult<MatchWithId[]> {
   return useQuery({
-    queryKey: matchesKeys.list(),
-    queryFn: listMatches,
+    // Chave e fetch fatiados pelo campeonato ativo (TASK-09). Default = Copa legado.
+    queryKey: matchesKeys.list(championshipId),
+    queryFn: () => listMatches(championshipId),
     staleTime: STALE_TIME.jogoDia,
     // Voltar à tela de jogos (remount) revalida sempre, ignorando staleTime.
     refetchOnMount: "always",

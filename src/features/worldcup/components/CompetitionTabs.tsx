@@ -13,16 +13,23 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useIsCupActive } from "@/features/championships";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Configuração das abas
 // ---------------------------------------------------------------------------
+// `cupOnly`: aba de fase de grupos FIFA / chaveamento — só existe em copas e
+// torneios. Ligas de pontos corridos (TASK-10) escondem essas abas.
+// `leagueOnly` (TASK-20): aba de classificação de pontos corridos — só existe
+// em ligas. Copas/torneios escondem esta aba (usam Grupos/Eliminatórias).
+// Um TAB nunca é cupOnly e leagueOnly ao mesmo tempo (mutuamente exclusivos).
 
 const TABS = [
-  { href: "/matches", label: "Partidas" },
-  { href: "/matches/grupos", label: "Grupos" },
-  { href: "/matches/eliminatorias", label: "Eliminatórias" },
+  { href: "/matches", label: "Partidas", cupOnly: false, leagueOnly: false },
+  { href: "/matches/grupos", label: "Grupos", cupOnly: true, leagueOnly: false },
+  { href: "/matches/eliminatorias", label: "Eliminatórias", cupOnly: true, leagueOnly: false },
+  { href: "/matches/classificacao", label: "Classificação", cupOnly: false, leagueOnly: true },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -34,7 +41,8 @@ function isTabRoute(pathname: string): boolean {
   return (
     pathname === "/matches" ||
     pathname.startsWith("/matches/grupos") ||
-    pathname.startsWith("/matches/eliminatorias")
+    pathname.startsWith("/matches/eliminatorias") ||
+    pathname.startsWith("/matches/classificacao")
   );
 }
 
@@ -84,15 +92,21 @@ interface CompetitionTabsProps {
  */
 export function CompetitionTabs({ className }: CompetitionTabsProps) {
   const pathname = usePathname();
+  const isCup = useIsCupActive();
 
   // Oculto em /matches/[id] e qualquer sub-rota não mapeada
   if (!isTabRoute(pathname)) return null;
+
+  // Gate cup/league (TASK-10 + TASK-20): copa esconde Classificação; liga esconde
+  // Grupos/Eliminatórias. Abas removidas do DOM (não apenas `hidden`) para
+  // preservar ordem de foco/leitura.
+  const tabs = TABS.filter((tab) => (isCup ? !tab.leagueOnly : !tab.cupOnly));
 
   return (
     <nav aria-label="Seções de Jogos" className={cn(className)}>
       {/* Linha de chips compactos roláveis (espelha os filtros rápidos de Jogos) */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const active = isActive(tab.href, pathname);
           return (
             <Link

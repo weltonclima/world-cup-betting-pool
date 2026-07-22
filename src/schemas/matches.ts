@@ -32,6 +32,10 @@ const bracketSlotSchema = z
 // quando `status === "finished"`, ambos os placares devem ser inteiros ≥ 0.
 export const matchSchema = z
   .object({
+    // Campeonato dono da partida (TASK-05, multi-championship-launch). ADITIVO:
+    // docs legados e a base ESPN da Copa não emitem o campo → default de leitura
+    // "fifa.world" (compat byte-a-byte). Campeonatos novos gravam o id real.
+    championshipId: nonEmptyString.default("fifa.world"),
     homeTeamId: nonEmptyString,                      // seleção mandante
     awayTeamId: nonEmptyString,                      // seleção visitante
     kickoffAt: isoDateTime,                          // data/hora do jogo

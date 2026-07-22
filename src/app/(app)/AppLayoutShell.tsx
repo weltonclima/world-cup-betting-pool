@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthGuard } from "@/components/layout/AuthGuard";
+import { ActiveChampionshipProvider } from "@/features/championships";
 import { BiometricActivationPrompt } from "@/features/passkeys";
 import { ThemeSync } from "@/features/profile/components";
 import { PoolThemeVars } from "@/features/groupAdmin/components/PoolThemeVars";
@@ -35,7 +36,12 @@ export function AppLayoutShell({ children }: AppLayoutShellProps) {
         {/* Soft-ask pró-ativo de push (push-optin) — aparece pra quem não ligou
             o push; "Agora não" adia 24h, some ao ligar/negar. */}
         <PushOptInPrompt className="mb-4" />
-        {children}
+        {/* Provider do campeonato ativo (multi-championship TASK-09). Montado UMA
+            vez aqui (não por feature). Lê `?championship=` via useSearchParams →
+            precisa de <Suspense> (exigência do Next 15). */}
+        <Suspense fallback={children}>
+          <ActiveChampionshipProvider>{children}</ActiveChampionshipProvider>
+        </Suspense>
       </AppShell>
     </AuthGuard>
   );

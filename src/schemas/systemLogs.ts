@@ -29,6 +29,8 @@ export const systemLogTypeSchema = z.enum([
   "group_admin_manual_prediction",
   // superadmin-invite-generator
   "group_invite_created",
+  // multi-championship-launch (TASK-13): arquivamento de campeonato encerrado
+  "championship_archived",
 ]);
 
 export const systemLogLevelSchema = z.enum(["info", "warning", "error"]);

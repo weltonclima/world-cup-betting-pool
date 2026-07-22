@@ -38,9 +38,17 @@ export { REVALIDATE_MATCHES, REVALIDATE_TEAMS } from "./config";
 export type { MatchWithId, TeamWithId };
 
 // Pipeline ESPN como fonte única (PRD-13) — consumido por matchSource.
-export { EspnScoreClient, ESPN_TOURNAMENT_RANGES } from "./espnClient";
-export { mapEspnEventsToMatches, mapEspnEventToMatch } from "./espnMapper";
+export { EspnScoreClient, ESPN_TOURNAMENT_RANGES, deriveRanges } from "./espnClient";
+export {
+  mapEspnEventsToMatches,
+  mapEspnEventToMatch,
+  mapEspnEventsToLeagueMatches,
+  mapEspnEventToLeagueMatch,
+} from "./espnMapper";
 export type { EspnMatchPatch } from "./espnMapper";
+
+// Catálogo de campeonatos (TASK-02) + fonte por campeonato (TASK-05).
+export { getChampionship, CHAMPIONSHIP_CATALOG } from "./championshipCatalog";
 
 // Mapa de slots de bracket via core API (TASK-07) — base das arestas (TASK-08).
 export {

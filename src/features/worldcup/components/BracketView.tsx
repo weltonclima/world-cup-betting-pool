@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { CupOnlyNotice, useIsCupActive } from "@/features/championships";
 import { cn } from "@/lib/utils";
 import { useBracket } from "@/features/worldcup/hooks/useBracket";
 import { buildTreeOrder } from "@/features/worldcup/lib/knockoutHelpers";
@@ -293,10 +294,26 @@ function pickDefaultPhaseKey(
 // ---------------------------------------------------------------------------
 
 /**
- * Tela de eliminatórias: árvore de colunas no desktop, abas por fase no mobile.
- * Trata todos os estados de ciclo de vida da query (pending/error/empty/ok).
+ * Tela de eliminatórias. Liga de pontos corridos não tem chaveamento → aviso
+ * cup-only ANTES de disparar `useBracket` (guard-before-query: evita fetch e flash
+ * de skeleton/erro). O corpo real vive em `BracketViewContent`, montado só p/ copa
+ * — mantém as regras de hooks intactas (nenhum hook chamado condicionalmente).
  */
 export function BracketView() {
+  const isCup = useIsCupActive();
+  if (!isCup) {
+    return (
+      <CupOnlyNotice message="Chaveamento disponível apenas para copas e torneios." />
+    );
+  }
+  return <BracketViewContent />;
+}
+
+/**
+ * Corpo da tela de eliminatórias: árvore de colunas no desktop, abas por fase no
+ * mobile. Trata todos os estados de ciclo de vida da query (pending/error/empty/ok).
+ */
+function BracketViewContent() {
   const { data, isPending, isError, refetch } = useBracket();
 
   // 1. Carregando

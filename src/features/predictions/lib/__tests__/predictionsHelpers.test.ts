@@ -26,6 +26,7 @@ import {
 function makeScheduledMatch(overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id: "match-01",
+    championshipId: "fifa.world",
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",
     kickoffAt: "2026-06-20T18:00:00.000Z",
@@ -43,6 +44,7 @@ function makeScheduledMatch(overrides: Partial<MatchWithId> = {}): MatchWithId {
 function makeFinishedMatch(overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id: "match-02",
+    championshipId: "fifa.world",
     homeTeamId: "team-fra",
     awayTeamId: "team-ger",
     kickoffAt: "2026-06-15T14:00:00.000Z",

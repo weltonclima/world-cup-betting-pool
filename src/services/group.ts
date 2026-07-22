@@ -4,10 +4,11 @@ import {
   groupManualPredictionSavedSchema,
   inviteSchema,
   poolSchema,
+  rankingModeSchema,
   userSchema,
 } from "@/schemas";
 import type { Invite } from "@/types/invites";
-import type { Pool } from "@/types/pools";
+import type { Pool, RankingMode } from "@/types/pools";
 import type {
   GroupManualPredictionInput,
   GroupManualPredictionSaved,
@@ -201,6 +202,11 @@ export interface UpdateGroupSettingsInput {
   predictionsLocked?: boolean;
   splitPhaseRanking?: boolean;
   ignoreOvertimeGoals?: boolean;
+  // Multi-championship (TASK-07/08). Campeonatos habilitados no pool e modo de
+  // ranking. Validação de domínio (piso/teto/catálogo) é server-side (TASK-07);
+  // aqui só o transporte tipado do PATCH.
+  enabledChampionships?: string[];
+  rankingMode?: RankingMode;
 }
 
 export async function updateGroupSettings(
@@ -226,6 +232,40 @@ export async function getGroupSettings(): Promise<Pool> {
   if (!response.ok) throw await toServiceError(response);
   const body = (await response.json()) as { pool: unknown };
   return poolSchema.parse(body.pool);
+}
+
+// ---------------------------------------------------------------------------
+// Campeonatos habilitados do pool (multi-championship TASK-09)
+// ---------------------------------------------------------------------------
+
+/**
+ * Projeção mínima lida por QUALQUER membro (não só admin) via
+ * `GET /api/group/championships`. Alimenta o seletor de campeonato ativo. Contrato
+ * separado do pool inteiro de propósito: membros comuns não recebem campos de
+ * admin/tema.
+ */
+export interface PoolChampionships {
+  enabledChampionships: string[];
+  rankingMode: RankingMode;
+}
+
+const poolChampionshipsSchema = z.object({
+  enabledChampionships: z.array(z.string().min(1)),
+  rankingMode: rankingModeSchema,
+});
+
+/**
+ * Lê os campeonatos habilitados do pool da sessão (rota escopada a membro). Valida
+ * a resposta por schema (defesa em profundidade) antes de entregar à UI.
+ */
+export async function getPoolChampionships(): Promise<PoolChampionships> {
+  const response = await fetch("/api/group/championships", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  if (!response.ok) throw await toServiceError(response);
+  const body = (await response.json()) as unknown;
+  return poolChampionshipsSchema.parse(body);
 }
 
 // ---------------------------------------------------------------------------

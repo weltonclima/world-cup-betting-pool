@@ -5,8 +5,9 @@ import { NextResponse } from "next/server";
 import { requireApprovedUser } from "@/server/auth/requireApprovedUser";
 import { getAdminFirestore } from "@/server/firebaseAdmin";
 import { ensureRankingsFresh } from "@/server/rankings/recalc";
+import { resolveChampionshipDocScope } from "@/server/rankings/championshipScope";
 import { hydrateRankingEntries } from "@/server/rankings/hydrateEntries";
-import { rankingSchema } from "@/schemas";
+import { championshipRankingSchema, rankingSchema } from "@/schemas";
 import { rankingScopeSchema } from "@/schemas/shared";
 
 // firebase-admin + cookies() exigem Node runtime; lê/grava Firestore → sem cache.
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
  * por pool em vez do doc global.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   ctx: { params: Promise<{ scope: string }> },
 ): Promise<NextResponse> {
   const session = await requireApprovedUser();
@@ -34,6 +35,14 @@ export async function GET(
   const parsedScope = rankingScopeSchema.safeParse(scope);
   if (!parsedScope.success) {
     return NextResponse.json({ error: "Escopo de ranking inválido." }, { status: 400 });
+  }
+
+  // TASK-21: `?championship={id}` opcional. Ausente/`fifa.world` → doc-scope BARE
+  // (compat Copa). Liga → só `geral` (`{id}-geral`). Id/fase inválidos → 400.
+  const rawChampionship = new URL(request.url).searchParams.get("championship");
+  const resolved = resolveChampionshipDocScope(rawChampionship, parsedScope.data);
+  if (!resolved.ok) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 });
   }
 
   const db = getAdminFirestore();
@@ -50,18 +59,21 @@ export async function GET(
 
   const snap = await db
     .collection("rankings")
-    .doc(`pool-${groupId}-${parsedScope.data}`)
+    .doc(`pool-${groupId}-${resolved.docScope}`)
     .get();
   if (!snap.exists) {
     return NextResponse.json(null, { status: 200 });
   }
 
-  const parsed = rankingSchema.safeParse(snap.data());
+  // Doc por campeonato usa schema dedicado; doc legado usa `rankingSchema`.
+  const parsed = resolved.isChampionshipScoped
+    ? championshipRankingSchema.safeParse(snap.data())
+    : rankingSchema.safeParse(snap.data());
   if (!parsed.success) {
     console.warn(
       "[rankings] pool scope doc fora do schema:",
       groupId,
-      parsedScope.data,
+      resolved.docScope,
       parsed.error.issues,
     );
     return NextResponse.json(null, { status: 200 });

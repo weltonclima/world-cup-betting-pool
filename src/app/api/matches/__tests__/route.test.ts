@@ -53,7 +53,7 @@ describe("GET /api/matches", () => {
   it("responde 200 com array de MatchWithId", async () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/matches"));
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as Array<{ id: string; stage: string }>;
@@ -65,21 +65,48 @@ describe("GET /api/matches", () => {
   it("responde 504 quando getEffectiveMatches lança EspnTimeoutError", async () => {
     getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/matches"));
     expect(response.status).toBe(504);
   });
 
   it("responde 502 quando getEffectiveMatches lança EspnFetchError", async () => {
     getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/matches"));
     expect(response.status).toBe(502);
   });
 
   it("responde 500 em erro inesperado", async () => {
     getEffectiveMatchesMock.mockRejectedValue(new Error("erro inesperado"));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/matches"));
     expect(response.status).toBe(500);
+  });
+
+  // ── TASK-06: escopo por campeonato ──────────────────────────────────────────
+
+  it("sem ?championship= usa o default fifa.world (compat)", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+
+    await GET(new Request("http://x/api/matches"));
+    expect(getEffectiveMatchesMock).toHaveBeenCalledWith("fifa.world");
+  });
+
+  it("passa o championship do query param para getEffectiveMatches", async () => {
+    getEffectiveMatchesMock.mockResolvedValue([]);
+
+    const response = await GET(
+      new Request("http://x/api/matches?championship=bra.1-2026"),
+    );
+    expect(response.status).toBe(200);
+    expect(getEffectiveMatchesMock).toHaveBeenCalledWith("bra.1-2026");
+  });
+
+  it("400 e NÃO chama a fonte quando championship está fora do catálogo", async () => {
+    const response = await GET(
+      new Request("http://x/api/matches?championship=nao.existe"),
+    );
+    expect(response.status).toBe(400);
+    expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminAuth, getAdminFirestore } from "@/server/firebaseAdmin";
+import {
+  notifyJoinRequest,
+  sendPushForNotifications,
+  writeNotifications,
+} from "@/server/notifications";
 import { inviteCodeSchema, inviteSchema } from "@/schemas";
 
 /**
@@ -36,6 +41,44 @@ class RedeemError extends Error {
     super(message);
     this.name = "RedeemError";
     this.status = status;
+  }
+}
+
+/**
+ * Notifica o admin do pool sobre um novo pedido de entrada (TASK-17). Resolve o
+ * destino via `pools/{groupId}.adminId` (admin único por pool). Best-effort: erros
+ * são logados e nunca propagam — o resgate já efetivou. Skip silencioso quando o
+ * pool não tem admin resolvível ou o próprio resgatante é o admin (auto-notificação).
+ */
+async function notifyJoinRequestBestEffort(
+  db: ReturnType<typeof getAdminFirestore>,
+  ctx: { uid: string; groupId: string; applicantName: string; now: number },
+): Promise<void> {
+  try {
+    const poolSnap = await db.collection("pools").doc(ctx.groupId).get();
+    const poolData = poolSnap.exists ? poolSnap.data() : undefined;
+    const adminUid = poolData?.["adminId"];
+    // Admin ausente/inválido → nada a notificar. Nunca auto-notifica o resgatante.
+    if (typeof adminUid !== "string" || adminUid.length === 0) {
+      return;
+    }
+    if (adminUid === ctx.uid) {
+      return;
+    }
+    const rawPoolName = poolData?.["name"];
+    const poolName = typeof rawPoolName === "string" ? rawPoolName : "seu bolão";
+
+    const notification = notifyJoinRequest({
+      adminUid,
+      applicantName: ctx.applicantName,
+      poolName,
+      groupId: ctx.groupId,
+      applicantUid: ctx.uid,
+    });
+    const created = await writeNotifications(db, [notification], new Date(ctx.now));
+    await sendPushForNotifications(created, new Date(ctx.now));
+  } catch (error) {
+    console.error("[invite/redeem] falha ao notificar pedido de entrada:", error);
   }
 }
 
@@ -79,6 +122,13 @@ export async function POST(
   const redemptionRef = inviteRef.collection("redemptions").doc(uid);
   const now = Date.now();
 
+  // Capturas para a notificação de pedido de entrada (TASK-17), preenchidas na
+  // transação e consumidas APÓS o commit. `newRedemption` só fica true no run que
+  // efetivamente grava o resgate (re-run do Firestore reavalia e sobrescreve).
+  let newRedemption = false;
+  let joinGroupId = "";
+  let applicantName = "";
+
   try {
     await db.runTransaction(async (tx) => {
       // Todas as leituras ANTES de qualquer escrita (regra do Firestore).
@@ -99,9 +149,8 @@ export async function POST(
       // ao pool do convite (gravado pelo signUp). Sem isso, qualquer ID token
       // válido poderia inflar `usedCount` de um pool alheio.
       const userSnap = await tx.get(userRef);
-      const userGroupId = userSnap.exists
-        ? userSnap.data()?.["groupId"]
-        : undefined;
+      const userData = userSnap.exists ? userSnap.data() : undefined;
+      const userGroupId = userData?.["groupId"];
       if (userGroupId !== invite.groupId) {
         throw new RedeemError(403, "Convite não corresponde ao seu grupo.");
       }
@@ -109,6 +158,7 @@ export async function POST(
       // Idempotência: se este uid já resgatou, é no-op — NÃO incrementa de novo.
       const redemptionSnap = await tx.get(redemptionRef);
       if (redemptionSnap.exists) {
+        newRedemption = false;
         return; // já contabilizado; resposta ok sem inflar usedCount
       }
 
@@ -119,7 +169,25 @@ export async function POST(
 
       tx.set(redemptionRef, { redeemedAt: now });
       tx.update(inviteRef, { usedCount: invite.usedCount + 1 });
+
+      // Dados para notificar o admin do pool após o commit (TASK-17).
+      newRedemption = true;
+      joinGroupId = invite.groupId;
+      const rawName = userData?.["name"];
+      applicantName = typeof rawName === "string" ? rawName : "";
     });
+
+    // Notificação de pedido de entrada ao admin do pool (TASK-17) — só em resgate
+    // NOVO. Best-effort: qualquer falha é logada e NÃO afeta o resgate (o convidado
+    // já está `pending` e será aprovado pelo console). Fora da transação.
+    if (newRedemption) {
+      await notifyJoinRequestBestEffort(db, {
+        uid,
+        groupId: joinGroupId,
+        applicantName,
+        now,
+      });
+    }
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {

@@ -90,6 +90,7 @@ function makeTeam(id: string, name: string = `Seleção ${id}`): TeamWithId {
 function makeScheduledMatch(id: string, kickoffAt = "2099-12-31T20:00:00.000Z"): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",
     kickoffAt,

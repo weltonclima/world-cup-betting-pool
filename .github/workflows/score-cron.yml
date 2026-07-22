@@ -1,9 +1,15 @@
-# Cron de pontuação (PRD-15 / TASK-06)
+# Cron de pontuação (PRD-15 / TASK-06; sweep multi-campeonato TASK-21)
 #
 # Dispara periodicamente POST /api/predictions/score na produção. Esse único
 # request encadeia, in-process, o recálculo de rankings (chainRecalc →
 # /api/rankings/recalc) e os fan-outs de notificações `games` e `ranking`.
 # Resultado: o pipeline scoring → recalc → notificações roda sem ação manual.
+#
+# TASK-21: a rota já VARRE, num único POST, a Copa + as LIGAS ATIVAS
+# (`type: "league"`, `status != "archived"`) habilitadas em qualquer pool — a
+# iteração por campeonato é derivada dos pools in-process, não do YAML. Cups
+# ficam de fora (matchId bare colidiria com a Copa). O response passa a incluir
+# `championshipsProcessed` (nº de ligas pontuadas), além de scoredMatches.
 #
 # Configuração necessária (Settings do repositório):
 #   - secrets.SCORE_SECRET  → deve bater com process.env.SCORE_SECRET do deploy.
@@ -45,7 +51,7 @@ jobs:
             -X POST "${APP_BASE_URL}/api/predictions/score" \
             -H "x-cron-secret: ${SCORE_SECRET}") || status=$?
 
-          # Corpo é { scoredMatches, updatedPredictions } — não sensível, pode logar.
+          # Corpo é { scoredMatches, updatedPredictions, skippedMatches, championshipsProcessed } — não sensível, pode logar.
           echo "Resposta: ${http_body}"
 
           if [ "${status}" -ne 0 ]; then

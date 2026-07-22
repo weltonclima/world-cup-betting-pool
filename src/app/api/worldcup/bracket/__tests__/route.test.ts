@@ -137,7 +137,7 @@ describe("GET /api/worldcup/bracket", () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     expect(response.status).toBe(200);
     expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
@@ -156,7 +156,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     expect(response.status).toBe(200);
     // Recomputou: bateu na fonte ESPN em vez de servir o snapshot velho.
@@ -167,7 +167,7 @@ describe("GET /api/worldcup/bracket", () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     const body = (await response.json()) as Record<string, unknown>;
     // Bracket body puro: não deve ter hasLiveGroupMatch
     expect(body).not.toHaveProperty("hasLiveGroupMatch");
@@ -177,7 +177,7 @@ describe("GET /api/worldcup/bracket", () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=86400, stale-while-revalidate=60",
     );
@@ -188,7 +188,7 @@ describe("GET /api/worldcup/bracket", () => {
     readSnapshotMock.mockResolvedValue(liveSnap);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     // Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=60, stale-while-revalidate=0",
@@ -209,7 +209,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     // Deve ter caído no caminho de recomputo, não usado o cache corrompido
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -251,7 +251,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     // Não serviu o snapshot legado — recomputou da fonte
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -295,7 +295,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     // Não serviu o snapshot preso — recomputou da fonte
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -311,7 +311,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     expect(response.status).toBe(200);
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -332,7 +332,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     expect(response.status).toBe(200);
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -345,7 +345,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]); // stage=oitavas, não grupos
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=86400, stale-while-revalidate=60",
     );
@@ -363,7 +363,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([liveGroupMatch]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     // Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=60, stale-while-revalidate=0",
@@ -383,7 +383,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([liveKnockoutMatch]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=60, stale-while-revalidate=0",
     );
@@ -396,7 +396,7 @@ describe("GET /api/worldcup/bracket", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -412,7 +412,7 @@ describe("GET /api/worldcup/bracket", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.status).toBe(502);
   });
 
@@ -421,7 +421,7 @@ describe("GET /api/worldcup/bracket", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.status).toBe(504);
   });
 
@@ -430,7 +430,7 @@ describe("GET /api/worldcup/bracket", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new Error("erro inesperado"));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.status).toBe(500);
   });
 
@@ -442,7 +442,7 @@ describe("GET /api/worldcup/bracket", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([]);
 
-    await GET();
+    await GET(new Request("http://x/api/worldcup/bracket"));
 
     expect(fetchEspnBracketMapMock).toHaveBeenCalledOnce();
   });
@@ -469,7 +469,7 @@ describe("GET /api/worldcup/bracket", () => {
       ]),
     );
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     const body = (await response.json()) as BracketResponse;
 
     expect(response.status).toBe(200);
@@ -486,7 +486,76 @@ describe("GET /api/worldcup/bracket", () => {
     // writeSnapshot engole o erro internamente; verifica que rota continua com 200
     writeSnapshotMock.mockResolvedValue(undefined);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
     expect(response.status).toBe(200);
+  });
+
+  // ── TASK-06: escopo por campeonato + gate cup/league ────────────────────────
+
+  it("400 para campeonato de liga (gate cup/league), sem ler snapshot nem fonte", async () => {
+    const response = await GET(
+      new Request("http://x/api/worldcup/bracket?championship=bra.1-2026"),
+    );
+    expect(response.status).toBe(400);
+    expect(readSnapshotMock).not.toHaveBeenCalled();
+    expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
+  });
+
+  it("400 para campeonato fora do catálogo, sem ler snapshot", async () => {
+    const response = await GET(
+      new Request("http://x/api/worldcup/bracket?championship=nao.existe"),
+    );
+    expect(response.status).toBe(400);
+    expect(readSnapshotMock).not.toHaveBeenCalled();
+  });
+
+  it("lê o snapshot na chave escopada por campeonato (bracket:fifa.world)", async () => {
+    readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
+    isFreshMock.mockReturnValue(true);
+
+    await GET(new Request("http://x/api/worldcup/bracket"));
+    expect(readSnapshotMock).toHaveBeenCalledWith("bracket:fifa.world");
+  });
+
+  it("faz fallback de leitura à chave legada 'bracket' para a Copa default", async () => {
+    // Escopada ausente → lê a chave legada (preserva snapshot pré-TASK-06).
+    readSnapshotMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(MOCK_SNAPSHOT);
+    isFreshMock.mockReturnValue(true);
+
+    const response = await GET(new Request("http://x/api/worldcup/bracket"));
+    expect(readSnapshotMock).toHaveBeenNthCalledWith(1, "bracket:fifa.world");
+    expect(readSnapshotMock).toHaveBeenNthCalledWith(2, "bracket");
+    expect(response.status).toBe(200);
+  });
+
+  it("NÃO faz fallback legado para campeonato cup não-default", async () => {
+    readSnapshotMock.mockResolvedValue(null);
+    isFreshMock.mockReturnValue(false);
+    getEffectiveMatchesMock.mockResolvedValue([]);
+    fetchAllTeamsMock.mockResolvedValue([]);
+
+    await GET(
+      new Request("http://x/api/worldcup/bracket?championship=uefa.champions-2026"),
+    );
+    expect(readSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(readSnapshotMock).toHaveBeenCalledWith("bracket:uefa.champions-2026");
+    expect(getEffectiveMatchesMock).toHaveBeenCalledWith("uefa.champions-2026");
+  });
+
+  it("grava o snapshot na chave escopada por campeonato", async () => {
+    readSnapshotMock.mockResolvedValue(null);
+    isFreshMock.mockReturnValue(false);
+    getEffectiveMatchesMock.mockResolvedValue([MOCK_KNOCKOUT_MATCH]);
+    fetchAllTeamsMock.mockResolvedValue([]);
+
+    await GET(new Request("http://x/api/worldcup/bracket"));
+    expect(writeSnapshotMock).toHaveBeenCalledWith(
+      "bracket:fifa.world",
+      expect.anything(),
+      expect.any(Boolean),
+      expect.any(Number),
+    );
   });
 });

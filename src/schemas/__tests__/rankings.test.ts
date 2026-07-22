@@ -1,6 +1,8 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  aggregateRankingSchema,
+  championshipRankingSchema,
   groupRankingSchema,
   poolRankingResponseSchema,
   rankingEntrySchema,
@@ -94,6 +96,40 @@ describe("rankings", () => {
     expect(rankingSchema.safeParse({ ...valid, extra: 1 }).success).toBe(
       false,
     );
+  });
+
+  // TASK-21 — doc de ranking por campeonato (recalc §7.5): scope namespaced +
+  // campo championshipId. NÃO parseia com rankingSchema (enum bare + .strict).
+  const validChampionshipRanking = {
+    scope: "bra.1-2026-geral",
+    championshipId: "bra.1-2026",
+    updatedAt: "2026-06-05T12:00:00Z",
+    entries: [fullEntry],
+  } as const;
+
+  it("championshipRankingSchema faz parse do doc por campeonato (scope namespaced)", () => {
+    expect(championshipRankingSchema.safeParse(validChampionshipRanking).success).toBe(true);
+  });
+
+  it("championshipRankingSchema aceita entries vazio", () => {
+    expect(
+      championshipRankingSchema.safeParse({ ...validChampionshipRanking, entries: [] }).success,
+    ).toBe(true);
+  });
+
+  it("championshipRankingSchema rejeita championshipId ausente", () => {
+    const { championshipId: _drop, ...semId } = validChampionshipRanking;
+    expect(championshipRankingSchema.safeParse(semId).success).toBe(false);
+  });
+
+  it("championshipRankingSchema rejeita campo extra (.strict)", () => {
+    expect(
+      championshipRankingSchema.safeParse({ ...validChampionshipRanking, extra: 1 }).success,
+    ).toBe(false);
+  });
+
+  it("rankingSchema NÃO parseia o doc por campeonato (scope namespaced + championshipId)", () => {
+    expect(rankingSchema.safeParse(validChampionshipRanking).success).toBe(false);
   });
 
   // ── Compat retroativa + campos de exibição (TASK-01) ──────────────────────
@@ -260,6 +296,53 @@ describe("rankings", () => {
     expect(
       poolRankingResponseSchema.safeParse({ ...valid, extra: 1 }).success,
     ).toBe(false);
+  });
+
+  // ── três formas de doc no MESMO endpoint (multi-championship TASK-12) ──────
+  it("poolRankingResponseSchema parseia a forma AGREGADO (scope 'agregado', sem championshipId)", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({ ...valid, scope: "agregado" }).success,
+    ).toBe(true);
+  });
+
+  it("poolRankingResponseSchema parseia a forma POR CAMPEONATO (scope namespaced + championshipId)", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({
+        ...valid,
+        scope: "bra.1-2026-geral",
+        championshipId: "bra.1-2026",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("poolRankingResponseSchema aceita rankingMode 'geral' e 'por-campeonato'", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({ ...valid, rankingMode: "geral" }).success,
+    ).toBe(true);
+    expect(
+      poolRankingResponseSchema.safeParse({ ...valid, rankingMode: "por-campeonato" }).success,
+    ).toBe(true);
+  });
+
+  it("poolRankingResponseSchema rejeita rankingMode fora do enum", () => {
+    expect(
+      poolRankingResponseSchema.safeParse({ ...valid, rankingMode: "misturado" }).success,
+    ).toBe(false);
+  });
+
+  it("aggregateRankingSchema parseia o doc agregado e rejeita championshipId", () => {
+    expect(aggregateRankingSchema.safeParse({ ...valid, scope: "agregado" }).success).toBe(true);
+    // NÃO carrega championshipId (soma entre campeonatos, não um específico) → .strict rejeita.
+    expect(
+      aggregateRankingSchema.safeParse({ ...valid, scope: "agregado", championshipId: "x" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("expõe rankingMode opcional no tipo inferido", () => {
+    expectTypeOf<PoolRanking["rankingMode"]>().toEqualTypeOf<
+      "geral" | "por-campeonato" | undefined
+    >();
   });
 
   it("expõe splitPhaseRanking opcional no tipo inferido", () => {

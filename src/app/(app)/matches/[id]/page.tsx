@@ -15,5 +15,15 @@ export default async function MatchDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <MatchDetail id={id} />;
+  // Id namespaced de liga traz ':' — Next/Turbopack o normaliza para `%3A` em
+  // `params.id`. Decodifica p/ o id CANÔNICO (cru) fluir na árvore; o serviço então
+  // encoda 1× no fetch (sem duplo-encode → sem 404 no detalhe). Idempotente p/ ids
+  // sem '%' (Copa legada); guarda contra sequência malformada.
+  let matchId = id;
+  try {
+    matchId = decodeURIComponent(id);
+  } catch {
+    // mantém o valor cru
+  }
+  return <MatchDetail id={matchId} />;
 }

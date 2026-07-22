@@ -23,6 +23,7 @@ import type { Prediction } from "@/types";
 function makeFinished(overrides: Partial<MatchListItem> = {}): MatchListItem {
   return {
     id: "match-1",
+    championshipId: "fifa.world",
     kickoffAt: "2026-06-15T18:00:00.000Z",
     stage: "grupos",
     round: 1,

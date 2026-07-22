@@ -4,5 +4,6 @@ export { GroupPendingUsers } from "./GroupPendingUsers";
 export { GroupApprovedUsers } from "./GroupApprovedUsers";
 export { GroupBlockedUsers } from "./GroupBlockedUsers";
 export { GroupSettingsForm } from "./GroupSettingsForm";
+export { GroupChampionshipsSettings } from "./GroupChampionshipsSettings";
 export { GroupInvites } from "./GroupInvites";
 export { GroupManualPredictions } from "./GroupManualPredictions";

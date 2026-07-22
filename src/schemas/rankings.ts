@@ -6,7 +6,7 @@ import {
   percentageSchema,
   rankingScopeSchema,
 } from "@/schemas/shared";
-import { hexColorSchema } from "@/schemas/pools";
+import { hexColorSchema, rankingModeSchema } from "@/schemas/pools";
 
 // Entrada de ranking (objeto aninhado).
 // Pontuação ponderada: `points` === total de PONTOS ponderados (5/10) no escopo,
@@ -45,22 +45,61 @@ export const rankingSchema = z
   })
   .strict();
 
-// Payload de resposta de `GET /api/rankings/pool` (split-phase-ranking TASK-02).
-// Estende `rankingSchema` com a flag de exibição `splitPhaseRanking` lida do pool.
-// NÃO mexer em `rankingSchema` (é `.strict()` e usado por outras rotas); `.extend()`
-// cria um schema dedicado. Flag optional: ausente = OFF (telas tratam como false).
-export const poolRankingResponseSchema = rankingSchema.extend({
-  splitPhaseRanking: z.boolean().optional(),
-  // Flag de exibição do pool (ignorar-gols-prorrogacao TASK-04): quando true, as
-  // telas pontuam palpites de eliminatórias pelo placar de 90min (coerência com o
-  // ranking do pool). Ausente = OFF. Fonte única no client via usePoolRanking.
-  ignoreOvertimeGoals: z.boolean().optional(),
-  // Cores de marca do pool (personalizacao-grupo TASK-03) — usadas pelo
-  // PoolThemeVars no client p/ sincronizar as CSS vars do tema por pool.
-  // Ausentes = grupo sem cor (fallback verde). Fonte única via usePoolRanking.
-  primaryColorLight: hexColorSchema.optional(),
-  primaryColorDark: hexColorSchema.optional(),
-});
+// Doc de ranking POR CAMPEONATO (multi-championship TASK-21, gravado pela recalc §7.5
+// da TASK-11). Difere de `rankingSchema` em dois pontos que impedem o reuso: `scope` é
+// namespaced (`bra.1-2026-geral`, fora do enum de fases) e há o campo extra
+// `championshipId`. Schema DEDICADO — não afrouxar `rankingSchema` (`.strict()` + enum,
+// usado pelas rotas legadas da Copa). `entries` reusa `rankingEntrySchema`.
+export const championshipRankingSchema = z
+  .object({
+    scope: nonEmptyString, // doc-scope namespaced, ex.: "bra.1-2026-geral"
+    championshipId: nonEmptyString, // id do campeonato dono do doc
+    updatedAt: isoDateTime,
+    entries: z.array(rankingEntrySchema),
+  })
+  .strict();
+
+// Payload de resposta de `GET /api/rankings/pool` (split-phase-ranking TASK-02;
+// championship-aware TASK-12). NÃO estende mais `rankingSchema`: sob multi-championship
+// a rota serve três formas de doc no MESMO endpoint — o `geral`/`agregado` bare do pool
+// E o `geral` por campeonato (`?championship=`), cujo `scope` é namespaced (`bra.1-2026-geral`)
+// e fora do enum de fases. Por isso `scope` é `nonEmptyString` aqui (aceita "geral",
+// "agregado" e "{C}-geral"), diferente de `rankingSchema` (`.strict()` + enum, intocado).
+// Antes (TASK-21 MEDIUM-1) o parser client rejeitava a resposta escopada; agora as três
+// formas passam. `championshipId` só vem na resposta por campeonato; `rankingMode` informa
+// ao client qual UI montar (lista agregada única vs seletor por campeonato). As flags de
+// exibição são de nível POOL (não do campeonato) e permanecem opcionais.
+export const poolRankingResponseSchema = z
+  .object({
+    scope: nonEmptyString, // "geral" | "agregado" | "{championshipId}-geral"
+    championshipId: nonEmptyString.optional(), // presente só na resposta por campeonato
+    rankingMode: rankingModeSchema.optional(), // modo de exibição do pool (default geral)
+    updatedAt: isoDateTime,
+    entries: z.array(rankingEntrySchema),
+    splitPhaseRanking: z.boolean().optional(),
+    // Flag de exibição do pool (ignorar-gols-prorrogacao TASK-04): quando true, as
+    // telas pontuam palpites de eliminatórias pelo placar de 90min (coerência com o
+    // ranking do pool). Ausente = OFF. Fonte única no client via usePoolRanking.
+    ignoreOvertimeGoals: z.boolean().optional(),
+    // Cores de marca do pool (personalizacao-grupo TASK-03) — usadas pelo
+    // PoolThemeVars no client p/ sincronizar as CSS vars do tema por pool.
+    // Ausentes = grupo sem cor (fallback verde). Fonte única via usePoolRanking.
+    primaryColorLight: hexColorSchema.optional(),
+    primaryColorDark: hexColorSchema.optional(),
+  })
+  .strict();
+
+// Doc de ranking `geral` AGREGADO por pool (multi-championship TASK-12, gravado pela
+// recalc §7.6). Difere de `rankingSchema` (`scope` fora do enum: "agregado") e de
+// `championshipRankingSchema` (NÃO carrega `championshipId` — é a soma entre campeonatos,
+// não um campeonato específico). Schema DEDICADO p/ o parse server do doc armazenado.
+export const aggregateRankingSchema = z
+  .object({
+    scope: nonEmptyString, // "agregado"
+    updatedAt: isoDateTime,
+    entries: z.array(rankingEntrySchema),
+  })
+  .strict();
 
 // Ranking por grupo individual (A–L). Doc `rankings/group-{groupId}`.
 // Reaproveita `rankingEntrySchema`; identificado por `groupId` (alinhado a match.groupId).

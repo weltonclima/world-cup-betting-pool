@@ -67,8 +67,11 @@ function mockDb(
   return { getDoc, getAll };
 }
 
-function req(..._ignored: unknown[]): Request {
-  return {} as unknown as Request;
+// TASK-21: o handler agora lê `?championship` via `new URL(request.url)`, então o
+// request precisa de uma URL real. Segundo arg opcional = valor de `?championship`.
+function req(_scope?: unknown, championship?: string): Request {
+  const q = typeof championship === "string" ? `?championship=${championship}` : "";
+  return new Request(`http://localhost/api/rankings/scope${q}`);
 }
 const ctx = (scope: string) => ({ params: Promise.resolve({ scope }) });
 
@@ -158,4 +161,86 @@ describe("GET /api/rankings/{scope}", () => {
       expect(res.status).toBe(200);
     },
   );
+});
+
+// ───────────────────── TASK-21: ?championship ─────────────────────
+/** Doc de ranking por campeonato (scope namespaced + `championshipId`). */
+function champDoc(id: string) {
+  return {
+    scope: `${id}-geral`,
+    championshipId: id,
+    updatedAt: "2026-06-01T02:00:00.000Z",
+    entries: [
+      { uid: "u1", nickname: "ana", name: "Ana", position: 1, points: 10, wrong: 2, accuracy: 83 },
+    ],
+  };
+}
+
+/** Firestore mock que captura o doc-id lido em `rankings`. */
+function mockDbCapture(snap: { exists: boolean; data: () => unknown }) {
+  const captured: string[] = [];
+  const getDoc = vi.fn().mockResolvedValue(snap);
+  getFirestoreMock.mockReturnValue({
+    collection: vi.fn(() => ({
+      doc: vi.fn((id?: string) => {
+        if (id) captured.push(id);
+        return { uid: id, get: getDoc };
+      }),
+    })),
+    getAll: vi.fn(async (...refs: unknown[]) => refs.map(() => ({ exists: false, data: () => undefined }))),
+  });
+  return { captured };
+}
+
+describe("GET /api/rankings/{scope} — ?championship (TASK-21)", () => {
+  it("sem param → doc bare servido (compat byte-idêntica)", async () => {
+    const { captured } = mockDbCapture({ exists: true, data: () => rankingDoc({ scope: "geral" }) });
+    const res = await GET(req("geral"), ctx("geral"));
+    expect(res.status).toBe(200);
+    expect(captured).toContain("geral"); // doc bare, sem prefixo de campeonato
+  });
+
+  it("?championship=fifa.world → tratado como legado (doc bare)", async () => {
+    const { captured } = mockDbCapture({ exists: true, data: () => rankingDoc({ scope: "geral" }) });
+    const res = await GET(req("geral", "fifa.world"), ctx("geral"));
+    expect(res.status).toBe(200);
+    expect(captured).toContain("geral");
+  });
+
+  it("?championship={liga} + geral → serve rankings/{id}-geral via schema dedicado", async () => {
+    const { captured } = mockDbCapture({ exists: true, data: () => champDoc("bra.1-2026") });
+    const res = await GET(req("geral", "bra.1-2026"), ctx("geral"));
+    expect(res.status).toBe(200);
+    expect(captured).toContain("bra.1-2026-geral");
+    const body = await res.json();
+    expect(body.championshipId).toBe("bra.1-2026");
+    expect(body.entries).toHaveLength(1);
+  });
+
+  it("?championship={liga} + fase → 400, sem tocar Firestore nem o guard", async () => {
+    const res = await GET(req("grupos", "bra.1-2026"), ctx("grupos"));
+    expect(res.status).toBe(400);
+    expect(getFirestoreMock).not.toHaveBeenCalled();
+    expect(ensureFreshMock).not.toHaveBeenCalled();
+  });
+
+  it("?championship=desconhecido → 400, sem tocar Firestore", async () => {
+    const res = await GET(req("geral", "nao.existe-2026"), ctx("geral"));
+    expect(res.status).toBe(400);
+    expect(getFirestoreMock).not.toHaveBeenCalled();
+  });
+
+  it("doc por campeonato ausente → 200 null", async () => {
+    mockDbCapture({ exists: false, data: () => undefined });
+    const res = await GET(req("geral", "bra.1-2026"), ctx("geral"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toBeNull();
+  });
+
+  it("doc por campeonato SEM championshipId → 200 null (schema dedicado rejeita)", async () => {
+    mockDbCapture({ exists: true, data: () => rankingDoc({ scope: "bra.1-2026-geral" }) });
+    const res = await GET(req("geral", "bra.1-2026"), ctx("geral"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toBeNull();
+  });
 });

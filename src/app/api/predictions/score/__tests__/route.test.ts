@@ -710,7 +710,13 @@ describe("POST /api/predictions/score", () => {
         scoredMatches: number;
         updatedPredictions: number;
       };
-      expect(body).toEqual({ scoredMatches: 0, updatedPredictions: 0, skippedMatches: 0 });
+      // championshipsProcessed=1: só a Copa varrida (sem ligas habilitadas). TASK-19.
+      expect(body).toEqual({
+        scoredMatches: 0,
+        updatedPredictions: 0,
+        skippedMatches: 0,
+        championshipsProcessed: 1,
+      });
     });
   });
 

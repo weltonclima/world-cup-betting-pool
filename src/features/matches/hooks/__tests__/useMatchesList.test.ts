@@ -32,6 +32,13 @@ vi.mock("../useMatches");
 vi.mock("../useTeams");
 vi.mock("../usePredictions");
 
+// Campeonato ativo controlável (TASK-09). Default = Copa (comportamento legado),
+// para não alterar os demais cenários que não passam id.
+const { activeChampMock } = vi.hoisted(() => ({ activeChampMock: vi.fn() }));
+vi.mock("@/features/championships", () => ({
+  useActiveChampionship: () => activeChampMock(),
+}));
+
 // ── imports pós-mock ─────────────────────────────────────────────────────────
 
 import { useAuth } from "@/hooks/useAuth";
@@ -93,6 +100,7 @@ function makeTeam(id: string, name: string = `Seleção ${id}`): TeamWithId {
 function makeScheduledMatch(id: string, kickoffAt = "2099-12-31T20:00:00.000Z"): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",
     kickoffAt,
@@ -152,6 +160,39 @@ function setupMocks({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: Copa (legado). Cenários específicos sobrescrevem.
+  activeChampMock.mockReturnValue({
+    activeChampionshipId: "fifa.world",
+    enabledChampionships: ["fifa.world"],
+    rankingMode: "geral",
+    isMultiChampionship: false,
+    isLoading: false,
+    setActiveChampionship: vi.fn(),
+  });
+});
+
+describe("useMatchesList — segmentação por campeonato ativo (TASK-09)", () => {
+  it("passa o campeonato ativo para useMatches e useTeams", () => {
+    activeChampMock.mockReturnValue({
+      activeChampionshipId: "bra.1-2026",
+      enabledChampionships: ["fifa.world", "bra.1-2026"],
+      rankingMode: "por-campeonato",
+      isMultiChampionship: true,
+      isLoading: false,
+      setActiveChampionship: vi.fn(),
+    });
+    setupMocks();
+    renderHook(() => useMatchesList());
+    expect(mockUseMatches).toHaveBeenCalledWith("bra.1-2026");
+    expect(mockUseTeams).toHaveBeenCalledWith("bra.1-2026");
+  });
+
+  it("default (Copa) → useMatches/useTeams recebem fifa.world (legado)", () => {
+    setupMocks();
+    renderHook(() => useMatchesList());
+    expect(mockUseMatches).toHaveBeenCalledWith("fifa.world");
+    expect(mockUseTeams).toHaveBeenCalledWith("fifa.world");
+  });
 });
 
 describe("useMatchesList — estado neutro (uid=null)", () => {

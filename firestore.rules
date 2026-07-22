@@ -138,6 +138,15 @@ service cloud.firestore {
     match /statistics/{uid}      { allow read: if isApproved(); allow write: if false; }
     match /pool_stats/{id}       { allow read: if isApproved(); allow write: if false; }
 
+    // ---- Multi-championship (TASK-13): estado + histórico de arquivamento ----
+    // `championships/{id}` = override de STATUS de runtime (default é o catálogo
+    // estático); `history/{docId}` = snapshot congelado (ranking/estatísticas
+    // finais). Ambos gravados EXCLUSIVAMENTE pelo pipeline de arquivamento via
+    // Admin SDK (`POST /api/admin/championships/[id]/archive`), que bypassa Rules.
+    // Approved lê; NINGUÉM escreve pelo cliente (imutabilidade do congelado).
+    match /championships/{id}    { allow read: if isApproved(); allow write: if false; }
+    match /history/{docId}       { allow read: if isApproved(); allow write: if false; }
+
     // ---- system_logs (PRD-07): auditoria admin-only e imutável ----
     // Gravado client-side pelo admin (sem Cloud Function — Spark). Leitura
     // admin-only (tela Logs). Sem update/delete: log é append-only (não forjável

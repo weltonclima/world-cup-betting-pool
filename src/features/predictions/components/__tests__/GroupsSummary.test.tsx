@@ -27,6 +27,7 @@ import {
 
 function makeMatch(overrides: Partial<MatchWithId> & { id: string }): MatchWithId {
   return {
+    championshipId: "fifa.world",
     homeTeamId: "BRA",
     awayTeamId: "FRA",
     kickoffAt: "2026-06-14T16:00:00Z",

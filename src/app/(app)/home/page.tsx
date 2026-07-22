@@ -1,3 +1,4 @@
+import { ChampionshipSelector } from "@/features/championships";
 import { HomeDashboard } from "@/features/home/components/HomeDashboard";
 
 /**
@@ -12,7 +13,11 @@ import { HomeDashboard } from "@/features/home/components/HomeDashboard";
  */
 export default function HomePage() {
   return (
-    <div className="home-theme">
+    <div className="home-theme flex flex-col gap-4">
+      {/* Seletor de campeonato ativo (multi-championship TASK-09) — auto-oculta em
+          pools com ≤ 1 campeonato. As derivações da Home (próximo jogo, raio-X,
+          jogos abertos) seguem o campeonato ativo; Hero/ranking permanece agregado. */}
+      <ChampionshipSelector />
       <HomeDashboard />
     </div>
   );

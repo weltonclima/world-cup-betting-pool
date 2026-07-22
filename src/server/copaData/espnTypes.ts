@@ -28,6 +28,9 @@ export const espnTeamSchema = z
     displayName: z.string().optional(),
     shortDisplayName: z.string().optional(),
     isActive: z.boolean().optional(),
+    // Escudo do clube (TASK-20). Opcional — a Copa (seleções) usa bandeira do
+    // registry e não depende deste campo; ligas extraem o crest daqui.
+    logo: z.string().optional(),
   })
   .passthrough();
 
@@ -127,6 +130,11 @@ export const espnCompetitionSchema = z
   })
   .passthrough();
 
+/** Rodada (matchday) do evento — só ligas de pontos corridos emitem (TASK-05). */
+export const espnWeekSchema = z
+  .object({ number: z.number().int().min(1).optional() })
+  .passthrough();
+
 export const espnEventSchema = z
   .object({
     // ID numérico do evento (ex.: "760415") — presente em todos os eventos.
@@ -134,6 +142,8 @@ export const espnEventSchema = z
     uid: z.string().optional(),
     date: z.string(),
     season: espnSeasonSchema.optional(),
+    // Rodada da liga (matchday). Opcional — a Copa não emite; ligas sim (TASK-05).
+    week: espnWeekSchema.optional(),
     competitions: z.array(espnCompetitionSchema).min(1),
   })
   .passthrough();

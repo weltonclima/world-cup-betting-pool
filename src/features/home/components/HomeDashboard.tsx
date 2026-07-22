@@ -19,6 +19,10 @@ import { AlertCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  SeasonEndedNotice,
+  useActiveChampionship,
+} from "@/features/championships";
 
 import { useHomeDashboard } from "@/features/home/hooks/useHomeDashboard";
 
@@ -98,6 +102,12 @@ export function HomeDashboard() {
   // Lê profile para o HomeHeader (nome e uid)
   const { profile, firebaseUser } = useAuth();
 
+  // Área ativa vazia (pool 100%-arquivado, ex.: só-Copa pós-encerramento): a Home
+  // não mostra dados da Copa encerrada — recolhe tudo ao aviso "temporada
+  // encerrada → Histórico". `hasActiveChampionship` é `false` SÓ após o load com
+  // conjunto vazio (nunca durante o load → sem flash). Bugfix multi-championship.
+  const { hasActiveChampionship } = useActiveChampionship();
+
   // Dados e estado agregado do compositor
   const {
     heroSummary,
@@ -118,6 +128,16 @@ export function HomeDashboard() {
   // ── Estado de erro de página ─────────────────────────────────────────────
   // Exibido apenas quando isError=true e isLoading=false.
   // Enquanto há loading, mostramos skeletons (melhor UX que erro imediato).
+  // Temporada encerrada: nenhum campeonato ativo → aviso + atalho ao Histórico.
+  // ANTES do estado de erro: com o pool 100%-arquivado, `useHomeDashboard` roda
+  // sobre o fallback `fifa.world` e pode errar; o aviso correto é "temporada
+  // encerrada", não um "Erro ao carregar dashboard" genérico (IN-01).
+  if (!hasActiveChampionship) {
+    return (
+      <SeasonEndedNotice subtitle="Não há campeonato ativo no seu grupo. O ranking e as estatísticas finais estão no Histórico." />
+    );
+  }
+
   if (isError && !isLoading) {
     return <ErrorState onRetry={refetch} />;
   }

@@ -32,6 +32,7 @@ function makeFinishedMatch(
 ): MatchWithId {
   return {
     id: "match-01",
+    championshipId: "fifa.world",
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",
     kickoffAt: "2026-06-15T18:00:00.000Z",
@@ -51,6 +52,7 @@ function makeScheduledMatch(
 ): MatchWithId {
   return {
     id: "match-02",
+    championshipId: "fifa.world",
     homeTeamId: "team-bra",
     awayTeamId: "team-arg",
     kickoffAt: "2026-06-20T18:00:00.000Z",

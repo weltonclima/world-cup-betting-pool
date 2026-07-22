@@ -86,6 +86,48 @@ function ymd(y: number, m: number, d: number): string {
 }
 
 /**
+ * Ranges MENSAIS disjuntos (`YYYYMMDD-YYYYMMDD`) do mês de `startYmd` ao mês de
+ * `endYmd` (ambos `YYYYMMDD`), inclusive. Cada range cobre o mês inteiro
+ * (dia 01 → último dia), garantindo cobertura total da janela e atravessando a
+ * virada de ano quando a temporada é partida (ago–mai). O dia dentro de start/end
+ * é ignorado: a granularidade mínima da paginação é o mês.
+ */
+function monthlyRangesBetween(startYmd: string, endYmd: string): string[] {
+  let y = Number(startYmd.slice(0, 4));
+  let m = Number(startYmd.slice(4, 6));
+  const endY = Number(endYmd.slice(0, 4));
+  const endM = Number(endYmd.slice(4, 6));
+
+  // Falha ruidosa (alinhado ao resto do arquivo): mês fora de 1-12 ou janela
+  // invertida (start > end) derivaria [] em silêncio → schedule vazio sem erro
+  // (perda de jogos mascarada). Prefere-se lançar a devolver cobertura vazia.
+  if (m < 1 || m > 12 || endM < 1 || endM > 12) {
+    throw new Error(
+      `monthlyRangesBetween: mês inválido em "${startYmd}"/"${endYmd}" ` +
+        `(mês deve ser 01-12).`,
+    );
+  }
+  if (endY < y || (endY === y && endM < m)) {
+    throw new Error(
+      `monthlyRangesBetween: janela invertida "${startYmd}" > "${endYmd}" ` +
+        `(seasonStart deve ser <= seasonEnd).`,
+    );
+  }
+
+  const ranges: string[] = [];
+  while (y < endY || (y === endY && m <= endM)) {
+    ranges.push(`${ymd(y, m, 1)}-${ymd(y, m, lastDayOfMonth(y, m))}`);
+    if (m === 12) {
+      m = 1;
+      y += 1;
+    } else {
+      m += 1;
+    }
+  }
+  return ranges;
+}
+
+/**
  * Deriva os ranges de datas (`YYYYMMDD-YYYYMMDD`) que cobrem a temporada de um
  * campeonato, respeitando o cap ESPN de 100 eventos/chamada.
  *
@@ -103,11 +145,23 @@ function ymd(y: number, m: number, d: number): string {
 export function deriveRanges(
   championship: Pick<
     Championship,
-    "espnSlug" | "season" | "needsPagination" | "legacyMatchId"
+    | "espnSlug"
+    | "season"
+    | "needsPagination"
+    | "legacyMatchId"
+    | "seasonStart"
+    | "seasonEnd"
   >,
 ): readonly string[] {
   if (championship.legacyMatchId === true) {
     return ESPN_TOURNAMENT_RANGES;
+  }
+
+  // Janela real (TASK-05 / fix WR-02): quando o catálogo define seasonStart/End,
+  // ela MANDA — inclusive sobre `season` YYYY. Deriva ranges mensais disjuntos do
+  // mês de início ao mês de fim (atravessa a virada de ano da temporada europeia).
+  if (championship.seasonStart && championship.seasonEnd) {
+    return monthlyRangesBetween(championship.seasonStart, championship.seasonEnd);
   }
 
   // Só `YYYY` é suportado hoje. Temporada partida (`2025-26`, europeia ago–mai)

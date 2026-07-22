@@ -65,11 +65,13 @@ export interface CacheSnapshot<T = unknown> {
 /**
  * Lê um snapshot de `worldcup_cache/{key}`.
  *
- * @param key Chave do doc ("groups" | "bracket").
+ * @param key Chave do doc. Chaves fixas legadas (`"groups"`, `"bracket"`) e, a
+ *   partir da TASK-06, chaves de bracket escopadas por campeonato
+ *   (`"bracket:{championshipId}"`) para não colidir entre torneios.
  * @returns O snapshot ou `null` se o doc não existir.
  */
 export async function readSnapshot<T>(
-  key: "groups" | "bracket",
+  key: string,
 ): Promise<CacheSnapshot<T> | null> {
   const doc = await getAdminFirestore()
     .collection(WORLDCUP_CACHE_COLLECTION)
@@ -87,13 +89,13 @@ export async function readSnapshot<T>(
  * Operação **best-effort**: engole qualquer erro de escrita via try/catch e
  * loga pelo console — uma falha de escrita NUNCA deve derrubar a leitura.
  *
- * @param key              Chave do doc.
+ * @param key              Chave do doc (fixa legada ou `"bracket:{championshipId}"`).
  * @param payload          Payload computado a gravar.
  * @param hasLiveGroupMatch Flag de partida ao vivo na fase de grupos.
  * @param computedAt       Epoch ms do instante de computação (passado pela rota).
  */
 export async function writeSnapshot(
-  key: "groups" | "bracket",
+  key: string,
   payload: unknown,
   hasLiveGroupMatch: boolean,
   computedAt: number,

@@ -1,6 +1,7 @@
 import "server-only";
 
 export {
+  notifyJoinRequest,
   notifyModeration,
   notifyPromotion,
   notifyRankingUp,

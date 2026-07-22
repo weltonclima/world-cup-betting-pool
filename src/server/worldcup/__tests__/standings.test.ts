@@ -70,6 +70,7 @@ function gm(
   matchSeq += 1;
   return {
     id: `m-${matchSeq}`,
+    championshipId: "fifa.world",
     homeTeamId: home.toLowerCase(),
     awayTeamId: away.toLowerCase(),
     kickoffAt: "2026-06-11T13:00:00-06:00",

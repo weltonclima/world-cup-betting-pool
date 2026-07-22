@@ -77,20 +77,30 @@ export async function triggerGroupRankingRecalc(): Promise<void> {
 }
 
 /**
- * Ranking FECHADO do pool do usuário logado (PRD-09). Lê via
- * `GET /api/rankings/pool` — o servidor resolve o `groupId` pela sessão e serve
- * `rankings/pool-{groupId}-geral`. O client NÃO passa o pool (isolamento). Usuário
+ * Ranking FECHADO do pool do usuário logado (PRD-09; multi-championship TASK-12).
+ * Lê via `GET /api/rankings/pool[?championship=<id>]` — o servidor resolve o
+ * `groupId` pela sessão e serve, conforme `rankingMode` do pool:
+ *  - sem `championship` + modo `geral` → agregado entre campeonatos
+ *    (`pool-{groupId}-agregado`; fallback ao `geral` bare p/ pool só-Copa);
+ *  - com `championship` (liga) → doc por campeonato (`{C}-geral`, TASK-21);
+ *  - `fifa.world`/ausente → `geral` bare (compat Copa).
+ * O client NÃO passa o pool (isolamento) — só, opcionalmente, o campeonato. Usuário
  * sem pool → `null`. Status não-OK propaga como erro (React Query trata isError).
+ * Parse único via `poolRankingResponseSchema` championship-aware (aceita as três
+ * formas de resposta — corrige TASK-21 MEDIUM-1).
  */
-export async function getPoolRanking(): Promise<PoolRanking | null> {
-  const res = await fetch("/api/rankings/pool", { cache: "no-store" });
+export async function getPoolRanking(
+  championship?: string,
+): Promise<PoolRanking | null> {
+  const query = championship
+    ? `?championship=${encodeURIComponent(championship)}`
+    : "";
+  const res = await fetch(`/api/rankings/pool${query}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Falha ao carregar ranking do grupo (${res.status}).`);
   }
   const json: unknown = await res.json();
   if (json === null) return null;
-  // Schema dedicado (split-phase-ranking TASK-02): carrega a flag `splitPhaseRanking`
-  // do pool junto do ranking. Ausência da flag = OFF (telas tratam como false).
   return poolRankingResponseSchema.parse(json);
 }
 

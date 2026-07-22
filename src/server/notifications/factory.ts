@@ -113,6 +113,36 @@ export function notifyModeration(ctx: {
 }
 
 /**
+ * Notificação `system` — pedido de entrada no grupo via convite (TASK-17). Alvo é
+ * o **admin do pool** (não o candidato). ID determinístico
+ * `system-joinreq-{groupId}-{applicantUid}` garante 1 notificação por (grupo,
+ * candidato) mesmo sob re-chamada do resgate (idempotência dupla com o subdoc
+ * `redemptions/{uid}`). `system` sempre entrega (ignora opt-out por-tipo). Nome de
+ * exibição vazio/só-espaços → mensagem genérica (sem PII/email na copy).
+ */
+export function notifyJoinRequest(ctx: {
+  adminUid: string;
+  applicantName: string;
+  poolName: string;
+  groupId: string;
+  applicantUid: string;
+}): NotificationCreate {
+  const { adminUid, applicantName, poolName, groupId, applicantUid } = ctx;
+  const name = applicantName.trim();
+  const message =
+    name.length > 0
+      ? `${name} pediu para entrar no bolão ${poolName}.`
+      : `Um novo participante pediu para entrar no bolão ${poolName}.`;
+  return {
+    id: `system-joinreq-${groupId}-${applicantUid}`,
+    userId: adminUid,
+    type: "system",
+    title: "Novo pedido de entrada",
+    message,
+  };
+}
+
+/**
  * Notificação `system` — promoção a admin do grupo (PRD §6.2, S5). Sem ID
  * determinístico: promoção é evento repetível (promote→demote→promote), cada
  * ocorrência deve entregar (auto-id no write). Notifica apenas o promovido.

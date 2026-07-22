@@ -96,6 +96,7 @@ function makeQueryResult<T>(
 function makeMatch(id: string, overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     kickoffAt: "2026-06-14T16:00:00Z",
     homeTeamId: "team-bra",
     awayTeamId: "team-fra",

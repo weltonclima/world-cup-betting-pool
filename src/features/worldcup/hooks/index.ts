@@ -6,4 +6,5 @@
 export { useGroups } from "./useGroups";
 export { useGroupStandings } from "./useGroupStandings";
 export { useBracket } from "./useBracket";
+export { useLeagueStandings } from "./useLeagueStandings";
 export { worldcupKeys } from "./worldcupKeys";

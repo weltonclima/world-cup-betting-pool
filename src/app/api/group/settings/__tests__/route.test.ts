@@ -383,4 +383,114 @@ describe("PATCH /api/group/settings", () => {
     expect(res.status).toBe(200);
     expect(res.cookies.get("pool-primary")).toBeUndefined();
   });
+
+  // ── TASK-07 multi-championship: enabledChampionships + rankingMode ─────────
+  it("200 enabledChampionships válido + rankingMode → persiste ambos", async () => {
+    const ids = ["fifa.world", "bra.1-2026"];
+    mockDb({ data: pool({ enabledChampionships: ids, rankingMode: "por-campeonato" }) });
+    const res = await PATCH(
+      makeReq({ body: { enabledChampionships: ids, rankingMode: "por-campeonato" } }),
+    );
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["enabledChampionships"]).toEqual(ids);
+    expect(patch["rankingMode"]).toBe("por-campeonato");
+  });
+
+  it("422 enabledChampionships com id fora do catálogo → NÃO chama update", async () => {
+    mockDb({});
+    const res = await PATCH(
+      makeReq({ body: { enabledChampionships: ["fifa.world", "xyz.999-2026"] } }),
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["error"]).toBe("Dados inválidos.");
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("422 enabledChampionships vazio (piso ≥ 1) → NÃO chama update", async () => {
+    mockDb({});
+    const res = await PATCH(makeReq({ body: { enabledChampionships: [] } }));
+    expect(res.status).toBe(422);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("422 enabledChampionships com duplicados → NÃO chama update", async () => {
+    mockDb({});
+    const res = await PATCH(
+      makeReq({ body: { enabledChampionships: ["fifa.world", "fifa.world"] } }),
+    );
+    expect(res.status).toBe(422);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("422 enabledChampionships acima do teto → NÃO chama update", async () => {
+    mockDb({});
+    const ids = Array.from({ length: 11 }, (_, i) => `champ-${i}`);
+    const res = await PATCH(makeReq({ body: { enabledChampionships: ids } }));
+    expect(res.status).toBe(422);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("422 rankingMode fora do enum → rejeitado (strict)", async () => {
+    const res = await PATCH(makeReq({ body: { rankingMode: "misto" } }));
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body["error"]).toBe("Dados inválidos.");
+  });
+
+  it("200 parcial: só rankingMode → não toca enabledChampionships", async () => {
+    mockDb({ data: pool({ rankingMode: "geral" }) });
+    const res = await PATCH(makeReq({ body: { rankingMode: "geral" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["rankingMode"]).toBe("geral");
+    expect("enabledChampionships" in patch).toBe(false);
+  });
+
+  it("200 parcial: só enabledChampionships válido → não toca rankingMode", async () => {
+    const ids = ["fifa.world"];
+    mockDb({ data: pool({ enabledChampionships: ids }) });
+    const res = await PATCH(makeReq({ body: { enabledChampionships: ids } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["enabledChampionships"]).toEqual(ids);
+    expect("rankingMode" in patch).toBe(false);
+  });
+
+  it("200 enabledChampionships no limite exato (10 ids válidos) → persiste", async () => {
+    const ids = [
+      "fifa.world",
+      "conmebol.america-2026",
+      "uefa.euro-2026",
+      "uefa.nations-2026",
+      "fifa.cwc-2026",
+      "bra.1-2026",
+      "eng.1-2026",
+      "esp.1-2026",
+      "ita.1-2026",
+      "ger.1-2026",
+    ];
+    mockDb({ data: pool({ enabledChampionships: ids }) });
+    const res = await PATCH(makeReq({ body: { enabledChampionships: ids } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch["enabledChampionships"]).toEqual(ids);
+  });
+
+  it("NÃO dispara recalc ao mudar só config de campeonato", async () => {
+    mockDb({ data: pool({ rankingMode: "por-campeonato" }) });
+    const res = await PATCH(makeReq({ body: { rankingMode: "por-campeonato" } }));
+    expect(res.status).toBe(200);
+    expect(recalcMock).not.toHaveBeenCalled();
+  });
+
+  it("200 sem os campos novos → ausentes no patch (retrocompat)", async () => {
+    mockDb({ data: pool({ name: "Novo Nome" }) });
+    const res = await PATCH(makeReq({ body: { name: "Novo Nome" } }));
+    expect(res.status).toBe(200);
+    const patch = updateMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect("enabledChampionships" in patch).toBe(false);
+    expect("rankingMode" in patch).toBe(false);
+  });
 });

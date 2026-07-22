@@ -17,6 +17,7 @@ type MatchWithId = Match & { id: string };
 function makeFinishedMatch(overrides: Partial<MatchWithId> = {}): MatchWithId {
   return {
     id: "match-02",
+    championshipId: "fifa.world",
     homeTeamId: "team-fra",
     awayTeamId: "team-ger",
     kickoffAt: "2026-06-15T14:00:00.000Z",
@@ -83,6 +84,7 @@ describe("matchResultFingerprint", () => {
       awayTeamId: a.awayTeamId,
       homeTeamId: a.homeTeamId,
       id: a.id,
+      championshipId: a.championshipId,
     };
     expect(matchResultFingerprint(a)).toBe(matchResultFingerprint(b));
   });

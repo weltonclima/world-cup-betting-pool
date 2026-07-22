@@ -74,3 +74,44 @@ export async function authorizeGroupAdminOfPool(): Promise<GroupAdminAuthResult>
 
   return { auth: { uid, groupId, role: role.data } };
 }
+
+/**
+ * Autorização de MEMBRO do pool (multi-championship TASK-09). Diferente de
+ * `authorizeGroupAdminOfPool`: NÃO exige role de admin — qualquer usuário aprovado
+ * que pertença a um grupo (`users/{uid}.groupId`) passa. Serve rotas de LEITURA que
+ * todo participante precisa acessar (ex.: campeonatos habilitados do pool para o
+ * seletor), enquanto `GET /api/group/settings` continua restrito a admins.
+ *
+ * Regras (fail-closed):
+ *  - sessão inválida/não-aprovada → 401/403 (de `requireApprovedUser`);
+ *  - `groupId` SÓ da sessão (nunca body/query — D2); ausente → 403 (sem pool).
+ *
+ * Retorna `{ auth: { uid, groupId } }` ou `{ errorResponse }` pronto (401/403).
+ */
+export interface GroupMemberAuth {
+  uid: string;
+  groupId: string;
+}
+
+export type GroupMemberAuthResult =
+  | { auth: GroupMemberAuth }
+  | { errorResponse: NextResponse };
+
+export async function authorizeGroupMemberOfPool(): Promise<GroupMemberAuthResult> {
+  const session = await requireApprovedUser();
+  if ("errorResponse" in session) return { errorResponse: session.errorResponse };
+
+  const { uid } = session.user;
+  const db = getAdminFirestore();
+  const snap = await db.collection("users").doc(uid).get();
+  if (!snap.exists) return forbidden();
+
+  const data = snap.data();
+  // `groupId` SEMPRE da sessão (doc do próprio usuário), nunca do request (D2).
+  const groupId = data?.["groupId"];
+  if (typeof groupId !== "string" || groupId.length === 0) {
+    return forbidden("Você não participa de nenhum grupo.");
+  }
+
+  return { auth: { uid, groupId } };
+}

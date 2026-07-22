@@ -15,5 +15,14 @@ export default async function PredictPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <PredictionForm matchId={id} />;
+  // Ver /matches/[id]/page.tsx: ':' do id namespaced vira `%3A` em `params.id`.
+  // Decodifica p/ o matchId canônico (cru) — senão o palpite de jogo de liga bate
+  // em id encodado e o detalhe/lookup dá 404. Idempotente p/ ids sem '%'.
+  let matchId = id;
+  try {
+    matchId = decodeURIComponent(id);
+  } catch {
+    // mantém o valor cru
+  }
+  return <PredictionForm matchId={matchId} />;
 }

@@ -128,7 +128,7 @@ describe("GET /api/worldcup/groups", () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
 
     expect(response.status).toBe(200);
     expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
@@ -142,7 +142,7 @@ describe("GET /api/worldcup/groups", () => {
     readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=86400, stale-while-revalidate=60",
     );
@@ -153,7 +153,7 @@ describe("GET /api/worldcup/groups", () => {
     readSnapshotMock.mockResolvedValue(liveSnap);
     isFreshMock.mockReturnValue(true);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     // Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=60, stale-while-revalidate=0",
@@ -174,7 +174,7 @@ describe("GET /api/worldcup/groups", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
 
     // Deve ter caído no caminho de recomputo, não usado o cache corrompido
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -193,7 +193,7 @@ describe("GET /api/worldcup/groups", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
 
     expect(response.status).toBe(200);
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -213,7 +213,7 @@ describe("GET /api/worldcup/groups", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
 
     expect(response.status).toBe(200);
     expect(getEffectiveMatchesMock).toHaveBeenCalledOnce();
@@ -226,7 +226,7 @@ describe("GET /api/worldcup/groups", () => {
     getEffectiveMatchesMock.mockResolvedValue([MOCK_MATCH]); // status = scheduled
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=86400, stale-while-revalidate=60",
     );
@@ -239,7 +239,7 @@ describe("GET /api/worldcup/groups", () => {
     getEffectiveMatchesMock.mockResolvedValue([liveMatch]);
     fetchAllTeamsMock.mockResolvedValue([MOCK_TEAM]);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     // Fix 4 (WR-02): stale-while-revalidate=0 quando ao vivo
     expect(response.headers.get("Cache-Control")).toBe(
       "s-maxage=60, stale-while-revalidate=0",
@@ -253,7 +253,7 @@ describe("GET /api/worldcup/groups", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -269,7 +269,7 @@ describe("GET /api/worldcup/groups", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new EspnFetchError(503));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     expect(response.status).toBe(502);
   });
 
@@ -278,7 +278,7 @@ describe("GET /api/worldcup/groups", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new EspnTimeoutError(10000));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     expect(response.status).toBe(504);
   });
 
@@ -287,7 +287,7 @@ describe("GET /api/worldcup/groups", () => {
     isFreshMock.mockReturnValue(false);
     getEffectiveMatchesMock.mockRejectedValue(new Error("erro inesperado"));
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     expect(response.status).toBe(500);
   });
 
@@ -303,7 +303,37 @@ describe("GET /api/worldcup/groups", () => {
     // Aqui verificamos que a rota continua com 200 independentemente.
     writeSnapshotMock.mockResolvedValue(undefined);
 
-    const response = await GET();
+    const response = await GET(new Request("http://x/api/worldcup/groups"));
     expect(response.status).toBe(200);
+  });
+
+  // ── TASK-10: gate cup/league ────────────────────────────────────────────────
+
+  it("400 para campeonato de liga (gate cup/league), sem ler snapshot nem fonte", async () => {
+    const response = await GET(
+      new Request("http://x/api/worldcup/groups?championship=bra.1-2026"),
+    );
+    expect(response.status).toBe(400);
+    expect(readSnapshotMock).not.toHaveBeenCalled();
+    expect(getEffectiveMatchesMock).not.toHaveBeenCalled();
+  });
+
+  it("400 para campeonato fora do catálogo, sem ler snapshot", async () => {
+    const response = await GET(
+      new Request("http://x/api/worldcup/groups?championship=nao.existe"),
+    );
+    expect(response.status).toBe(400);
+    expect(readSnapshotMock).not.toHaveBeenCalled();
+  });
+
+  it("copa default (sem championship) → fluxo normal preservado", async () => {
+    readSnapshotMock.mockResolvedValue(MOCK_SNAPSHOT);
+    isFreshMock.mockReturnValue(true);
+
+    const response = await GET(
+      new Request("http://x/api/worldcup/groups?championship=fifa.world"),
+    );
+    expect(response.status).toBe(200);
+    expect(readSnapshotMock).toHaveBeenCalled();
   });
 });

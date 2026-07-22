@@ -81,6 +81,7 @@ const MOCK_SCORE_SECRET = "super-secret-cron-token-abc123";
 
 const MATCH_FINISHED = {
   id: "5001",
+  championshipId: "fifa.world",
   status: "finished" as const,
   kickoffAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   homeTeamId: "team-1",

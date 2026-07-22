@@ -12,6 +12,7 @@ export * from "./matches";
 export * from "./predictions";
 export * from "./rankings";
 export * from "./statistics";
+export * from "./history";
 export * from "./bonusPredictions";
 export * from "./systemSettings";
 export * from "./notifications";

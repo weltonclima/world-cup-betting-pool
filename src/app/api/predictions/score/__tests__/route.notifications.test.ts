@@ -102,6 +102,7 @@ const MOCK_SCORE_SECRET = "super-secret-cron-token-abc123";
 
 const MATCH = {
   id: "5001",
+  championshipId: "fifa.world",
   status: "finished" as const,
   kickoffAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   homeTeamId: "BRA",
@@ -295,7 +296,13 @@ describe("POST /api/predictions/score — notificações games (TASK-04)", () =>
       updatedPredictions: number;
       skippedMatches: number;
     };
-    expect(body).toEqual({ scoredMatches: 1, updatedPredictions: 1, skippedMatches: 0 });
+    // championshipsProcessed=1: só a Copa varrida (sem ligas habilitadas). TASK-19.
+    expect(body).toEqual({
+      scoredMatches: 1,
+      updatedPredictions: 1,
+      skippedMatches: 0,
+      championshipsProcessed: 1,
+    });
   });
 
   it("nome de time resolvido (BRA→Brasil) e fallback ao código quando não resolve", async () => {

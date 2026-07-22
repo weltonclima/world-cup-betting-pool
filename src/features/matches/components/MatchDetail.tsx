@@ -51,6 +51,7 @@ export interface MatchDetailProps {
 
 const STAGE_LABELS: Record<Stage, string> = {
   grupos: "Fase de Grupos",
+  liga: "Liga",
   "dezesseis-avos": "Dezesseis Avos de Final",
   oitavas: "Oitavas de Final",
   quartas: "Quartas de Final",

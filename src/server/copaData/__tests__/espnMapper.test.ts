@@ -670,6 +670,26 @@ describe("mapEspnEventToMatch — TASK-02 regressão fase de grupos", () => {
   });
 });
 
+describe("mapEspnEventToMatch — TASK-05 compat championshipId", () => {
+  it("mapper Copa injeta championshipId 'fifa.world' (default do schema)", () => {
+    const ev = parseEvent(
+      espnGroupEvent({
+        date: "2026-06-14T19:00Z",
+        state: "post",
+        detail: "FT",
+        home: { abbr: "BRA", score: "2" },
+        away: { abbr: "MEX", score: "0" },
+        group: "A",
+      }),
+    );
+    const match = mapEspnEventToMatch(ev);
+    // Backward-compat: a base ESPN da Copa não emite o campo → o parse do schema
+    // resolve para "fifa.world". IDs/comportamento seguem byte-idênticos.
+    expect(match.championshipId).toBe("fifa.world");
+    expect(match.stage).not.toBe("liga"); // Copa nunca usa o stage de liga
+  });
+});
+
 describe("mapEspnEventToMatch — TASK-02 prorrogação", () => {
   it("MEM-06: mata-mata decidido na prorrogação → outcome 'overtime', sem shootout", () => {
     const ev = parseEvent(

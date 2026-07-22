@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 
+import { useActiveChampionship } from "@/features/championships";
 import { useAuth } from "@/hooks/useAuth";
 import type { MatchStatus, MatchWithId, Stage } from "@/types";
 
@@ -24,6 +25,8 @@ import { useTeams } from "./useTeams";
 /** Match enriquecido com seleções resolvidas e status de palpite derivado. */
 export interface MatchListItem {
   id: string;
+  /** Campeonato dono da partida (TASK-05). Mantém MatchListItem superset de MatchWithId. */
+  championshipId: string;
   kickoffAt: string;
   stage: Stage;
   // round/groupId espelham o matchSchema (`nullable().optional()`): `null` = sem grupo/rodada
@@ -94,9 +97,13 @@ export function useMatchesList(): MatchesListData {
   const { firebaseUser } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 
-  // 2. Queries por recurso
-  const matchesQuery     = useMatches();
-  const teamsQuery       = useTeams();
+  // Campeonato ativo (multi-championship TASK-09). Fora do Provider (ex.: testes),
+  // o default legado (só Copa) mantém o comportamento anterior inalterado.
+  const { activeChampionshipId } = useActiveChampionship();
+
+  // 2. Queries por recurso, escopadas ao campeonato ativo (cache isolado por id).
+  const matchesQuery     = useMatches(activeChampionshipId);
+  const teamsQuery       = useTeams(activeChampionshipId);
   const predictionsQuery = usePredictions(uid);
 
   // 3. Estado agregado
@@ -141,6 +148,7 @@ export function useMatchesList(): MatchesListData {
       const pred = predMap.get(match.id);
       return {
         id: match.id,
+        championshipId: match.championshipId,
         kickoffAt: match.kickoffAt,
         stage: match.stage,
         round: match.round,

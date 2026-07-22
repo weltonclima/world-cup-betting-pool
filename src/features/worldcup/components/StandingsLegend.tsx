@@ -15,6 +15,12 @@ import { cn } from "@/lib/utils";
 
 export interface StandingsLegendProps {
   className?: string;
+  /**
+   * Exibe o bloco de cores de qualificação (Classificado / Possível / Eliminado).
+   * Default `true` (Copa/grupos). Ligas de pontos corridos (TASK-20) passam
+   * `false` — não há qualificação por posição, só a tabela linear.
+   */
+  showQualification?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,25 +54,30 @@ const QUALIFICATION_ITEMS: QualificationLegendItem[] = [
 /**
  * Legenda abaixo da tabela de grupos: abreviações de colunas + cores de qualificação.
  */
-export function StandingsLegend({ className }: StandingsLegendProps) {
+export function StandingsLegend({
+  className,
+  showQualification = true,
+}: StandingsLegendProps) {
   return (
     <div className={cn("mt-3 space-y-2 text-xs text-muted-foreground", className)}>
       {/* Abreviações das colunas */}
       <p>{ABBREVIATIONS}</p>
 
-      {/* Cores de qualificação */}
-      <div className="flex flex-wrap gap-3">
-        {QUALIFICATION_ITEMS.map(({ barClass, label }) => (
-          <span key={label} className="flex items-center gap-1.5">
-            {/* Amostra de cor — barra vertical que espelha o border-l-4 das linhas */}
-            <span
-              aria-hidden="true"
-              className={cn("inline-block h-4 w-0", barClass)}
-            />
-            {label}
-          </span>
-        ))}
-      </div>
+      {/* Cores de qualificação — omitido em ligas (TASK-20) */}
+      {showQualification && (
+        <div className="flex flex-wrap gap-3">
+          {QUALIFICATION_ITEMS.map(({ barClass, label }) => (
+            <span key={label} className="flex items-center gap-1.5">
+              {/* Amostra de cor — barra vertical que espelha o border-l-4 das linhas */}
+              <span
+                aria-hidden="true"
+                className={cn("inline-block h-4 w-0", barClass)}
+              />
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

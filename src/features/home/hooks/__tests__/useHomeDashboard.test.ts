@@ -33,6 +33,12 @@ vi.mock("../usePredictions");
 vi.mock("../useSystemSettings");
 vi.mock("@/features/rankings/hooks/usePoolRankingByScope");
 
+// Campeonato ativo controlável (TASK-09). Default = Copa (legado).
+const { activeChampMock } = vi.hoisted(() => ({ activeChampMock: vi.fn() }));
+vi.mock("@/features/championships", () => ({
+  useActiveChampionship: () => activeChampMock(),
+}));
+
 // ── imports pós-mock ─────────────────────────────────────────────────────────
 
 import { useAuth } from "@/hooks/useAuth";
@@ -69,6 +75,7 @@ function futureIso(days = 30): string {
 function makeItem(id: string, overrides: Partial<MatchListItem> = {}): MatchListItem {
   return {
     id,
+    championshipId: "fifa.world",
     kickoffAt: futureIso(30),
     stage: "grupos",
     round: 2,
@@ -298,6 +305,47 @@ function setupMocks({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  activeChampMock.mockReturnValue({
+    activeChampionshipId: "fifa.world",
+    enabledChampionships: ["fifa.world"],
+    rankingMode: "geral",
+    isMultiChampionship: false,
+    isLoading: false,
+    setActiveChampionship: vi.fn(),
+  });
+});
+
+describe("useHomeDashboard — escopo de campeonato (TASK-09)", () => {
+  it("teams é lido no campeonato ativo (escopado)", () => {
+    activeChampMock.mockReturnValue({
+      activeChampionshipId: "bra.1-2026",
+      enabledChampionships: ["fifa.world", "bra.1-2026"],
+      rankingMode: "por-campeonato",
+      isMultiChampionship: true,
+      isLoading: false,
+      setActiveChampionship: vi.fn(),
+    });
+    setupMocks();
+    renderHook(() => useHomeDashboard());
+    expect(mockTeams).toHaveBeenCalledWith("bra.1-2026");
+  });
+
+  it("Hero permanece AGREGADO: usePoolRanking não recebe o id do campeonato", () => {
+    activeChampMock.mockReturnValue({
+      activeChampionshipId: "bra.1-2026",
+      enabledChampionships: ["fifa.world", "bra.1-2026"],
+      rankingMode: "por-campeonato",
+      isMultiChampionship: true,
+      isLoading: false,
+      setActiveChampionship: vi.fn(),
+    });
+    setupMocks();
+    renderHook(() => useHomeDashboard());
+    // usePoolRanking é chamado por groupId (undefined aqui), nunca pelo campeonato.
+    for (const call of mockRanking.mock.calls) {
+      expect(call[0]).not.toBe("bra.1-2026");
+    }
+  });
 });
 
 describe("useHomeDashboard — estado neutro (uid=null)", () => {

@@ -176,6 +176,45 @@ describe("getPoolRanking", () => {
     const result = await getPoolRanking();
     expect(result?.splitPhaseRanking).toBe(false);
   });
+
+  // ── championship-aware (multi-championship TASK-12) ────────────────────────
+  it("getPoolRanking(champ) monta ?championship= e parseia a resposta escopada", async () => {
+    fetchMock.mockResolvedValueOnce(
+      fetchResp(
+        rankingDoc({
+          scope: "bra.1-2026-geral",
+          championshipId: "bra.1-2026",
+          rankingMode: "por-campeonato",
+        }),
+      ),
+    );
+    const result = await getPoolRanking("bra.1-2026");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/rankings/pool?championship=bra.1-2026",
+      { cache: "no-store" },
+    );
+    expect(result?.scope).toBe("bra.1-2026-geral");
+    expect(result?.championshipId).toBe("bra.1-2026");
+    expect(result?.rankingMode).toBe("por-campeonato");
+  });
+
+  it("getPoolRanking() propaga rankingMode do payload agregado", async () => {
+    fetchMock.mockResolvedValueOnce(
+      fetchResp(rankingDoc({ scope: "agregado", rankingMode: "geral" })),
+    );
+    const result = await getPoolRanking();
+    expect(result?.scope).toBe("agregado");
+    expect(result?.rankingMode).toBe("geral");
+  });
+
+  it("getPoolRanking encoda ids com caracteres especiais no query", async () => {
+    fetchMock.mockResolvedValueOnce(fetchResp(rankingDoc()));
+    await getPoolRanking("bra.1 2026");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/rankings/pool?championship=bra.1%202026",
+      { cache: "no-store" },
+    );
+  });
 });
 
 describe("getGroupRanking", () => {

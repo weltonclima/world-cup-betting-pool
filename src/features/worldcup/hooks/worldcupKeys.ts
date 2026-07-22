@@ -24,4 +24,8 @@ export const worldcupKeys = {
   groups: () => [...worldcupKeys.all(), "groups"] as const,
   group: (groupId: string) => [...worldcupKeys.all(), "group", groupId] as const,
   bracket: () => [...worldcupKeys.all(), "bracket"] as const,
+  // TASK-20: classificação de liga escopada por campeonato ativo — cada liga tem
+  // sua própria tabela; a key inclui o championshipId para não colidir.
+  standings: (championshipId: string) =>
+    [...worldcupKeys.all(), "standings", championshipId] as const,
 } as const;

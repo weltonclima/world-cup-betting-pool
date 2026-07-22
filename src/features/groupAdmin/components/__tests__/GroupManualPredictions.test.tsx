@@ -44,6 +44,7 @@ function fakeMember(uid: string): GroupUser {
 function lockedMatch(id: string): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "t-home",
     awayTeamId: "t-away",
     kickoffAt: "2026-06-10T12:00:00.000Z",
@@ -57,6 +58,7 @@ function lockedMatch(id: string): MatchWithId {
 function scheduledMatch(id: string): MatchWithId {
   return {
     id,
+    championshipId: "fifa.world",
     homeTeamId: "t-home",
     awayTeamId: "t-away",
     kickoffAt: "2099-01-01T12:00:00.000Z",

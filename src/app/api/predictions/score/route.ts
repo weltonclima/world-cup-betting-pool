@@ -14,6 +14,10 @@ import {
 } from "@/features/predictions/lib";
 import { readScoreState, writeScoreState } from "@/server/scoring/scoreState";
 import { getEffectiveMatches } from "@/server/copaData/matchSource";
+import { DEFAULT_CHAMPIONSHIP_ID, getChampionship } from "@/server/copaData/championshipCatalog";
+import { loadChampionshipStatuses } from "@/server/copaData/championshipState";
+import { getEnabledChampionships } from "@/lib/poolChampionships";
+import type { Pool } from "@/types/pools";
 import { resolveTeamByCode } from "@/server/copaData/teamRegistry";
 import {
   fetchPreferencesMap,
@@ -169,24 +173,86 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // ─── 3. Buscar e filtrar partidas finished ────────────────────────────────
+  // TASK-11: pontua a Copa legada + as LIGAS habilitadas em algum pool. Só ligas
+  // (`type: "league"`): o path de liga namespaceia o matchId (`{championshipId}:{id}`),
+  // então juntar as fontes não colide com a Copa nem entre ligas, e as chaves de
+  // idempotência (`score_state[matchId]`) seguem únicas. Cups NÃO-legados geram ids
+  // BARE (colidem com a Copa) → EXCLUÍDOS até serem namespaced (foundation/TASK-10);
+  // pontuá-los aqui sobrescreveria palpites reais da Copa. A Copa (`DEFAULT_CHAMPIONSHIP_ID`)
+  // é OBRIGATÓRIA — sua falha aborta (legado). Ligas extras são best-effort.
+  const db = getAdminFirestore();
+  const leagueIds = new Set<string>();
+  // TASK-13: status ARQUIVADO resolvido dinamicamente (override do doc
+  // `championships/{id}` sobre o default do catálogo) — liga arquivada em runtime
+  // não é re-pontuada ao vivo.
+  const dynamicStatuses = await loadChampionshipStatuses(db);
+  try {
+    const poolsSnap = await db.collection("pools").get();
+    for (const d of poolsSnap.docs) {
+      for (const cid of getEnabledChampionships(d.data() as Pool)) {
+        if (cid === DEFAULT_CHAMPIONSHIP_ID) continue;
+        const champ = getChampionship(cid);
+        // TASK-21/13: sweep só campeonatos ATIVOS — `type: "league"` (único path
+        // namespaced) E `status !== "archived"` (arquivado é servido do banco pela
+        // TASK-13/14; re-pontuá-lo ao vivo seria retrabalho e poderia sobrescrever o
+        // snapshot congelado).
+        const status = dynamicStatuses.get(cid) ?? champ?.status;
+        if (champ?.type === "league" && status !== "archived") {
+          leagueIds.add(cid);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[score] falha ao ler campeonatos habilitados dos pools:", err);
+  }
+
   let matches: Awaited<ReturnType<typeof getEffectiveMatches>>;
   try {
-    matches = await getEffectiveMatches();
+    matches = await getEffectiveMatches(DEFAULT_CHAMPIONSHIP_ID);
   } catch (err) {
     return copaDataErrorResponse(err);
   }
+  // HR-01: buscar ligas extras EM PARALELO — a Copa (obrigatória) já tem suas
+  // partidas; uma liga lenta não pode atrasar/travar a pontuação legada. `allSettled`
+  // isola falhas por liga (best-effort), sem derrubar as demais nem a Copa.
+  // Materializa 1× — o índice do warning depende da MESMA ordem passada ao
+  // allSettled (spread duplicado seria frágil se `leagueIds` mudasse entre eles).
+  const leagueIdList = [...leagueIds];
+  const extraResults = await Promise.allSettled(
+    leagueIdList.map((cid) => getEffectiveMatches(cid)),
+  );
+  extraResults.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      matches = matches.concat(r.value);
+    } else {
+      console.warn(`[score] falha ao buscar partidas da liga ${leagueIdList[i]}:`, r.reason);
+    }
+  });
+
+  // TASK-19: observabilidade do sweep para o cron (contrato de score-cron.yml).
+  // Conta os campeonatos EFETIVAMENTE varridos = Copa (sempre 1, obrigatória) +
+  // cada liga ativa cujo fetch teve sucesso (best-effort: liga fora do ar não
+  // conta). Ligas `archived`/cups já ficaram fora de `leagueIds`. Aditivo — não
+  // altera scoredMatches/updatedPredictions/skippedMatches.
+  const championshipsProcessed =
+    1 + extraResults.filter((r) => r.status === "fulfilled").length;
 
   const finishedMatches = matches.filter((m) => m.status === "finished");
 
   if (finishedMatches.length === 0) {
     return NextResponse.json(
-      { scoredMatches: 0, updatedPredictions: 0, skippedMatches: 0 },
+      {
+        scoredMatches: 0,
+        updatedPredictions: 0,
+        skippedMatches: 0,
+        championshipsProcessed,
+      },
       { status: 200 },
     );
   }
 
   // ─── 4. Pontuação paralela ────────────────────────────────────────────────
-  const db = getAdminFirestore(); // singleton — retorna mesma instância
+  // (reusa o handle `db` da seção 3 — singleton)
 
   // scoring-write-cost (TASK-03): 1 read do doc de controle. Mapa { matchId: hash }
   // do que já foi pontuado — sustenta o filtro grosso (B). Degrada seguro p/ vazio.
@@ -343,7 +409,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await chainRecalc(request);
 
   return NextResponse.json(
-    { scoredMatches, updatedPredictions, skippedMatches },
+    { scoredMatches, updatedPredictions, skippedMatches, championshipsProcessed },
     { status: 200 },
   );
 }

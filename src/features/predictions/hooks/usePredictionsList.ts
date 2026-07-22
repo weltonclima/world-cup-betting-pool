@@ -11,6 +11,7 @@
 
 import { useCallback } from "react";
 
+import { useActiveChampionship } from "@/features/championships";
 import { useAuth } from "@/hooks/useAuth";
 import { usePoolRanking } from "@/features/rankings/hooks/usePoolRanking";
 import { useMatches, useTeams } from "@/features/matches/hooks";
@@ -72,10 +73,13 @@ export function usePredictionsList(): PredictionsListData {
   const { firebaseUser, profile } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 
-  // 2. Queries por recurso
+  // Campeonato ativo (multi-championship TASK-09); default legado fora do Provider.
+  const { activeChampionshipId } = useActiveChampionship();
+
+  // 2. Queries por recurso, escopadas ao campeonato ativo.
   const predictionsQuery = usePredictions(uid);
-  const matchesQuery = useMatches();
-  const teamsQuery = useTeams();
+  const matchesQuery = useMatches(activeChampionshipId);
+  const teamsQuery = useTeams(activeChampionshipId);
   // Flag do pool: ignorar gols de prorrogação nas eliminatórias (TASK-04). Vem no
   // payload do ranking do pool; alimenta o status de exibição p/ ficar coerente
   // com o ranking. Ausente/sem pool = OFF (placar final).

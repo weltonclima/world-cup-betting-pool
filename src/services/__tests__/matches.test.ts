@@ -99,6 +99,18 @@ describe("listMatches", () => {
     await expect(listMatches()).resolves.toEqual([]);
   });
 
+  it("default (fifa.world) mantém a URL BARE (compat legado)", async () => {
+    fetchMock.mockResolvedValueOnce(okJson([]));
+    await listMatches("fifa.world");
+    expect(fetchMock).toHaveBeenCalledWith("/api/matches");
+  });
+
+  it("campeonato não-default anexa ?championship= (TASK-09)", async () => {
+    fetchMock.mockResolvedValueOnce(okJson([]));
+    await listMatches("bra.1-2026");
+    expect(fetchMock).toHaveBeenCalledWith("/api/matches?championship=bra.1-2026");
+  });
+
   it("lança Error com status e detalhe em falha HTTP", async () => {
     // persistente: as duas asserções de rejeição disparam dois fetches.
     fetchMock.mockResolvedValue(errorJson(503, "Cota esgotada."));

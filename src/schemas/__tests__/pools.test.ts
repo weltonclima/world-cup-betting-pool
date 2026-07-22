@@ -1,14 +1,17 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
+  DEFAULT_RANKING_MODE,
+  MAX_ENABLED_CHAMPIONSHIPS,
   MAX_POOL_LOGO_BASE64_LENGTH,
   MAX_POOL_PHOTO_BASE64_LENGTH,
   poolEditSchema,
   poolInputSchema,
   poolSchema,
   poolStatusSchema,
+  rankingModeSchema,
 } from "@/schemas/pools";
-import type { Pool, PoolInput, PoolStatus } from "@/types/pools";
+import type { Pool, PoolInput, PoolStatus, RankingMode } from "@/types/pools";
 
 const valid = {
   id: "pool-abc",
@@ -214,6 +217,61 @@ describe("pools › poolSchema", () => {
       poolSchema.safeParse({ ...valid, ignoreOvertimeGoals: "true" }).success,
     ).toBe(false);
   });
+
+  // TASK-07 — config de campeonatos no pool (aditivos optional, default-na-leitura).
+  it("enabledChampionships: ausente → parse ok (default-na-leitura = só Copa)", () => {
+    // Pools legados (sem o campo) continuam válidos — retrocompat.
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("enabledChampionships: aceita array de strings", () => {
+    expect(
+      poolSchema.safeParse({
+        ...valid,
+        enabledChampionships: ["fifa.world", "bra.1-2026"],
+      }).success,
+    ).toBe(true);
+    // Array vazio ainda faz PARSE no schema (o piso ≥1 é regra de domínio no
+    // PATCH, não no schema — default-na-leitura trata vazio como "só Copa").
+    expect(
+      poolSchema.safeParse({ ...valid, enabledChampionships: [] }).success,
+    ).toBe(true);
+  });
+
+  it("enabledChampionships: rejeita não-array e array de não-strings", () => {
+    expect(
+      poolSchema.safeParse({ ...valid, enabledChampionships: "fifa.world" })
+        .success,
+    ).toBe(false);
+    expect(
+      poolSchema.safeParse({ ...valid, enabledChampionships: [1, 2] }).success,
+    ).toBe(false);
+  });
+
+  it("rankingMode: ausente → parse ok (default-na-leitura = geral)", () => {
+    expect(poolSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("rankingMode: aceita 'geral' e 'por-campeonato', rejeita fora do enum", () => {
+    expect(
+      poolSchema.safeParse({ ...valid, rankingMode: "geral" }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, rankingMode: "por-campeonato" }).success,
+    ).toBe(true);
+    expect(
+      poolSchema.safeParse({ ...valid, rankingMode: "misto" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("pools › rankingModeSchema", () => {
+  it("aceita 'geral' e 'por-campeonato', rejeita fora do enum", () => {
+    expect(rankingModeSchema.safeParse("geral").success).toBe(true);
+    expect(rankingModeSchema.safeParse("por-campeonato").success).toBe(true);
+    expect(rankingModeSchema.safeParse("global").success).toBe(false);
+    expect(rankingModeSchema.safeParse("").success).toBe(false);
+  });
 });
 
 describe("pools › poolStatusSchema", () => {
@@ -296,6 +354,16 @@ describe("pools › inferência de tipos", () => {
     expectTypeOf<Pool["splitPhaseRanking"]>().toEqualTypeOf<
       boolean | undefined
     >();
+    expectTypeOf<Pool["enabledChampionships"]>().toEqualTypeOf<
+      string[] | undefined
+    >();
+    expectTypeOf<Pool["rankingMode"]>().toEqualTypeOf<RankingMode | undefined>();
+    expectTypeOf<RankingMode>().toEqualTypeOf<"geral" | "por-campeonato">();
     expectTypeOf<PoolInput["name"]>().toEqualTypeOf<string>();
+  });
+
+  it("constantes exportadas: default e teto (TASK-07)", () => {
+    expect(DEFAULT_RANKING_MODE).toBe("geral");
+    expect(MAX_ENABLED_CHAMPIONSHIPS).toBe(10);
   });
 });

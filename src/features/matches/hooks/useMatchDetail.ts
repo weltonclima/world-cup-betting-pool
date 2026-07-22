@@ -91,6 +91,7 @@ export function useMatchDetail(id: string): MatchDetailData {
 
   const match: MatchDetailItem = {
     id: rawMatch.id,
+    championshipId: rawMatch.championshipId,
     kickoffAt: rawMatch.kickoffAt,
     stage: rawMatch.stage,
     round: rawMatch.round,

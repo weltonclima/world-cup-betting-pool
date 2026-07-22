@@ -20,6 +20,7 @@
 import { useCallback, useMemo } from "react";
 
 import { BackButton } from "@/components/layout/BackButton";
+import { CupOnlyNotice, useIsCupActive } from "@/features/championships";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatches, useTeams } from "@/features/matches/hooks";
 import { usePredictions } from "@/features/predictions/hooks";
@@ -34,7 +35,26 @@ import {
 
 const BRACKET_HREF = "/predictions/knockout/dezesseis-avos";
 
+/**
+ * Gate cup/league (TASK-10): o ranking dos melhores terceiros é conceito de fase
+ * de grupos FIFA — só faz sentido em copas. Liga ativa → aviso cup-only ANTES de
+ * disparar as queries (o corpo `BestThirdsContent` só é montado p/ copa, mantendo
+ * as regras de hooks intactas).
+ */
 export default function BestThirdsPage() {
+  const isCup = useIsCupActive();
+  if (!isCup) {
+    return (
+      <div className="palpites-theme mx-auto flex max-w-2xl flex-col gap-6 pb-20 md:pb-4">
+        <BackButton />
+        <CupOnlyNotice message="Ranking dos melhores terceiros disponível apenas para copas." />
+      </div>
+    );
+  }
+  return <BestThirdsContent />;
+}
+
+function BestThirdsContent() {
   const { firebaseUser } = useAuth();
   const uid = firebaseUser?.uid ?? null;
 

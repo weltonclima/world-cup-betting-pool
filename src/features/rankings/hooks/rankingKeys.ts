@@ -7,7 +7,11 @@ import type { RankingScope } from "@/types";
 export const rankingKeys = {
   all: () => ["ranking"] as const,
   scope: (scope: RankingScope) => ["ranking", "scope", scope] as const,
-  pool: (groupId: string) => ["ranking", "pool", groupId] as const, // ranking fechado do pool (PRD-09)
+  // Ranking fechado do pool (PRD-09). `championship` opcional (multi-championship
+  // TASK-12) separa o cache por campeonato quando o modo é `por-campeonato`; ausente
+  // ("all") = ranking agregado/geral do pool.
+  pool: (groupId: string, championship = "all") =>
+    ["ranking", "pool", groupId, championship] as const,
   poolScope: (groupId: string, scope: RankingScope) =>
     ["ranking", "pool-scope", groupId, scope] as const, // fase recortada ao pool (PRD-09 Tela 03); groupId separa cache por pool
 
